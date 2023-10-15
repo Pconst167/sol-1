@@ -20,6 +20,10 @@
   ** implement lea si, [bp+@], etc
 
   ** fix array variable declarations.
+  
+  TODO:
+  2820:  case DT_STRUCT: // TODO: check this is to be here. I found this check lacking in the code, but I'm not sure it should be here.
+           return get_struct_size(type.struct_id);
 */
 
 #include <stdio.h>
@@ -569,7 +573,6 @@ void parse_functions(void){
       current_func_id = i;
       prog = function_table[i].code_location;
       parse_block(); // starts parsing the function block;
-
       if(return_is_last_statement == 0){ // generate code for a 'return'
         emitln("  syscall sys_terminate_proc");
       }
@@ -2201,6 +2204,7 @@ t_type parse_atomic(void){
     else{
       if(tok == SIGNED){
         _signed = 1;
+        _unsigned = 0;
         get();
       }
       else if(tok == UNSIGNED){
@@ -2293,17 +2297,6 @@ t_type parse_atomic(void){
       if(func_id != -1){
         expr_out = function_table[func_id].return_type; // get function's return type
         parse_function_call(func_id);
-        /*
-        expr_out = function_table[func_id].return_type; // get function's return type
-        parse_function_arguments(func_id);
-        emit("  call ");
-        emitln(temp_name);
-        if(tok != CLOSING_PAREN) error("Closing paren expected");
-        // the function's return value is in register B
-        if(function_table[func_id].total_parameter_size > 0)
-          // clean stack of the arguments added to it
-          emitln("  add sp, %d", function_table[func_id].total_parameter_size);
-          */
       }
       else error("Undeclared function: %s", temp_name);
     }
@@ -2377,12 +2370,9 @@ void parse_function_call(int func_id){
   current_func_call_total_args = function_table[func_id].total_parameter_size; // Necessary because it so happens that when we backtrack compilation, we need to reset the total number of found parameters to the original number found when the funtion is defined, so that we can then add the variable arguments on top of that number. Otherwise we'd keep adding and adding each time we backtrack and re-execute this function.
   get();
   if(tok == CLOSING_PAREN){
-    if(function_table[func_id].num_arguments != 0 && !has_var_args(func_id))
+    if(function_table[func_id].num_arguments == 0) return;
+    else if(!has_var_args(func_id))
       error("Incorrect number of arguments for function: %s. Expecting %d, detected: 0", function_table[func_id].name, function_table[func_id].num_arguments);
-    else{
-      emitln("  call %s", function_table[func_id].name);
-      return;
-    }
   }
   back();
   param_index = 0;
@@ -2420,6 +2410,7 @@ void parse_function_call(int func_id){
     }
     if(has_var_args(func_id)){
       current_func_call_total_args += get_basic_type_size(expr_in);
+      printf("\nname: %s, Adding to total: %d\n", function_table[func_id].name, current_func_call_total_args);
     }
     param_index++;
   } while(tok == COMMA);
@@ -2429,12 +2420,14 @@ void parse_function_call(int func_id){
   if(function_table[func_id].num_arguments != param_index && !has_var_args(func_id))  
     error("Incorrect number of arguments for function: %s. Expecting %d, detected: %d", function_table[func_id].name, function_table[func_id].num_arguments, param_index);
 
-  emitln("  call %s", function_table[func_id].name);
+  emit("  call ");
+  emitln(function_table[func_id].name);
   if(tok != CLOSING_PAREN) error("Closing paren expected");
   // the function's return value is in register B
   if(function_table[func_id].total_parameter_size > 0)
     emitln("  add sp, %d", current_func_call_total_args); // clean stack of the arguments added to it
 }
+
 void dbg_print_var_info(t_var *var){
   int i;
   int local = 0;
@@ -2888,7 +2881,7 @@ int get_data_size_for_indexing(t_type type){
       return 1;
     case DT_INT:
       return 2;
-    case DT_STRUCT:
+    case DT_STRUCT: // TODO: check this is to be here. I found this check lacking in the code, but I'm not sure it should be here.
       return get_struct_size(type.struct_id);
   }
 }
@@ -2896,63 +2889,6 @@ int get_data_size_for_indexing(t_type type){
 int has_var_args(int func_id){
   return function_table[func_id].local_vars[1].is_var_args &&
          function_table[func_id].local_vars[1].is_parameter;
-}
-
-void parse_function_arguments(int func_id){
-  int param_index = 0;
-  t_type expr_in;
-  char num_arguments;
-
-  get();
-  if(tok == CLOSING_PAREN){
-    if(function_table[func_id].num_arguments == 0) return;
-    else if(!has_var_args(func_id))
-      error("Incorrect number of arguments for function: %s. Expecting %d, detected: 0", function_table[func_id].name, function_table[func_id].num_arguments);
-  }
-  back();
-  param_index = 0;
-  do{
-    if(function_table[func_id].local_vars[param_index].is_var_args == true){
-
-    }
-    else{
-      if(function_table[func_id].local_vars[param_index].type.ind_level > 0 || 
-        is_array(function_table[func_id].local_vars[param_index].type)
-      ){
-        parse_expr();
-        emitln("  swp b");
-        emitln("  push b");
-      }
-      else if(function_table[func_id].local_vars[param_index].type.basic_type == DT_STRUCT){
-        emitln("  sub sp, %d", get_total_type_size(function_table[func_id].local_vars[param_index].type));
-        parse_expr();
-        emitln("  mov si, b"); 
-        emitln("  lea d, [sp + 1]");
-        emitln("  mov di, d");
-        emitln("  mov c, %d", get_total_type_size(function_table[func_id].local_vars[param_index].type));
-        emitln("  rep movsb");
-      }
-      else{
-        expr_in = parse_expr();
-        switch(function_table[func_id].local_vars[param_index].type.basic_type){
-          case DT_CHAR:
-            emitln("  push bl");
-            break;
-          case DT_INT:
-            if(expr_in.basic_type == DT_CHAR && expr_in.ind_level == 0){
-              emitln("  snex b");
-            }
-            emitln("  swp b");
-            emitln("  push b");
-            break;
-        }
-      }
-    }
-    param_index++;
-  } while(tok == COMMA);
-
-  if(function_table[func_id].num_arguments != param_index)  
-    error("Incorrect number of arguments for function: %s. Expecting %d, detected: %d", function_table[func_id].name, function_table[func_id].num_arguments, param_index);
 }
 
 int search_global_var(char *var_name){

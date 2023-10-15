@@ -539,6 +539,7 @@ void parse_continue(void);
 void parse_break(void);
 void parse_asm(void);
 void parse_directive(void);
+void parse_function_arguments(int func_index);
 void parse_function_call(int func_id);
 void parse_goto(void);
 

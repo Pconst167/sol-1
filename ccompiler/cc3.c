@@ -20,6 +20,14 @@
   ** implement lea si, [bp+@], etc
 
   ** fix array variable declarations.
+  
+  TODO:
+  2820:  case DT_STRUCT: // TODO: check this is to be here. I found this check lacking in the code, but I'm not sure it should be here.
+           return get_struct_size(type.struct_id);
+  
+  TODO:
+  2820:  case DT_STRUCT: // TODO: check this is to be here. I found this check lacking in the code, but I'm not sure it should be here.
+           return get_struct_size(type.struct_id);
 */
 
 #include <stdio.h>
@@ -565,7 +573,7 @@ void parse_functions(void){
       emitln("  mov bp, $FFE0 ;");
       emitln("  mov sp, $FFE0 ; Make space for argc(2 bytes) and for 10 pointers in argv (local variables)");
       declare_all_locals(i);
-      current_function_var_bp_offset = 0; 
+current_function_var_bp_offset = 0; 
       current_func_id = i;
       prog = function_table[i].code_location;
       parse_block(); // starts parsing the function block;
@@ -937,6 +945,9 @@ int get_param_size(){
 
   get();
   if(tok == CONST) get();
+    case VAR_ARGS:
+      data_size = 0; // assign zero here as the real size will be computed when the variable arguments are pushed
+      break;
   if(tok == SIGNED || tok == UNSIGNED) get();
   
   switch(tok){
@@ -2195,12 +2206,14 @@ t_type parse_atomic(void){
     if(tok != SIGNED && tok != UNSIGNED && tok != INT && tok != CHAR){
       back();
       expr_in = parse_expr();  // parses expression between parenthesis and result will be in B
+        _unsigned = 0;
       expr_out = expr_in;
       if(tok != CLOSING_PAREN) error("Closing paren expected");
     }
     else{
       if(tok == SIGNED){
         _signed = 1;
+        _unsigned = 0;
         get();
       }
       else if(tok == UNSIGNED){
@@ -2285,15 +2298,12 @@ t_type parse_atomic(void){
     emit_var_assignment__addr_in_d(expr_in);
     expr_out = expr_in;
   }    
-  else if(toktype == IDENTIFIER){
+        else if(toktype == IDENTIFIER){
     strcpy(temp_name, token);
     get();
     if(tok == OPENING_PAREN){ // function call      
       func_id = search_function(temp_name);
       if(func_id != -1){
-        expr_out = function_table[func_id].return_type; // get function's return type
-        parse_function_call(func_id);
-        /*
         expr_out = function_table[func_id].return_type; // get function's return type
         parse_function_arguments(func_id);
         emit("  call ");
@@ -2303,7 +2313,6 @@ t_type parse_atomic(void){
         if(function_table[func_id].total_parameter_size > 0)
           // clean stack of the arguments added to it
           emitln("  add sp, %d", function_table[func_id].total_parameter_size);
-          */
       }
       else error("Undeclared function: %s", temp_name);
     }
@@ -2377,12 +2386,9 @@ void parse_function_call(int func_id){
   current_func_call_total_args = function_table[func_id].total_parameter_size; // Necessary because it so happens that when we backtrack compilation, we need to reset the total number of found parameters to the original number found when the funtion is defined, so that we can then add the variable arguments on top of that number. Otherwise we'd keep adding and adding each time we backtrack and re-execute this function.
   get();
   if(tok == CLOSING_PAREN){
-    if(function_table[func_id].num_arguments != 0 && !has_var_args(func_id))
+    if(function_table[func_id].num_arguments == 0) return;
+    else if(!has_var_args(func_id))
       error("Incorrect number of arguments for function: %s. Expecting %d, detected: 0", function_table[func_id].name, function_table[func_id].num_arguments);
-    else{
-      emitln("  call %s", function_table[func_id].name);
-      return;
-    }
   }
   back();
   param_index = 0;
@@ -2420,6 +2426,7 @@ void parse_function_call(int func_id){
     }
     if(has_var_args(func_id)){
       current_func_call_total_args += get_basic_type_size(expr_in);
+      printf("\nname: %s, Adding to total: %d\n", function_table[func_id].name, current_func_call_total_args);
     }
     param_index++;
   } while(tok == COMMA);
@@ -2429,12 +2436,14 @@ void parse_function_call(int func_id){
   if(function_table[func_id].num_arguments != param_index && !has_var_args(func_id))  
     error("Incorrect number of arguments for function: %s. Expecting %d, detected: %d", function_table[func_id].name, function_table[func_id].num_arguments, param_index);
 
-  emitln("  call %s", function_table[func_id].name);
+  emit("  call ");
+  emitln(function_table[func_id].name);
   if(tok != CLOSING_PAREN) error("Closing paren expected");
   // the function's return value is in register B
   if(function_table[func_id].total_parameter_size > 0)
     emitln("  add sp, %d", current_func_call_total_args); // clean stack of the arguments added to it
 }
+
 void dbg_print_var_info(t_var *var){
   int i;
   int local = 0;
@@ -2821,6 +2830,8 @@ int is_struct(t_type type){
 
 int is_array(t_type type){
   return type.dims[0] ? 1 : 0;
+    case DT_STRUCT: // TODO: check this is to be here. I found this check lacking in the code, but I'm not sure it should be here.
+      return get_struct_size(type.struct_id);
 }
 
 int array_dim_count(t_type type){
@@ -2888,14 +2899,13 @@ int get_data_size_for_indexing(t_type type){
       return 1;
     case DT_INT:
       return 2;
-    case DT_STRUCT:
+    case DT_STRUCT: // TODO: check this is to be here. I found this check lacking in the code, but I'm not sure it should be here.
       return get_struct_size(type.struct_id);
   }
 }
 
 int has_var_args(int func_id){
-  return function_table[func_id].local_vars[1].is_var_args &&
-         function_table[func_id].local_vars[1].is_parameter;
+  return function_table[func_id].local_vars[1].is_var_args;
 }
 
 void parse_function_arguments(int func_id){
@@ -2912,46 +2922,43 @@ void parse_function_arguments(int func_id){
   back();
   param_index = 0;
   do{
-    if(function_table[func_id].local_vars[param_index].is_var_args == true){
-
+    if(function_table[func_id].local_vars[param_index].type.ind_level > 0 || 
+      is_array(function_table[func_id].local_vars[param_index].type)
+    ){
+      parse_expr();
+      emitln("  swp b");
+      emitln("  push b");
+    }
+    else if(function_table[func_id].local_vars[param_index].type.basic_type == DT_STRUCT){
+      emitln("  sub sp, %d", get_total_type_size(function_table[func_id].local_vars[param_index].type));
+      parse_expr();
+      emitln("  mov si, b"); 
+      emitln("  lea d, [sp + 1]");
+      emitln("  mov di, d");
+      emitln("  mov c, %d", get_total_type_size(function_table[func_id].local_vars[param_index].type));
+      emitln("  rep movsb");
     }
     else{
-      if(function_table[func_id].local_vars[param_index].type.ind_level > 0 || 
-        is_array(function_table[func_id].local_vars[param_index].type)
-      ){
-        parse_expr();
-        emitln("  swp b");
-        emitln("  push b");
-      }
-      else if(function_table[func_id].local_vars[param_index].type.basic_type == DT_STRUCT){
-        emitln("  sub sp, %d", get_total_type_size(function_table[func_id].local_vars[param_index].type));
-        parse_expr();
-        emitln("  mov si, b"); 
-        emitln("  lea d, [sp + 1]");
-        emitln("  mov di, d");
-        emitln("  mov c, %d", get_total_type_size(function_table[func_id].local_vars[param_index].type));
-        emitln("  rep movsb");
-      }
-      else{
-        expr_in = parse_expr();
-        switch(function_table[func_id].local_vars[param_index].type.basic_type){
-          case DT_CHAR:
-            emitln("  push bl");
-            break;
-          case DT_INT:
-            if(expr_in.basic_type == DT_CHAR && expr_in.ind_level == 0){
-              emitln("  snex b");
-            }
-            emitln("  swp b");
-            emitln("  push b");
-            break;
-        }
+      expr_in = parse_expr();
+      switch(function_table[func_id].local_vars[param_index].type.basic_type){
+        case DT_CHAR:
+          emitln("  push bl");
+          break;
+        case DT_INT:
+          if(expr_in.basic_type == DT_CHAR && expr_in.ind_level == 0){
+            emitln("  snex b");
+          }
+          emitln("  swp b");
+          emitln("  push b");
+          break;
       }
     }
     param_index++;
   } while(tok == COMMA);
 
-  if(function_table[func_id].num_arguments != param_index)  
+  // Check if the number of arguments matches the number of function parameters
+  // but only if the function does not have variable arguments
+  if(function_table[func_id].num_arguments != param_index && !has_var_args(func_id))  
     error("Incorrect number of arguments for function: %s. Expecting %d, detected: %d", function_table[func_id].name, function_table[func_id].num_arguments, param_index);
 }
 
