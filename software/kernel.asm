@@ -1,6 +1,8 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; Solarium - Sol-1 Homebrew Minicomputer Operating System Kernel.
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; Memory Map
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; 0000    ROM BEGIN
@@ -10,6 +12,8 @@
 ; 8000    RAM begin
 ; ....
 ; F7FF    Stack root
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; I/O MAP
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -22,12 +26,8 @@
 ; FFE0    Timer     (8253)
 ; FFF0    BIOS CONFIGURATION NV-RAM STORE AREA
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; FILE INCLUDES
-.include "bios.exp"         ; to obtain the BIOS_RESET_VECTOR location (for reboots)
-.include "lib/stdio.asm"
-.include "lib/ctype.asm"
-.include "lib/token.asm"
-; SYSTEM CONSTANTS
+
+; SYSTEM CONSTANTS / EQUATIONS
 _UART0_DATA       .equ $FF80            ; data
 _UART0_DLAB_0     .equ $FF80            ; divisor latch low byte
 _UART0_DLAB_1     .equ $FF81            ; divisor latch high byte
@@ -35,6 +35,7 @@ _UART0_IER        .equ $FF81            ; Interrupt enable register
 _UART0_FCR        .equ $FF82            ; FIFO control register
 _UART0_LCR        .equ $FF83            ; line control register
 _UART0_LSR        .equ $FF85            ; line status register
+
 _UART1_DATA       .equ $FF90            ; data
 _UART1_DLAB_0     .equ $FF90            ; divisor latch low byte
 _UART1_DLAB_1     .equ $FF91            ; divisor latch high byte
@@ -42,6 +43,7 @@ _UART1_IER        .equ $FF91            ; Interrupt enable register
 _UART1_FCR        .equ $FF92            ; FIFO control register
 _UART1_LCR        .equ $FF93            ; line control register
 _UART1_LSR        .equ $FF95            ; line status register
+
 _ide_BASE         .equ $FFD0            ; IDE BASE
 _ide_R0           .equ _ide_BASE + 0    ; DATA PORT
 _ide_R1           .equ _ide_BASE + 1    ; READ: ERROR CODE, WRITE: FEATURE
@@ -51,19 +53,24 @@ _ide_R4           .equ _ide_BASE + 4    ; SECTOR ADDRESS LBA 1 [8:15]
 _ide_R5           .equ _ide_BASE + 5    ; SECTOR ADDRESS LBA 2 [16:23]
 _ide_R6           .equ _ide_BASE + 6    ; SECTOR ADDRESS LBA 3 [24:27 (LSB)]
 _ide_R7           .equ _ide_BASE + 7    ; READ: STATUS, WRITE: COMMAND
+
 _7SEG_DISPLAY     .equ $FFB0            ; BIOS POST CODE HEX DISPLAY (2 DIGITS)
 _BIOS_POST_CTRL   .equ $FFB3            ; BIOS POST DISPLAY CONTROL REGISTER, 80h = As Output
 _PIO_A            .equ $FFB0    
 _PIO_B            .equ $FFB1
 _PIO_C            .equ $FFB2
 _PIO_CONTROL      .equ $FFB3            ; PIO CONTROL PORT
+
 _TIMER_C_0        .equ $FFE0            ; TIMER COUNTER 0
 _TIMER_C_1        .equ $FFE1            ; TIMER COUNTER 1
 _TIMER_C_2        .equ $FFE2            ; TIMER COUNTER 2
 _TIMER_CTRL       .equ $FFE3            ; TIMER CONTROL REGISTER
+
 STACK_BEGIN       .equ $F7FF            ; beginning of stack
 FIFO_SIZE         .equ (1024 * 4)
-TEXT_ORG          .equ $400
+
+TEXT_ORG     .equ $400
+
 
 ; For the next iteration:
 ; boot-sector(1) | kernel-sectors(32) | inode-bitmap | rawdata-bitmap | inode-table | raw-disk-data
@@ -75,6 +82,7 @@ TEXT_ORG          .equ $400
 ;  time-stamps
 ;  15 data block pointers
 ;  single-indirect pointer
+;
 
 ; FILE ENTRY ATTRIBUTES
 ; filename (24)
@@ -85,6 +93,7 @@ TEXT_ORG          .equ $400
 ; month (1)
 ; year (1)
 ; packet size = 32 bytes  : total packet size in bytes
+;
 FST_ENTRY_SIZE          .equ 32  ; bytes
 FST_FILES_PER_SECT      .equ (512 / FST_ENTRY_SIZE)
 FST_FILES_PER_DIR       .equ (512 / FST_ENTRY_SIZE)
@@ -105,10 +114,15 @@ FS_LBA_END              .equ (FS_LBA_START + FS_NBR_FILES - 1)
 
 CF_CARD_LBA_SIZE        .equ $800       ; temporary small size
 
-ROOT_DIR_ID:            .equ FST_LBA_START
+ROOT_dirID:              .equ FST_LBA_START
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; GLOBAL SYSTEM VARIABLES
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ; EXTERNAL INTERRUPT TABLE
 ; highest priority at lowest address
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 .dw int_0
 .dw int_1
 .dw int_2
@@ -117,8 +131,10 @@ ROOT_DIR_ID:            .equ FST_LBA_START
 .dw int_5
 .dw int_6
 .dw int_7
+
 ; RESET VECTOR DECLARATION
 .dw kernel_reset_vector
+
 ;; EXCEPTION VECTOR TABLE
 ;; Total of 7 entries, starting at address $0012
 .dw trap_privilege
@@ -128,8 +144,10 @@ ROOT_DIR_ID:            .equ FST_LBA_START
 .dw 0
 .dw 0
 .dw 0
+
 ;; SYSTEM CALL VECTOR TABLE
 ;; Starts at address $0020
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 .dw syscall_breakpoint
 .dw syscall_rtc
 .dw syscall_ide
@@ -144,6 +162,13 @@ ROOT_DIR_ID:            .equ FST_LBA_START
 .dw syscall_terminate_proc
 .dw syscall_system
 .dw syscall_boot_installer
+
+;; FILE INCLUDES
+.include "bios.exp"         ; to obtain the BIOS_RESET_VECTOR location (for reboots)
+.include "lib/stdio.asm"
+.include "lib/ctype.asm"
+.include "lib/token.asm"
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 sys_bkpt             .equ 0
 sys_rtc              .equ 1
@@ -176,20 +201,23 @@ sys_boot_install     .equ 13
 .export sys_system
 .export sys_boot_install
 
-; EXTERNAL INTERRUPTS
+; EXTERNAL INTERRUPTS' CODE BLOCK
 ; uart1
 int_0:
   push a
   push d
   pushf
+
   mov a, [fifo_pi]
   mov d, a
+
   mov al, [_UART1_DATA]  ; get character
   cmp al, $03        ; CTRL-C
   je CTRLC
   cmp al, $1A        ; CTRL-Z
   je CTRLZ
   mov [d], al        ; add to fifo
+  
   mov a, [fifo_pi]
   inc a
   cmp a, fifo + FIFO_SIZE         ; check if pointer reached the end of the fifo
@@ -218,6 +246,7 @@ int_6:
   mov al, [active_proc_index]
   shl a              ; x2
   mov a, [proc_table_convert + a]  ; get process state start index
+    
   mov di, a
   mov a, sp
   inc a
@@ -237,10 +266,12 @@ int6_cycle_back:
   mov al, 1        ; next process = process 1
 int6_continue:
   mov [active_proc_index], al    ; set next active proc
+
 ; calculate LUT entry for next process
   mov ah, 0
   shl a              ; x2
   mov a, [proc_table_convert + a]    ; get process state start index  
+  
   mov si, a            ; source is proc state block
   mov a, sp
   sub a, 19
@@ -253,8 +284,10 @@ int6_continue:
 ; set VM process
   mov al, [active_proc_index]
   setptb
+    
   mov byte[_TIMER_C_0], 0        ; load counter 0 low byte
   mov byte[_TIMER_C_0], $10        ; load counter 0 high byte
+      
   popa
   sysret
 
@@ -263,14 +296,17 @@ int_7:
   push a
   push d
   pushf
+      
   mov a, [fifo_pi]
   mov d, a
+
   mov al, [_UART0_DATA]  ; get character
   cmp al, $03        ; CTRL-C
   je CTRLC
   cmp al, $1A        ; CTRL-Z
   je CTRLZ
   mov [d], al        ; add to fifo
+  
   mov a, [fifo_pi]
   inc a
   cmp a, fifo + FIFO_SIZE         ; check if pointer reached the end of the fifo
@@ -282,6 +318,7 @@ int_7_continue:
   pop d
   pop a  
   sysret
+
 CTRLC:
   add sp, 5
   jmp syscall_terminate_proc
@@ -298,10 +335,12 @@ system_jmptbl:
   .dw change_debug_mode
 syscall_system:
   jmp [system_jmptbl + al]
+
 ; debug mode in register bl
 change_debug_mode:
   mov [kernel_debug_mode], bl
   sysret
+
 system_uname:
   mov d, uname_name
   call _puts
@@ -323,22 +362,28 @@ system_uname:
   call print_u8d
   call printnl
   sysret
+
 system_whoami:
   mov d, s_root
   call _puts
   sysret
+
 system_post_update:
   mov [_7SEG_DISPLAY], bl
   sysret
+
+; REBOOT SYSTEM
 syscall_reboot:
   push word $FFFF 
   push byte %00000000             ; dma_ack = 0, interrupts disabled, mode = supervisor, paging = off, halt=0, display_reg_load=0, dir=0
   push word BIOS_RESET_VECTOR    ; and then push RESET VECTOR of the shell to the stack
   sysret
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; switch to another process
 ;; inputs:
 ;; AL = new process number
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 syscall_resume_proc:
   mov g, a                            ; save the process number
   pusha                               ; save all registers into kernel stack
@@ -361,6 +406,7 @@ syscall_resume_proc:
   mov ah, 0
   shl a                               ; x2
   mov a, [proc_table_convert + a]     ; get process state start index  
+  
   mov si, a                           ; source is proc state block
   mov a, sp
   sub a, 19
@@ -373,6 +419,7 @@ syscall_resume_proc:
 ; set VM process
   mov al, [active_proc_index]
   setptb
+      
   popa
   sysret
 
@@ -412,14 +459,19 @@ list_procs_end:
 trap_privilege:
   jmp syscall_reboot
   push d
+
   mov d, s_priviledge
   call _puts
+
   pop d
+  
   sysret
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; BREAKPOINT EXCEPTION
 ; IMPORTANT: values in the stack are being pushed in big endian. i.e.: MSB at low address
 ; and LSB at high address. *** NEED TO CORRECT THIS IN THE MICROCODE and make it little endian again ***
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 syscall_breakpoint:
   pusha
 syscall_break_prompt:
@@ -514,13 +566,16 @@ print_base:
   mov a, $2000
   syscall sys_io
   jmp back
+
 s_break1:  
   .db "\nDebugger entry point.\n"
   .db "0. Show Registers\n"
   .db "1. Show 512B RAM block\n"
   .db "2. Continue Execution", 0
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; DIVIDE BY ZERO EXCEPTION
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 trap_div_zero:
   push a
   push d
@@ -536,12 +591,14 @@ trap_div_zero:
 trap_undef_opcode:
   sysret
 
-; RTC INTERRUPT
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; RTC SERVICES INTERRUPT
 ; RTC I/O bank = FFA0 to FFAF
 ; FFA0 to FFA7 is scratch RAM
 ; control register at $FFA8 [ W | R | S | Cal4..Cal0 ]
 ; al = 0..6 -> get
 ; al = 7..D -> set
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 syscall_rtc:
   push al
   push d
@@ -590,6 +647,7 @@ print_date:
   call _puts
   mov a, $2000
   syscall sys_io         ; display ' '
+  
   mov al, 4
   syscall sys_rtc        ; get day
   mov bl, ah
@@ -608,34 +666,42 @@ print_date:
   mov d, s_months
   add d, a
   call _puts
+  
   mov a, $2000
   syscall sys_io         ; display ' '
+  
   mov bl, $20
   call print_u8x         ; print 20 for year prefix
   mov al, 06
   syscall sys_rtc        ; get year
   mov bl, ah
   call print_u8x
+  
   mov a, $2000  
   syscall sys_io         ; display ' '
+
   mov al, 2
   syscall sys_rtc        ; get hours
   mov bl, ah
   call print_u8x
   mov a, $3A00    
   syscall sys_io         ; display ':'
+
   mov al, 01
   syscall sys_rtc        ; get minutes
   mov bl, ah
   call print_u8x
   mov a, $3A00  
   syscall sys_io         ; display ':'
+
   mov al, 0
   syscall sys_rtc        ; get seconds
   mov bl, ah
   call print_u8x
+  
   call printnl
   sysret
+  
 set_date:
   mov d, s_set_year
   call _puts
@@ -643,36 +709,42 @@ set_date:
   shl a, 8               ; only AL used, move to AH
   mov al, 0Dh            ; set RTC year
   syscall sys_rtc        ; set RTC
+  
   mov d, s_set_month
   call _puts
   call scan_u8x          ; read integer into A
   shl a, 8               ; only AL used, move to AH
   mov al, 0Ch            ; set RTC month
   syscall sys_rtc        ; set RTC
+
   mov d, s_set_day
   call _puts
   call scan_u8x          ; read integer into A
   shl a, 8               ; only AL used, move to AH
   mov al, 0Bh            ; set RTC month
   syscall sys_rtc        ; set RTC
+
   mov d, s_set_week
   call _puts
   call scan_u8x          ; read integer into A
   shl a, 8               ; only AL used, move to AH
   mov al, 0Ah            ; set RTC month
   syscall sys_rtc        ; set RTC
+
   mov d, s_set_hours
   call _puts
   call scan_u8x          ; read integer into A
   shl a, 8               ; only AL used, move to AH
   mov al, 09h            ; set RTC month
   syscall sys_rtc        ; set RTC
+
   mov d, s_set_minutes
   call _puts
   call scan_u8x          ; read integer into A
   shl a, 8               ; only AL used, move to AH
   mov al, 08h            ; set RTC month
   syscall sys_rtc        ; set RTC
+
   mov d, s_set_seconds
   call _puts
   call scan_u8x          ; read integer into A
@@ -681,7 +753,8 @@ set_date:
   syscall sys_rtc        ; set RTC
   sysret
 
-; IDE INTERRUPT
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; IDE SERVICES INTERRUPT
 ; al = option
 ; 0 = IDE reset, 1 = IDE sleep, 2 = read sector, 3 = write sector
 ; IDE read/write sector
@@ -689,6 +762,7 @@ set_date:
 ; user buffer pointer in D
 ; AH = number of sectors
 ; CB = LBA bytes 3..0
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 s_syscall_ide_dbg0: .db "> syscall_ide called: ", 0
 ide_serv_tbl:
   .dw ide_reset
@@ -713,6 +787,7 @@ syscall_ide:
   pop d
 syscall_ide_jmp:
   jmp [ide_serv_tbl + al]    
+  
 ide_reset:      
   mov byte[_ide_R7], 4            ; RESET IDE
   call ide_wait                   ; wait for IDE ready             
@@ -773,14 +848,17 @@ ide_write_sect_wait:
   call ide_write      
   ret
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; READ IDE DATA
 ; pointer in D
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ide_read:
   push d
 ide_read_loop:
   mov al, [_ide_R7]  
   and al, 80h                     ; BUSY FLAG
   jnz ide_read_loop               ; wait loop
+  
   mov al, [_ide_R7]
   and al, %00001000               ; DRQ FLAG
   jz ide_read_end
@@ -792,14 +870,17 @@ ide_read_end:
   pop d
   ret
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; WRITE IDE DATA
 ; data pointer in D
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ide_write:
   push d
 ide_write_loop:
   mov al, [_ide_R7]  
   and al, 80h             ; BUSY FLAG
   jnz ide_write_loop      ; wait loop
+  
   mov al, [_ide_R7]
   and al, %00001000       ; DRQ FLAG
   jz ide_write_end
@@ -811,14 +892,18 @@ ide_write_end:
   pop d
   ret
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; wait for IDE to be ready
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ide_wait:
   mov al, [_ide_R7]  
   and al, 80h        ; BUSY FLAG
   jnz ide_wait
   ret
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; i/o interrupt
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; Baud  Divisor
 ; 50    2304
 ; 110   1047
@@ -833,13 +918,15 @@ io_jmp:
   .dw io_getchar
   .dw io_uart_setup
   .dw io_getchar_noech
+
 syscall_io:
   jmp [io_jmp + al]
+
 ; b = baud rate divisors, bl = DLAB_0, bh = BLAB_1
 io_uart_setup:
   mov byte[_UART0_LCR], $83    ; 8 data, 1 stop, no parity  , divisor latch = 1, UART address 3 = Line Control Register
-  mov [_UART0_DLAB_0], b       ; baud
-; mov [_UART0_DLAB_1], $00     ; divisor latch high byte = 0      
+  mov byte[_UART0_DLAB_0], 12  ; baud
+  mov byte[_UART0_DLAB_1], 0   ; divisor latch high byte = 0      
   mov byte[_UART0_LCR], 3      ; UART address 3 = Line Control Register
   mov byte[_UART0_IER], 1      ; enable interrupt: receive data available
   mov byte[_UART0_FCR], 0      ; disable FIFO
@@ -863,9 +950,11 @@ io_getchar_L0:
   mov b, [fifo_pi]
   cmp a, b
   je io_getchar_fail
+  
   mov d, a
   mov al, [d]
   push al
+  
   mov a, [fifo_pr]
   inc a
   cmp a, fifo + FIFO_SIZE      ; check if pointer reached the end of the fifo
@@ -890,6 +979,7 @@ io_getchar_fail:
   pop b
   mov al, 0                    ; AL = 0 means no char received
   sysret
+
 ; char in ah
 ; al = sucess code
 io_getchar_noech:
@@ -900,9 +990,11 @@ io_getchar_noech_L0:
   mov b, [fifo_pi]
   cmp a, b
   je io_getchar_noech_fail
+  
   mov d, a
   mov al, [d]
   push al
+  
   mov a, [fifo_pr]
   inc a
   cmp a, fifo + FIFO_SIZE      ; check if pointer reached the end of the fifo
@@ -920,7 +1012,7 @@ io_getchar_noech_fail:
   pop b
   mov al, 0                    ; AL = 0 means no char received
   sysret
-
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; FILE SYSTEM DATA
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; infor for : IDE SERVICES INTERRUPT
@@ -973,6 +1065,7 @@ file_system_jmptbl:
   .dw fs_path_to_dir_id_user    ; 19
   .dw fs_load_from_path_user    ; 20  
   .dw fs_filepath_exists_user   ; 21
+
 s_syscall_fs_dbg0: .db "\n> syscall_file_system called: ", 0
 syscall_file_system:
   push bl
@@ -992,12 +1085,15 @@ syscall_file_system:
   pop d
 syscall_filesystem_jmp:
   jmp [file_system_jmptbl + al]
+
 fs_mkfs:  
   sysret  
+  
 fs_cd_root:
-  mov a, ROOT_DIR_ID
+  mov a, ROOT_dirID
   mov [current_dirID], a      ; set current directory LBA to ROOT
   sysret  
+
 ; filename in D (userspace data)
 ; permission in BL
 fs_chmod:
@@ -1006,6 +1102,7 @@ fs_chmod:
   mov di, temp_data
   mov c, 128
   load                        ; load filename from user-space
+    
   mov a, [current_dirID]
   inc a                       ; metadata sector
   mov b, a
@@ -1020,6 +1117,7 @@ fs_chmod_L1:
   mov di, temp_data
   call _strcmp
   je fs_chmod_found_entry
+
   add d, 32
   mov a, [index]
   inc a
@@ -1042,6 +1140,7 @@ fs_chmod_found_entry:
   call ide_write_sect         ; write sector
 fs_chmod_not_found:
   sysret
+
 ;; bootloader installer
 ;; kernel LBA address in A
 syscall_boot_installer:
@@ -1051,6 +1150,7 @@ syscall_boot_installer:
   mov ah, $01                 ; 1 sector
   mov d, transient_area
   call ide_read_sect          ; read sector
+  
   pop a
   mov [d + 510], a            ; update LBA address
   mov b, 0
@@ -1058,8 +1158,13 @@ syscall_boot_installer:
   mov ah, $01                 ; 1 sector
   mov d, transient_area
   call ide_write_sect         ; write sector
+  
   sysret
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; CREATE NEW DIRECTORY
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; search list for NULL name entry. add new directory to list
 fs_mkdir:
   mov si, d
@@ -1142,6 +1247,7 @@ fs_mkdir_found_null2:
   mov d, transient_area
   mov ah, $01                     ; disk write, 1 sector
   call ide_write_sect             ; write sector
+
 ; after adding the new directory's information to its parent directory's list
 ; we need to now enter the new directory, and to it add two new directories!
 ; which directories do we need to add ? '..' and '.' are the directories needed.
@@ -1149,6 +1255,7 @@ fs_mkdir_found_null2:
 ; and do not have actual physical entries in the disk as real directories.
 ; i.e. they only exist as list entries in the new directory created so that
 ; the new directory can reference its parent and itself
+;
 ; we need to add both '..' and '.'
 ; this first section is for '..' and on the section below we do the same for '.'
   pop a                         ; retrieve the new directory's LBA  
@@ -1197,7 +1304,10 @@ fs_mkdir_found_null3:
   mov d, transient_area
   mov ah, $01                   ; disk write, 1 sector
   call ide_write_sect           ; write sector
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; like we did above for '..', we need to now add the '.' directory to the list.
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
   pop a                         ; retrieve the new directory's LBA  
   push a
   add a, 1
@@ -1246,6 +1356,8 @@ fs_mkdir_found_null4:
   call ide_write_sect           ; write sector
 fs_mkdir_end:
   sysret
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; get path from a given directory dirID
 ;; pseudo code:
 ;  fs_dir_id_to_path(int dirID, char *D){
@@ -1262,6 +1374,8 @@ fs_mkdir_end:
 ;  }
 ;; A = dirID
 ;; D = generated path string pointer
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; sample path: /usr/bin
 fs_dir_id_to_path:
   mov d, filename
   mov al, 0
@@ -1277,19 +1391,21 @@ fs_dir_id_to_path_E0:
   mov si, s_fslash
   mov di, d
   call _strcat                    ; add '/' to end of path
-  cmp a, ROOT_DIR_ID               ; check if we are at the root directory
+  cmp a, ROOT_dirID               ; check if we are at the root directory
   je fs_dir_id_to_path_root
   call get_parentID_from_dirID    ; use current ID (A) to find parentID (into A)
-  cmp a, ROOT_DIR_ID               ; check if we are at the root directory
+  cmp a, ROOT_dirID               ; check if we are at the root directory
   je fs_dir_id_to_path_root
   call fs_dir_id_to_path_E0     ; recursively call itself
 fs_dir_id_to_path_root:
   ret
 
-;; inputs:
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; in_puts:
 ;; A = directory ID
-;; outputs:
+;; out_puts:
 ;; D = pointer to directory name string
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 get_dirname_from_dirID:
   push a
   push b
@@ -1308,10 +1424,12 @@ get_dirname_from_dirID:
   pop a
   ret
 
-;; inputs:
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; in_puts:
 ;; A = directory ID
-;; outputs:
+;; out_puts:
 ;; A = parent directory ID
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 get_parentID_from_dirID:
   push b
   push d
@@ -1325,6 +1443,7 @@ get_parentID_from_dirID:
   pop b
   ret
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; get dirID from a given path string
 ;; in_puts:
 ;; D = path pointer 
@@ -1333,6 +1452,7 @@ get_parentID_from_dirID:
 ;; if dir non existent, A = FFFF (fail code)
 ;; /usr/local/bin    - absolute
 ;; local/bin/games    - relative
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 fs_path_to_dir_id_user:
   mov si, d
   mov di, temp_data
@@ -1340,6 +1460,7 @@ fs_path_to_dir_id_user:
   load
   call get_dirID_from_path
   sysret
+
 get_dirID_from_path:
   mov b, temp_data
   mov [prog], b                  ; token pointer set to path string
@@ -1351,12 +1472,13 @@ get_dirID_from_path:
   call _putback
   jmp get_dirID_from_path_E0
 get_dirID_from_path_abs:
-  mov a, ROOT_DIR_ID
+  mov a, ROOT_dirID
 get_dirID_from_path_E0:
   call get_token
   mov bl, [toktyp]
   cmp bl, TOKTYP_IDENTIFIER
   jne get_dirID_from_path_end   ; check if there are tokens after '/'. i.e. is this a 'cd /' command?
+
   mov si, tokstr
   mov di, filename
   call _strcpy        
@@ -1394,12 +1516,15 @@ get_dirID_from_path_fail:
   mov A, $FFFF
   ret
 
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; check if file exists by a given path string
 ;; in_puts:
 ;; D = path pointer 
 ;; OUTPUTS:
 ;; A = success code, if file exists gives LBA, else, give 0
 ;; /usr/local/bin/ed
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 fs_filepath_exists_user:
   mov si, d
   mov di, temp_data
@@ -1418,7 +1543,7 @@ file_exists_by_path:
   call _putback
   jmp file_exists_by_path_E0
 file_exists_by_path_abs:
-  mov a, ROOT_DIR_ID
+  mov a, ROOT_dirID
 file_exists_by_path_E0:
   call get_token
   mov bl, [toktyp]
@@ -1464,12 +1589,14 @@ file_exists_by_path_end:
   mov a, 0                        ; return 0 because file was not found
   ret
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; load file data from a given path string
 ;; inputs:
 ;; D = path pointer 
 ;; DI = userspace program data destination
 ;; /usr/local/bin/ed
 ;; ./ed
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 fs_load_from_path_user:
   push di
   mov si, d
@@ -1493,7 +1620,7 @@ loadfile_from_path:
   call _putback
   jmp loadfile_from_path_E0
 loadfile_from_path_abs:
-  mov a, ROOT_DIR_ID
+  mov a, ROOT_dirID
 loadfile_from_path_E0:
   call get_token
   mov bl, [toktyp]
@@ -1543,20 +1670,26 @@ loadfile_isdirectory:
 loadfile_from_path_end:
   ret
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; return the ID of the current directory
 ;; ID returned in B
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 fs_get_curr_dirID:
   mov b, [current_dirID]
   sysret
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; CD
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; new dirID in B
 fs_cd:
   mov [current_dirID], b
   sysret  
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; LS SIMPLE
 ;; dirID in B
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ls_simple_num: .db 0
 fs_ls_simple:
   inc b                        ; metadata sector
@@ -1596,8 +1729,10 @@ fs_ls_simple_end:
   call printnl
   sysret
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; LS
 ;; dirID in B
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ls_count:       .db 0
 ls_file_type:   .db 0
 ls_file_attrib: .db 0
@@ -1720,7 +1855,9 @@ fs_ls_format_exe:
   call _putchar
   jmp fs_ls_newline
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; pad string to 32 chars
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; count in C
 padding:
   push a
@@ -1742,7 +1879,9 @@ padding_L1:
 ; file structure:
 ; 512 bytes header
 ; header used to tell whether the block is free
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; CREATE NEW TEXTFILE
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; d = content pointer in user space
 fs_mktxt:
 	mov si, d
@@ -1791,22 +1930,26 @@ fs_mktxt_add_to_dir_null:
 	sub d, 2
 	pop b				; get file LBA
 	mov [d], b			; save LBA	
+	
 	; set file creation date	
 	add d, 4
 	mov al, 4
 	syscall sys_rtc
 	mov al, ah
 	mov [d], al			; set day
+	
 	inc d
 	mov al, 5
 	syscall sys_rtc
 	mov al, ah
 	mov [d], al			; set month
+	
 	inc d
 	mov al, 6
 	syscall sys_rtc
 	mov al, ah
 	mov [d], al			; set year
+	
 ; write sector into disk for new directory entry
 	mov b, g
 	mov c, 0
@@ -1815,8 +1958,11 @@ fs_mktxt_add_to_dir_null:
 	call ide_write_sect		; write sector
 	sysret
 
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; finds an empty data block
 ;; block LBA returned in B
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 fs_find_empty_block:
   mov b, FS_LBA_START     ; raw files starting block
   mov c, 0                ; reset LBA to 0
@@ -1831,7 +1977,9 @@ fs_find_empty_block_L1:
 fs_find_empty_block_found_null:
   ret
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; CREATE NEW BINARY FILE
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; search for first null block
 fs_mkbin:
   mov si, d
@@ -1904,6 +2052,7 @@ fs_mkbin_add_to_dir_null:
   sub d, 2
   pop b                         ; get file LBA
   mov [d], b                    ; save LBA
+  
   ; set file creation date  
   add d, 4
   mov al, 4
@@ -1927,8 +2076,11 @@ fs_mkbin_add_to_dir_null:
   mov ah, $01                   ; disk write, 1 sector
   call ide_write_sect           ; write sector
   sysret
+
       
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; CREATE NEW BINARY FILE VIA KEYBOARD INPUT WITH NO ECHO
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; search for first null block
 fs_mkbin_sil:
   mov si, d
@@ -2025,7 +2177,9 @@ fs_mkbin_sil_add_to_dir_null:
   call ide_write_sect           ; write sector
   sysret
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; PWD - PRINT WORKING DIRECTORY
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;    
 fs_pwd:
   mov d, filename
   mov al, 0
@@ -2038,15 +2192,20 @@ fs_pwd:
   call printnl
   sysret
 
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; get current directory LBA
 ;; A: returned LBA
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;:
 cmd_get_curr_dir_LBA:
   mov a, [current_dirID]
   sysret
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; LOAD FILE INTO MEM
 ;; file loaded to transient_area
 ;; D: filename pointer
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;:
 cmd_loadfile_user:
   mov si, d
   mov di, filename
@@ -2054,6 +2213,7 @@ cmd_loadfile_user:
   load
   call cmd_loadfile
   sysret
+
 cmd_loadfile:
   mov a, [current_dirID]
   inc a                             ; metadata sector
@@ -2086,9 +2246,11 @@ cmd_loadfile_found_entry:
 cmd_loadfile_not_found:
   ret
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; CAT
 ;; userspace destination data pointer in D
 ;; filename starts at D, but is overwritten after the read is made
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;:
 fs_cat:
   push d                              ; save userspace file data destination
   mov si, d
@@ -2132,7 +2294,9 @@ fs_cat_not_found:
   pop d
   sysret
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; RMDIR - remove DIR by dirID
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; deletes a directory entry in the given directory's file list 
 ; also deletes the actual directory entry in the FST
 ; synopsis: rmdir /usr/local/testdir
@@ -2173,6 +2337,7 @@ fs_rmdir_found_entry:
   mov ah, $01          ; 
   mov d, transient_area
   call ide_write_sect           ; write sector and erase file's entry in the current DIR
+
   mov b, g
   mov d, transient_area  
   cla
@@ -2185,7 +2350,9 @@ fs_rmdir_not_found:
   pop b
   sysret
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; RM - remove file
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; frees up the data sectors for the file further down the disk
 ; deletes file entry in the directory's file list 
 fs_rm:
@@ -2236,7 +2403,9 @@ fs_rm_found_entry:
 fs_rm_not_found:  
   sysret  
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; mv - move / change file name
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 fs_mv:
   mov si, d
   mov di, temp_data
@@ -2290,12 +2459,15 @@ fs_mv_not_found:
 kernel_reset_vector:  
   mov bp, STACK_BEGIN
   mov sp, STACK_BEGIN
+  
   mov al, %10000000
   stomsk                        ; mask out timer interrupt for now (only allow UART to interrupt)
   sti  
+
   lodstat
   and al, %11011111             ; disable display register loading
   stostat
+  
 ; reset fifo pointers
   mov a, fifo
   mov d, fifo_pi
@@ -2303,18 +2475,23 @@ kernel_reset_vector:
   mov d, fifo_pr
   mov [d], a  
   mov al, 2
-  mov b, 12                     ; baud rate = 9600
   syscall sys_io                ; enable uart in interrupt mode
+  
   mov d, s_kernel_started
   call _puts
+  
   mov d, s_prompt_init
   call _puts
+
   mov al, 16
   syscall sys_filesystem        ; set root dirID
+
   mov d, s_init_path
   syscall sys_spawn_proc              ; launch init as a new process
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Process Index in A
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 find_free_proc:
   mov si, proc_availab_table + 1      ; skip process 0 (kernel)
 find_free_proc_L0:
@@ -2327,7 +2504,10 @@ find_free_proc_free:
   sub a, 1 + proc_availab_table       ; get process index
   ret
   
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Process Index in AL
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 proc_memory_map:
   mov ah, 0
   mov b, a                      ; page in BL, 0 in BH
@@ -2341,6 +2521,7 @@ proc_memory_map_L0:
   cmp a, c                      ; check to see if we reached the end of memory
   jne proc_memory_map_L0
   ret
+  
 
 syscall_terminate_proc:
   add sp, 5                            ; clear stack of the values that were pushed by the interrupt (SP, Status, PC)
@@ -2352,21 +2533,26 @@ syscall_terminate_proc:
   mov d, a
   mov al, 0
   mov [d], al                           ; nullify process name
+
   mov al, [active_proc_index]
   mov ah, 0  
   mov d, a
   mov al, 0
   mov [d + proc_availab_table], al    ; make process empty again
+  
   mov al, [nbr_active_procs]          ; decrease nbr of active processes
   dec al
   mov [nbr_active_procs], al
+
 ; now load the shell process again
   mov al, 2                           ; next process = process 2 = shell
   mov [active_proc_index], al         ; set next active proc
+
 ; calculate LUT entry for next process
   mov ah, 0
   shl a                               ; x2
   mov a, [proc_table_convert + a]     ; get process state start index  
+  
   mov si, a                           ; source is proc state block
   mov a, sp
   sub a, 19
@@ -2379,6 +2565,7 @@ syscall_terminate_proc:
 ; set VM process
   mov al, [active_proc_index]
   setptb
+    
   popa
   sysret
 
@@ -2389,6 +2576,7 @@ syscall_pause_proc:
   mov al, [active_proc_index]
   shl a              ; x2
   mov a, [proc_table_convert + a]   ; get process state start index
+    
   mov di, a
   mov a, sp
   inc a
@@ -2400,10 +2588,12 @@ syscall_pause_proc:
 ; now load the shell process again
   mov al, 2                         ; next process = process 2 = shell
   mov [active_proc_index], al       ; set next active proc
+
 ; calculate LUT entry for next process
   mov ah, 0
   shl a                             ; x2
   mov a, [proc_table_convert + a]   ; get process state start index  
+  
   mov si, a                         ; source is proc state block
   mov a, sp
   sub a, 19
@@ -2416,12 +2606,15 @@ syscall_pause_proc:
 ; set VM process
   mov al, [active_proc_index]
   setptb
+    
   popa
   sysret
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; spawn a new process
 ;; D = path of the process file to be spawned
 ;; B = arguments ptr
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 syscall_spawn_proc:
 ; we save the active process first  
   pusha
@@ -2429,6 +2622,7 @@ syscall_spawn_proc:
   mov al, [active_proc_index]
   shl a              ; x2
   mov a, [proc_table_convert + a]    ; get process state table's start index
+  
   mov di, a
   mov a, sp
   inc a
@@ -2437,6 +2631,7 @@ syscall_spawn_proc:
   rep movsb                          ; save process state!
 ; restore kernel stack position to point before interrupt arrived
   add sp, 20
+  
   mov si, d                          ; copy the file path
   mov di, temp_data
   mov c, 512
@@ -2462,6 +2657,7 @@ syscall_spawn_proc:
   mov di, TEXT_ORG              ; code origin address for all user processes
   mov c, FS_FILE_SIZE                ; size of memory space to copy, which is equal to the max file size in disk (for now)
   store                              ; copy process data
+    
   call find_free_proc                ; index in A
   mov [active_proc_index], al        ; set new active process
   shl a, 5                           ; x32
@@ -2469,10 +2665,12 @@ syscall_spawn_proc:
   mov di, a
   mov si, temp_data                  ; copy and store process filename
   call _strcpy
+  
   call find_free_proc                ; index in A
   mov d, a
   mov al, 1
   mov [d + proc_availab_table], al   ; make process busy
+  
   mov al, [nbr_active_procs]         ; increase nbr of active processes
   inc al
   mov [nbr_active_procs], al
@@ -2492,9 +2690,11 @@ proc_table_convert:
   .dw proc_state_table + 120
   .dw proc_state_table + 140
   
+; ************************************************************
 ; GET HEX FILE
 ; di = destination address
 ; return length in bytes in C
+; ************************************************************
 _load_hex:
   push bp
   mov bp, sp
@@ -2532,9 +2732,11 @@ __load_hex_ret:
   pop bp
   ret
 
+; ************************************************************
 ; GET HEX FILE WITHOUT ECHO
 ; di = destination address
 ; return length in bytes in C
+; ************************************************************
 _load_hex_sil:
   push bp
   mov bp, sp
@@ -2589,15 +2791,20 @@ f_find:
 
 kernel_debug_mode:  .db 0 ; debug modes: 0 (normal mode)
                           ;              1 (level 1 debug)
+
 nbr_active_procs:   .db 0
 active_proc_index:  .db 1
+
 index:              .dw 0
 buffer_addr:        .dw 0
+
 fifo_pi:            .dw fifo
 fifo_pr:            .dw fifo
+
 ; file system variables
 current_dirID:      .dw 0        ; keep dirID of current directory
 s_init_path:        .db "/sbin/init", 0
+
 s_parent_dir:       .db "..", 0
 s_current_dir:      .db ".", 0
 s_fslash:           .db "/", 0
@@ -2606,13 +2813,16 @@ file_attrib:        .db "-rw x"      ; chars at powers of 2
 file_type:          .db "-dc"
 s_ps_header:        .db "PID COMMAND\n", 0
 s_ls_total:         .db "Total: ", 0
+
 uname_name:         .db "Sol-OS", 0
 uname_machine:      .db "Sol-1 74HC Homebrew MiniComputer", 0
 s_kernel:           .db "Kernel ver.: ", 0
 uname_ver_major:    .db 1
 uname_ver_minor:    .db 0
+
 s_ls_space:         .db "   ", 0
 s_root:             .db "root\n", 0
+
 s_int_en:           .db "interrupts enabled\n", 0
 s_kernel_started:   .db "kernel started\n", 0
 s_procname:         .db "enter process name: ", 0
@@ -2620,8 +2830,10 @@ s_prompt_init:      .db "starting init\n", 0
 s_priviledge:       .db "\nsoftware failure: privilege exception\n", 0
 s_divzero:          .db "\nexception: zero division\n", 0
 s_sp_value:         .db "Current KSP: ", 0
+
 s_ansi_blue:        .db "\033[38;5;32m", 0
 s_ansi_end:         .db "\033[0m", 0
+
 s_set_year:         .db "Year: ",     0
 s_set_month:        .db "Month: ",    0
 s_set_day:          .db "Day: ",      0
@@ -2629,33 +2841,39 @@ s_set_week:         .db "Weekday: ",  0
 s_set_hours:        .db "Hours: ",    0
 s_set_minutes:      .db "Minutes: ",  0
 s_set_seconds:      .db "Seconds: ",  0
-s_months:           .db "   ", 0
-                    .db "Jan", 0
-                    .db "Feb", 0
-                    .db "Mar", 0
-                    .db "Apr", 0
-                    .db "May", 0
-                    .db "Jun", 0
-                    .db "Jul", 0
-                    .db "Aug", 0
-                    .db "Sep", 0
-                    .db "Oct", 0
-                    .db "Nov", 0
-                    .db "Dec", 0
-s_week:             .db "Sun", 0
-                    .db "Mon", 0
-                    .db "Tue", 0
-                    .db "Wed", 0
-                    .db "Thu", 0
-                    .db "Fri", 0
-                    .db "Sat", 0
+s_months:      
+  .db "   ", 0
+  .db "Jan", 0
+  .db "Feb", 0
+  .db "Mar", 0
+  .db "Apr", 0
+  .db "May", 0
+  .db "Jun", 0
+  .db "Jul", 0
+  .db "Aug", 0
+  .db "Sep", 0
+  .db "Oct", 0
+  .db "Nov", 0
+  .db "Dec", 0
+
+s_week:        
+  .db "Sun", 0 
+  .db "Mon", 0 
+  .db "Tue", 0 
+  .db "Wed", 0 
+  .db "Thu", 0 
+  .db "Fri", 0 
+  .db "Sat", 0
+
 proc_state_table:   .fill 16 * 20, 0  ; for 15 processes max
 proc_availab_table: .fill 16, 0       ; space for 15 processes. 0 = process empty, 1 = process taken
 proc_names:         .fill 16 * 32, 0  ; process names
 filename:           .fill 512, 0      ; holds a path for file search
 temp_data:          .fill 512, 0      ;  user space data
 fifo:               .fill FIFO_SIZE
+
 scrap_sector:       .fill 512         ; scrap sector
 transient_area:     .db 0             ; beginning of the transient memory area. used for disk reads and other purposes    
+
 
 .end
