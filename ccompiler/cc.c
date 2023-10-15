@@ -2373,6 +2373,9 @@ void parse_function_call(int func_id){
   t_type expr_in;
   char num_arguments;
   int current_func_call_total_args;
+  int total_size_of_non_variable_params;
+
+  total_size_of_non_variable_params 
 
   current_func_call_total_args = function_table[func_id].total_parameter_size; // Necessary because it so happens that when we backtrack compilation, we need to reset the total number of found parameters to the original number found when the funtion is defined, so that we can then add the variable arguments on top of that number. Otherwise we'd keep adding and adding each time we backtrack and re-execute this function.
   get();
@@ -2387,39 +2390,70 @@ void parse_function_call(int func_id){
   back();
   param_index = 0;
   do{
-    if(function_table[func_id].local_vars[param_index].type.ind_level > 0 || 
-      is_array(function_table[func_id].local_vars[param_index].type)
-    ){
+    if(has_var_args(func_id)){
       expr_in = parse_expr();
-      emitln("  swp b");
-      emitln("  push b");
-    }
-    else if(function_table[func_id].local_vars[param_index].type.basic_type == DT_STRUCT){
-      emitln("  sub sp, %d", get_total_type_size(function_table[func_id].local_vars[param_index].type));
-      expr_in = parse_expr();
-      emitln("  mov si, b"); 
-      emitln("  lea d, [sp + 1]");
-      emitln("  mov di, d");
-      emitln("  mov c, %d", get_total_type_size(function_table[func_id].local_vars[param_index].type));
-      emitln("  rep movsb");
-    }
-    else{
-      expr_in = parse_expr();
-      switch(function_table[func_id].local_vars[param_index].type.basic_type){
-        case DT_CHAR:
-          emitln("  push bl");
-          break;
-        case DT_INT:
-          if(expr_in.basic_type == DT_CHAR && expr_in.ind_level == 0){
-            emitln("  snex b");
-          }
-          emitln("  swp b");
-          emitln("  push b");
-          break;
+      current_func_call_total_args += get_basic_type_size(expr_in);
+      if(expr_in.ind_level > 0 || 
+        is_array(expr_in)
+      ){
+        emitln("  swp b");
+        emitln("  push b");
+      }
+      else if(expr_in.basic_type == DT_STRUCT){
+        emitln("  sub sp, %d", get_total_type_size(expr_in));
+        emitln("  mov si, b"); 
+        emitln("  lea d, [sp + 1]");
+        emitln("  mov di, d");
+        emitln("  mov c, %d", get_total_type_size(expr_in));
+        emitln("  rep movsb");
+      }
+      else{
+        switch(expr_in.basic_type){
+          case DT_CHAR:
+            emitln("  push bl");
+            break;
+          case DT_INT:
+            if(expr_in.basic_type == DT_CHAR && expr_in.ind_level == 0){
+              emitln("  snex b");
+            }
+            emitln("  swp b");
+            emitln("  push b");
+            break;
+        }
       }
     }
-    if(has_var_args(func_id)){
-      current_func_call_total_args += get_basic_type_size(expr_in);
+    else{
+      if(function_table[func_id].local_vars[param_index].type.ind_level > 0 || 
+        is_array(function_table[func_id].local_vars[param_index].type)
+      ){
+        expr_in = parse_expr();
+        emitln("  swp b");
+        emitln("  push b");
+      }
+      else if(function_table[func_id].local_vars[param_index].type.basic_type == DT_STRUCT){
+        emitln("  sub sp, %d", get_total_type_size(function_table[func_id].local_vars[param_index].type));
+        expr_in = parse_expr();
+        emitln("  mov si, b"); 
+        emitln("  lea d, [sp + 1]");
+        emitln("  mov di, d");
+        emitln("  mov c, %d", get_total_type_size(function_table[func_id].local_vars[param_index].type));
+        emitln("  rep movsb");
+      }
+      else{
+        expr_in = parse_expr();
+        switch(function_table[func_id].local_vars[param_index].type.basic_type){
+          case DT_CHAR:
+            emitln("  push bl");
+            break;
+          case DT_INT:
+            if(expr_in.basic_type == DT_CHAR && expr_in.ind_level == 0){
+              emitln("  snex b");
+            }
+            emitln("  swp b");
+            emitln("  push b");
+            break;
+        }
+      }
     }
     param_index++;
   } while(tok == COMMA);
