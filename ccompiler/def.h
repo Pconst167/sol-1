@@ -539,7 +539,7 @@ void parse_continue(void);
 void parse_break(void);
 void parse_asm(void);
 void parse_directive(void);
-void parse_function_arguments(int func_index);
+int parse_variable_args(int func_id);
 void parse_function_call(int func_id);
 void parse_goto(void);
 
@@ -557,6 +557,7 @@ char *get_var_base_addr(char *dest, char *var_name);
 int get_param_size(void);
 int get_pointer_unit(t_type type);
 int get_basic_type_size(t_type type);
+int get_type_size_for_func_arg_parsing(t_type type);
 int get_struct_size(int id);
 int get_struct_elements_count(int struct_id);
 int get_struct_element_offset(int struct_id, char *name);

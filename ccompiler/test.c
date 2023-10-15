@@ -6,7 +6,7 @@ struct va_list{
 };
 
 void main(){
-  func(3, 5,6,7);
+  func(3, 5,6,7, 123, 125);
 
 
 }

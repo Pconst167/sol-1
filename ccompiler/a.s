@@ -7,7 +7,7 @@
 main:
   mov bp, $FFE0 ;
   mov sp, $FFE0 ; Make space for argc(2 bytes) and for 10 pointers in argv (local variables)
-;; func(3, 5,6,7); 
+;; func(3, 5,6,7, 123, 125); 
   mov b, $3
   swp b
   push b
@@ -20,8 +20,14 @@ main:
   mov b, $7
   swp b
   push b
+  mov b, $7b
+  swp b
+  push b
+  mov b, $7d
+  swp b
+  push b
   call func
-  add sp, 10
+  add sp, 12
   syscall sys_terminate_proc
 
 strcpy:
