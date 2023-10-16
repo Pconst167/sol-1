@@ -745,6 +745,12 @@ void pre_scan(void){
         get();
       }
     }
+    else if(tok == INLINE){ //it must be a function declaration
+      prog = tp;
+      declare_func();
+      skip_block();
+      continue;
+    }
 
     if(tok == SIGNED || tok == UNSIGNED || tok == LONG || tok == CONST || tok == VOID || tok == CHAR || tok == INT || tok == FLOAT || tok == DOUBLE || tok == STRUCT){
       if(tok == CONST){
@@ -787,6 +793,7 @@ void declare_func(void){
   int total_parameter_bytes;
   char param_name[ID_LEN];
   char is_main;
+  char _inline;
   char add_argc_argv;
 
   add_argc_argv = false;
@@ -796,6 +803,11 @@ void declare_func(void){
   func = &function_table[function_table_tos];
 
   get();
+  if(tok == INLINE){
+    func->_inline = true;
+    get();
+  }
+
   func->return_type.signedness = SNESS_SIGNED; // set as signed by default
   func->return_type.longness = LNESS_NORMAL; 
   while(tok == SIGNED || tok == UNSIGNED || tok == LONG || tok == CONST){
@@ -841,7 +853,7 @@ void declare_func(void){
       func->local_vars[func->local_var_tos].is_var_args  = false;
       temp_prog = prog;
       get();
-      if(tok == VAR_ARGS){
+      if(tok == VAR_ARG_DOTS){
         func->local_vars[func->local_var_tos].is_var_args = true;
         get();
         if(tok != CLOSING_PAREN) error("'...' needs to be the last function parameter if present.");
@@ -940,7 +952,7 @@ int get_param_size(){
   if(tok == SIGNED || tok == UNSIGNED) get();
   
   switch(tok){
-    case VAR_ARGS:
+    case VAR_ARG_DOTS:
       data_size = 0; // assign zero here as the real size will be computed when the variable arguments are pushed
       break;
     case CHAR:
@@ -2087,7 +2099,7 @@ t_type parse_atomic(void){
     string_id = search_string(string_const);
     if(string_id == -1) string_id = add_string_data(string_const);
     // now emit the reference to this string into the ASM
-    emitln("  mov b, _s%d ; \"%s\"", string_id, string_const);
+    emitln("  mov b, __s%d ; \"%s\"", string_id, string_const);
     expr_out.basic_type = DT_CHAR;
     expr_out.ind_level = 1;
     expr_out.signedness = SNESS_SIGNED;
@@ -2417,8 +2429,8 @@ void parse_function_call(int func_id){
   t_type expr_in;
   char num_arguments;
   int current_func_call_total_args;
+  int total_size_var_args;
 
-  //current_func_call_total_args = function_table[func_id].total_parameter_size; // Necessary because it so happens that when we backtrack compilation, we need to reset the total number of found parameters to the original number found when the funtion is defined, so that we can then add the variable arguments on top of that number. Otherwise we'd keep adding and adding each time we backtrack and re-execute this function.
   get();
   if(tok == CLOSING_PAREN){
     if(function_table[func_id].num_arguments != 0 && !has_var_args(func_id))
@@ -2433,7 +2445,16 @@ void parse_function_call(int func_id){
   current_func_call_total_args = 0;
   do{
     if(function_table[func_id].local_vars[param_index].is_var_args){
-      current_func_call_total_args += parse_variable_args(func_id);
+      total_size_var_args = parse_variable_args(func_id);
+      current_func_call_total_args += total_size_var_args;;
+      function_table[func_id].total_var_args_size = total_size_var_args;
+      // Add the variable args total offset to each parameter's address in the stack
+      // So that the correct addreses are set for each parameter.
+      /*for(int i = 0; i < function_table[func_id].local_var_tos; i++){
+        if(!function_table[func_id].local_vars[i].is_var_args){
+          function_table[func_id].local_vars[i].bp_offset += total_size_var_args;
+        }
+      }*/
       break;
     }
     else{
@@ -2482,6 +2503,7 @@ void parse_function_call(int func_id){
   if(function_table[func_id].total_parameter_size > 0)
     emitln("  add sp, %d", current_func_call_total_args); // clean stack of the arguments added to it
 }
+
 void dbg_print_var_info(t_var *var){
   int i;
   int local = 0;
@@ -2720,7 +2742,7 @@ void emit_string_table_data(void){
 
   for(i = 0; string_table[i][0]; i++){
     // emit the declaration of this string, into the data block
-    emit_data("_s%d", i);
+    emit_data("__s%d", i);
     emit_data(": .db \"");
     emit_data(string_table[i]);
     emit_data("\", 0\n");
@@ -2741,7 +2763,12 @@ char *get_var_base_addr(char *dest, char *var_name){
 
   if(local_var_exists(var_name) != -1){ // is a local variable
     var_id = local_var_exists(var_name);
-    sprintf(dest, "bp + %d", function_table[current_func_id].local_vars[var_id].bp_offset);
+    if(function_table[current_func_id].local_vars[var_id].is_parameter){
+      sprintf(dest, "bp + %d", function_table[current_func_id].local_vars[var_id].bp_offset + function_table[current_func_id].total_var_args_size);
+    }
+    else{
+      sprintf(dest, "bp + %d", function_table[current_func_id].local_vars[var_id].bp_offset);
+    }
   }
   else if(global_var_exists(var_name) != -1)  // is a global variable
     strcpy(dest, var_name);
@@ -2768,7 +2795,7 @@ t_type emit_var_addr_into_d(char *var_name){
     else{
       get_var_base_addr(temp, var_name);
       // both array and parameter means this is a parameter local variable to a function
-      // that is really a pointer variable and not really a array.
+      // that is really a pointer variable and not really an array.
       if(is_array(function_table[current_func_id].local_vars[var_id].type) && function_table[current_func_id].local_vars[var_id].is_parameter){
         emitln("  mov b, [%s] ; $%s", temp, var_name);
         emitln("  mov d, b");
@@ -3215,7 +3242,7 @@ void parse_struct_initialization_data(int struct_id, int array_size){
                   break;
                 case STRING_CONST:
                   int string_id = add_string_data(string_const);
-                  emit_data(".dw _s%u\n", string_id);
+                  emit_data(".dw __s%u\n", string_id);
               }
             }
             else{
@@ -3241,7 +3268,7 @@ void parse_struct_initialization_data(int struct_id, int array_size){
                 break;
               case STRING_CONST:
                 int string_id = add_string_data(string_const);
-                emit_data(".dw _s%u\n", string_id);
+                emit_data(".dw __s%u\n", string_id);
                 break;
             }
             break;
@@ -3294,10 +3321,14 @@ void declare_enum(void){
     get();
     if(toktype != IDENTIFIER) error("Identifier expected");
     strcpy(enum_table[enum_table_tos].elements[element_tos].name, token);
+    get();
+    if(tok == ASSIGNMENT){
+      get();
+      value = int_const;
+    }
     enum_table[enum_table_tos].elements[element_tos].value = value;
     value++;
     element_tos++;  
-    get();
   } while(tok == COMMA);
   
   enum_table_tos++;
@@ -3581,7 +3612,7 @@ void emit_static_var_initialization(t_var *var){
       else if(toktype == STRING_CONST){
         int string_id;
         string_id = add_string_data(string_const);
-        emit_data("_s%u, ", string_id);
+        emit_data("__s%u, ", string_id);
       }
       else 
         error("Unknown data type");
@@ -4255,7 +4286,7 @@ void get(void){
       if(*prog == '.' && *(prog+1) == '.'){
         *t++ = *prog++;
         *t++ = *prog++;
-        tok = VAR_ARGS;
+        tok = VAR_ARG_DOTS;
       }
       else tok = STRUCT_DOT;
     }

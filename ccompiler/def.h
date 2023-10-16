@@ -25,9 +25,14 @@ typedef enum {
   PRAGMA, 
   INCLUDE, 
   DEFINE,
+  INLINE,
 
-  VAR_ARGS,
+  VAR_ARG_DOTS,
   TYPEDEF,
+  REGISTER,
+  AUTO,
+  VOLATILE,
+  EXTERN,
   STATIC,
   VOID,
   CHAR,
@@ -38,6 +43,7 @@ typedef enum {
   LONG,
   SIGNED,
   UNSIGNED,
+  UNION,
   STRUCT,
   STRUCT_DOT,
   STRUCT_ARROW,
@@ -118,7 +124,12 @@ struct{
   "pragma",                  PRAGMA, 
   "include",                 INCLUDE, 
   "define",                  DEFINE,
+  "inline",                  INLINE,
   "typedef",                 TYPEDEF,
+  "register",                REGISTER,
+  "auto",                    AUTO,
+  "volatile",                VOLATILE,
+  "extern",                  EXTERN,
   "static",                  STATIC,
   "void",                    VOID,
   "char",                    CHAR,
@@ -129,6 +140,7 @@ struct{
   "long",                    LONG,
   "signed",                  SIGNED,
   "unsigned",                UNSIGNED,
+  "union",                   UNION,
   "struct",                  STRUCT,
   "struct_dot",              STRUCT_DOT,
   "struct_arrow",            STRUCT_ARROW,
@@ -292,6 +304,8 @@ typedef struct {
   char goto_labels_table[MAX_GOTO_LABELS_PER_FUNC][ID_LEN];
   int goto_labels_table_tos;
   char num_arguments;
+  char total_var_args_size; // obviously not a function feature, but a transient value used when parameter variables are referenced in the code.
+  char _inline;
 } t_user_func;
 
 char *basic_type_to_str_table[] = {
@@ -312,21 +326,26 @@ struct _keyword_table{
   "pragma",   PRAGMA,
   "define",   DEFINE,
   "asm",      ASM,
+  "inline",   INLINE,
 
+  "register", REGISTER,
+  "auto",     AUTO,
+  "volatile", VOLATILE,
+  "extern",   EXTERN,
   "typedef",  TYPEDEF,
-  "void",     VOID,
-  "char",     CHAR,
-  "int",      INT,
-  "float",    FLOAT,
-  "double",   DOUBLE,
-
   "static",   STATIC,
   "const",    CONST,
   "signed",   SIGNED,
   "unsigned", UNSIGNED,
   "long",     LONG,
 
+  "void",     VOID,
+  "char",     CHAR,
+  "int",      INT,
+  "float",    FLOAT,
+  "double",   DOUBLE,
   "enum",     ENUM,
+  "union",    UNION,
   "struct",   STRUCT,
   "sizeof",   SIZEOF,
 

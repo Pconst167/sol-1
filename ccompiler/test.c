@@ -5,18 +5,29 @@ struct va_list{
 
 };
 
+char *s1 = "Hello World.\n";
+char *s2 = "My Name\n";
+char *s3 = "is Paulo.\n";
+
 void main(){
-  func(3, 5,6,7, 123, 125);
-
-
-}
-
-void func(int count, ...){
-  struct va_list args;
+  print(3, s1, s2, s3);
 
 }
 
-int va_arg(struct va_list *arg, int size){
+void print(int count, ...){
+  char **p;
+  int i;
+
+  p = &count;
+  p = p - 2;
+  for(i = 0; i < count; i++){
+    printf(*p);
+    p = p - 2;
+  }
+  //va_start(args, &count);  
+}
+
+inline int va_arg(struct va_list *arg, int size){
   int val;
   if(size == 1){
     val = *(char*)arg->p;
@@ -49,4 +60,15 @@ void print_info(const char* format, ...){
 
   puts(tempbuffer);
 }
+
+arg0
+...
+argn
+pc
+bp
+local0    <<< BP
+...
+localn
+...       <<< SP
+
 */

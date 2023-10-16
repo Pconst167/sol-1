@@ -7,27 +7,21 @@
 main:
   mov bp, $FFE0 ;
   mov sp, $FFE0 ; Make space for argc(2 bytes) and for 10 pointers in argv (local variables)
-;; func(3, 5,6,7, 123, 125); 
+;; print(3, s1, s2, s3); 
   mov b, $3
   swp b
   push b
-  mov b, $5
+  mov b, [_s1] ; $s1           
   swp b
   push b
-  mov b, $6
+  mov b, [_s2] ; $s2           
   swp b
   push b
-  mov b, $7
+  mov b, [_s3] ; $s3           
   swp b
   push b
-  mov b, $7b
-  swp b
-  push b
-  mov b, $7d
-  swp b
-  push b
-  call func
-  add sp, 12
+  call print
+  add sp, 8
   syscall sys_terminate_proc
 
 strcpy:
@@ -1435,10 +1429,77 @@ include_stdio_asm:
   leave
   ret
 
-func:
+print:
   enter 0 ; (push bp; mov bp, sp)
-; $args 
-  sub sp, 2
+; $p 
+; $i 
+  sub sp, 4
+;; p = &count; 
+  lea d, [bp + -1] ; $p
+  push d
+  lea d, [bp + 11] ; $count
+  mov b, d
+  pop d
+  mov [d], b
+;; p = p - 2; 
+  lea d, [bp + -1] ; $p         
+  mov b, [bp + -1] ; $p             
+; START TERMS
+  push a
+  mov a, b
+  mov b, $2
+  sub a, b
+  mov b, a
+  pop a
+; END TERMS        
+  mov [d], b
+;; for(i = 0; i < count; i++){ 
+_for22_init:
+  lea d, [bp + -3] ; $i         
+  mov b, $0        
+  mov [d], b
+_for22_cond:
+  mov b, [bp + -3] ; $i             
+; START RELATIONAL
+  push a
+  mov a, b
+  mov b, [bp + 11] ; $count             
+  cmp a, b
+  slt ; < 
+  pop a
+; END RELATIONAL
+  cmp b, 0
+  je _for22_exit
+_for22_block:
+;; printf(*p); 
+  mov b, [bp + -1] ; $p             
+  mov d, b
+  mov b, [d]
+  swp b
+  push b
+  call printf
+  add sp, 2
+;; p = p - 2; 
+  lea d, [bp + -1] ; $p         
+  mov b, [bp + -1] ; $p             
+; START TERMS
+  push a
+  mov a, b
+  mov b, $2
+  sub a, b
+  mov b, a
+  pop a
+; END TERMS        
+  mov [d], b
+_for22_update:
+  mov b, [bp + -3] ; $i             
+  mov g, b
+  inc b
+  lea d, [bp + -3] ; $i
+  mov [d], b
+  mov b, g
+  jmp _for22_cond
+_for22_exit:
   leave
   ret
 
@@ -1447,7 +1508,7 @@ va_arg:
 ; $val 
   sub sp, 2
 ;; if(size == 1){ 
-_if22_cond:
+_if23_cond:
   mov b, [bp + 5] ; $size             
 ; START RELATIONAL
   push a
@@ -1458,8 +1519,8 @@ _if22_cond:
   pop a
 ; END RELATIONAL
   cmp b, 0
-  je _if22_else
-_if22_true:
+  je _if23_else
+_if23_true:
 ;; val = *(char*)arg->p; 
   lea d, [bp + -1] ; $val
   push d
@@ -1473,10 +1534,10 @@ _if22_true:
   mov bh, 0
   pop d
   mov [d], b
-  jmp _if22_exit
-_if22_else:
+  jmp _if23_exit
+_if23_else:
 ;; if(size == 2){ 
-_if23_cond:
+_if24_cond:
   mov b, [bp + 5] ; $size             
 ; START RELATIONAL
   push a
@@ -1487,8 +1548,8 @@ _if23_cond:
   pop a
 ; END RELATIONAL
   cmp b, 0
-  je _if23_else
-_if23_true:
+  je _if24_else
+_if24_true:
 ;; val = *(int*)arg->p; 
   lea d, [bp + -1] ; $val
   push d
@@ -1501,16 +1562,16 @@ _if23_true:
   mov b, [d]
   pop d
   mov [d], b
-  jmp _if23_exit
-_if23_else:
+  jmp _if24_exit
+_if24_else:
 ;; printf("Unknown type size in va_arg() call. Size needs to be either 1 or 2."); 
-  mov b, _s0 ; "Unknown type size in va_arg() call. Size needs to be either 1 or 2."
+  mov b, __s0 ; "Unknown type size in va_arg() call. Size needs to be either 1 or 2."
   swp b
   push b
   call printf
   add sp, 2
+_if24_exit:
 _if23_exit:
-_if22_exit:
 ;; arg->p = arg->p + size; 
   lea d, [bp + 7] ; $arg
   mov d, [d]
@@ -1549,7 +1610,13 @@ va_end:
 ; --- END TEXT BLOCK
 
 ; --- BEGIN DATA BLOCK
-_s0: .db "Unknown type size in va_arg() call. Size needs to be either 1 or 2.", 0
+_s1_data: .db "Hello World.\n", 0
+_s1: .dw _s1_data
+_s2_data: .db "My Name\n", 0
+_s2: .dw _s2_data
+_s3_data: .db "is Paulo.\n", 0
+_s3: .dw _s3_data
+__s0: .db "Unknown type size in va_arg() call. Size needs to be either 1 or 2.", 0
 
 _heap_top: .dw _heap
 _heap: .db 0

@@ -4,43 +4,38 @@
 #include <ESP8266HTTPClient.h>
 #include <LittleFS.h>
 
-const int MAX_CLIENTS = 4;
-const char* ssid = "";
-const char* password = "";
-uint8_t buffer[32 * 1024];
-int len;
-int baud = 9600;
+// Wifi
+String    ssid = "";
+String    password = "";
 
+// Serial Port
+uint16_t len;
+uint16_t baud = 9600;
+
+// Telnet
+const int  MAX_CLIENTS = 3;
 WiFiServer server(51515); // Telnet server on port 23
 WiFiClient serverClients[MAX_CLIENTS];
-
-String commandBuffer = "";
+String     commandBuffer = "";
+uint8_t    buffer[32 * 1024];
+bool       text_visible;
 
 
 void setup() {
-  //ESP.wdtEnable(60000);  // 60 seconds timeout
+  //ESP.wdtEnable(1000);  // 1 second watchdog timeout
   Serial.begin(baud);
   WiFi.begin(ssid, password);
-  while (WiFi.status() != WL_CONNECTED) {
+  while (WiFi.status() != WL_CONNECTED){
     delay(1000);
   }
   server.begin();
+
+  text_visible = true;
 }
 
 void loop() {
   int len = 0;
-  for (uint8_t i = 0; i < MAX_CLIENTS; i++) {
-    if (serverClients[i] && serverClients[i].connected()) {
-      while (serverClients[i].available()) {
-        char c = serverClients[i].read();
-        if(c != 0x0D) Serial.write(c);
-        if(len % 100 == 0) yield();  // Yield every 100 iterations
-        if(len % 512 == 0) delay(200);
-        len++;
-      }
-    }
-  }
-
+  
   if (server.hasClient()) {
     for (int i = 0; i < MAX_CLIENTS; i++) {
       // Find first available slot for new client
@@ -55,10 +50,23 @@ void loop() {
     serverClient.stop();
   }
 
-  while (Serial.available()) {
+  
+  for (uint8_t i = 0; i < MAX_CLIENTS; i++) {
+    if (serverClients[i] && serverClients[i].connected()) {
+      while(serverClients[i].available()) {
+        char c = serverClients[i].read();
+        if(c != 0x0D) Serial.write(c);
+        if(len % 100 == 0) yield();  // Yield every 100 iterations
+        if(len % 512 == 0) delay(200);
+        len++;
+      }
+    }
+  }
+
+  
+  while(Serial.available()){
     char c = Serial.read();
     sendCharToAllClients(c);
-
     if (c == '\n') {
       if(commandBuffer != ""){
         processCommand(commandBuffer);
@@ -84,7 +92,7 @@ void sendStrToAllClients(String s){
   int j;
   for (int i = 0; i < MAX_CLIENTS; i++) {
       if (serverClients[i] && serverClients[i].connected()) {
-        for(j=0;j<s.length();j++)
+        for(j = 0; j < s.length(); j++)
           serverClients[i].write(s[j]);
       }
     }
@@ -97,9 +105,9 @@ void processCommand(const String& command) {
     switch(cmd){
       case '0':{
         String baudRateStr = command.substring(3, command.lastIndexOf(")"));
-        long Baud = baudRateStr.toInt();
-        if (Baud > 0) {
-          Serial.begin(Baud);
+        baud = baudRateStr.toInt();
+        if (baud > 0) {
+          Serial.begin(baud);
         } 
         break;
       }
