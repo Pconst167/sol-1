@@ -4,6 +4,8 @@ char *string1 = "This is a string via a pointer.";
 
 void main(){
 
+  printf("Hello");
+
   printf("Int : %d, %x\n\n", 0xFFFF, 65535);
   printf("Int : %d, %x\n\n", 0xFFFF, 65535);
   printf("Int : %d, %x\n\n", 0xFFFF, 65535);
