@@ -2164,9 +2164,10 @@ t_type parse_atomic(void){
   }
   else if(toktype == CHAR_CONST){
     emitln("  mov b, $%x", string_const[0]);
-    expr_out.basic_type = DT_INT; // considering it an INT as an experiment for now
+    expr_out.basic_type = DT_CHAR; //TODO: int or char? 
     expr_out.ind_level = 0;
     expr_out.signedness = SNESS_UNSIGNED;
+    expr_out.dims[0] = 0;
   }
   // -127, -128, -255, -32768, -32767, -65535
   else if(tok == MINUS){

@@ -7,17 +7,17 @@
 main:
   mov bp, $FFE0 ;
   mov sp, $FFE0 ; Make space for argc(2 bytes) and for 10 pointers in argv (local variables)
-;; print(3, s1, s2, s3); 
-  mov b, $3
+;; print("Int: %d, Char: %c, String: %s", 123, 'a', "Hello World"); 
+  mov b, __s0 ; "Int: %d, Char: %c, String: %s"
   swp b
   push b
-  mov b, [_s1] ; $s1           
+  mov b, $7b
   swp b
   push b
-  mov b, [_s2] ; $s2           
+  mov b, $61
   swp b
   push b
-  mov b, [_s3] ; $s3           
+  mov b, __s1 ; "Hello World"
   swp b
   push b
   call print
@@ -368,7 +368,7 @@ _if6_cond:
   mov a, b
   mov b, $61
   cmp a, b
-  sgeu ; >= (unsigned)
+  sge ; >=
   pop a
 ; END RELATIONAL
   push a
@@ -380,7 +380,7 @@ _if6_cond:
   mov a, b
   mov b, $66
   cmp a, b
-  sleu ; <= (unsigned)
+  sle ; <=
   pop a
 ; END RELATIONAL
   sand a, b ; &&
@@ -431,7 +431,7 @@ _if7_cond:
   mov a, b
   mov b, $41
   cmp a, b
-  sgeu ; >= (unsigned)
+  sge ; >=
   pop a
 ; END RELATIONAL
   push a
@@ -443,7 +443,7 @@ _if7_cond:
   mov a, b
   mov b, $46
   cmp a, b
-  sleu ; <= (unsigned)
+  sle ; <=
   pop a
 ; END RELATIONAL
   sand a, b ; &&
@@ -643,7 +643,7 @@ _while11_cond:
   mov a, b
   mov b, $30
   cmp a, b
-  sgeu ; >= (unsigned)
+  sge ; >=
   pop a
 ; END RELATIONAL
   push a
@@ -657,7 +657,7 @@ _while11_cond:
   mov a, b
   mov b, $39
   cmp a, b
-  sleu ; <= (unsigned)
+  sle ; <=
   pop a
 ; END RELATIONAL
   sand a, b ; &&
@@ -1432,15 +1432,89 @@ include_stdio_asm:
 print:
   enter 0 ; (push bp; mov bp, sp)
 ; $p 
+; $fp 
 ; $i 
-  sub sp, 4
-;; p = &count; 
+  sub sp, 6
+;; fp = format; 
+  lea d, [bp + -3] ; $fp         
+  mov b, [bp + 11] ; $format                     
+  mov [d], b
+;; p = &format; 
   lea d, [bp + -1] ; $p
   push d
-  lea d, [bp + 11] ; $count
+  lea d, [bp + 11] ; $format
   mov b, d
   pop d
   mov [d], b
+;; for(;;){ 
+_for22_init:
+_for22_cond:
+_for22_block:
+;; if(!*fp) break; 
+_if23_cond:
+  mov b, [bp + -3] ; $fp             
+  mov d, b
+  mov bl, [d]
+  mov bh, 0
+  cmp b, 0
+  seq ; !
+  cmp b, 0
+  je _if23_exit
+_if23_true:
+;; break; 
+  jmp _for22_exit ; for break
+  jmp _if23_exit
+_if23_exit:
+;; if(*fp == '%'){ 
+_if24_cond:
+  mov b, [bp + -3] ; $fp             
+  mov d, b
+  mov bl, [d]
+  mov bh, 0
+; START RELATIONAL
+  push a
+  mov a, b
+  mov b, $25
+  cmp a, b
+  seq ; ==
+  pop a
+; END RELATIONAL
+  cmp b, 0
+  je _if24_else
+_if24_true:
+;; fp++; 
+  mov b, [bp + -3] ; $fp             
+  mov g, b
+  inc b
+  lea d, [bp + -3] ; $fp
+  mov [d], b
+  mov b, g
+;; switch(*fp){ 
+_switch25_expr:
+  mov b, [bp + -3] ; $fp             
+  mov d, b
+  mov bl, [d]
+  mov bh, 0
+_switch25_comparisons:
+  cmp bl, $64
+  je _switch25_case0
+  cmp bl, $69
+  je _switch25_case1
+  cmp bl, $73
+  je _switch25_case2
+  cmp bl, $63
+  je _switch25_case3
+  jmp _switch25_default
+  jmp _switch25_exit
+_switch25_case0:
+_switch25_case1:
+;; fp++; 
+  mov b, [bp + -3] ; $fp             
+  mov g, b
+  inc b
+  lea d, [bp + -3] ; $fp
+  mov [d], b
+  mov b, g
 ;; p = p - 2; 
   lea d, [bp + -1] ; $p         
   mov b, [bp + -1] ; $p             
@@ -1453,25 +1527,37 @@ print:
   pop a
 ; END TERMS        
   mov [d], b
-;; for(i = 0; i < count; i++){ 
-_for22_init:
-  lea d, [bp + -3] ; $i         
-  mov b, $0        
+;; prints(*(int*)p); 
+  mov b, [bp + -1] ; $p             
+  mov d, b
+  mov b, [d]
+  swp b
+  push b
+  call prints
+  add sp, 2
+;; break; 
+  jmp _switch25_exit ; case break
+_switch25_case2:
+;; fp++; 
+  mov b, [bp + -3] ; $fp             
+  mov g, b
+  inc b
+  lea d, [bp + -3] ; $fp
   mov [d], b
-_for22_cond:
-  mov b, [bp + -3] ; $i             
-; START RELATIONAL
+  mov b, g
+;; p = p - 2; 
+  lea d, [bp + -1] ; $p         
+  mov b, [bp + -1] ; $p             
+; START TERMS
   push a
   mov a, b
-  mov b, [bp + 11] ; $count             
-  cmp a, b
-  slt ; < 
+  mov b, $2
+  sub a, b
+  mov b, a
   pop a
-; END RELATIONAL
-  cmp b, 0
-  je _for22_exit
-_for22_block:
-;; printf(*p); 
+; END TERMS        
+  mov [d], b
+;; printf(*(char**)p); 
   mov b, [bp + -1] ; $p             
   mov d, b
   mov b, [d]
@@ -1479,6 +1565,16 @@ _for22_block:
   push b
   call printf
   add sp, 2
+;; break; 
+  jmp _switch25_exit ; case break
+_switch25_case3:
+;; fp++; 
+  mov b, [bp + -3] ; $fp             
+  mov g, b
+  inc b
+  lea d, [bp + -3] ; $fp
+  mov [d], b
+  mov b, g
 ;; p = p - 2; 
   lea d, [bp + -1] ; $p         
   mov b, [bp + -1] ; $p             
@@ -1491,13 +1587,43 @@ _for22_block:
   pop a
 ; END TERMS        
   mov [d], b
-_for22_update:
-  mov b, [bp + -3] ; $i             
+;; putchar(*(char*)p); 
+  mov b, [bp + -1] ; $p             
+  mov d, b
+  mov bl, [d]
+  mov bh, 0
+  push bl
+  call putchar
+  add sp, 1
+;; break; 
+  jmp _switch25_exit ; case break
+_switch25_default:
+;; putchar(*fp); 
+  mov b, [bp + -3] ; $fp             
+  mov d, b
+  mov bl, [d]
+  mov bh, 0
+  push bl
+  call putchar
+  add sp, 1
+_switch25_exit:
+  jmp _if24_exit
+_if24_else:
+;; putchar(*fp++); 
+  mov b, [bp + -3] ; $fp             
   mov g, b
   inc b
-  lea d, [bp + -3] ; $i
+  lea d, [bp + -3] ; $fp
   mov [d], b
   mov b, g
+  mov d, b
+  mov bl, [d]
+  mov bh, 0
+  push bl
+  call putchar
+  add sp, 1
+_if24_exit:
+_for22_update:
   jmp _for22_cond
 _for22_exit:
   leave
@@ -1508,7 +1634,7 @@ va_arg:
 ; $val 
   sub sp, 2
 ;; if(size == 1){ 
-_if23_cond:
+_if26_cond:
   mov b, [bp + 5] ; $size             
 ; START RELATIONAL
   push a
@@ -1519,8 +1645,8 @@ _if23_cond:
   pop a
 ; END RELATIONAL
   cmp b, 0
-  je _if23_else
-_if23_true:
+  je _if26_else
+_if26_true:
 ;; val = *(char*)arg->p; 
   lea d, [bp + -1] ; $val
   push d
@@ -1534,10 +1660,10 @@ _if23_true:
   mov bh, 0
   pop d
   mov [d], b
-  jmp _if23_exit
-_if23_else:
+  jmp _if26_exit
+_if26_else:
 ;; if(size == 2){ 
-_if24_cond:
+_if27_cond:
   mov b, [bp + 5] ; $size             
 ; START RELATIONAL
   push a
@@ -1548,8 +1674,8 @@ _if24_cond:
   pop a
 ; END RELATIONAL
   cmp b, 0
-  je _if24_else
-_if24_true:
+  je _if27_else
+_if27_true:
 ;; val = *(int*)arg->p; 
   lea d, [bp + -1] ; $val
   push d
@@ -1562,16 +1688,16 @@ _if24_true:
   mov b, [d]
   pop d
   mov [d], b
-  jmp _if24_exit
-_if24_else:
+  jmp _if27_exit
+_if27_else:
 ;; printf("Unknown type size in va_arg() call. Size needs to be either 1 or 2."); 
-  mov b, __s0 ; "Unknown type size in va_arg() call. Size needs to be either 1 or 2."
+  mov b, __s2 ; "Unknown type size in va_arg() call. Size needs to be either 1 or 2."
   swp b
   push b
   call printf
   add sp, 2
-_if24_exit:
-_if23_exit:
+_if27_exit:
+_if26_exit:
 ;; arg->p = arg->p + size; 
   lea d, [bp + 7] ; $arg
   mov d, [d]
@@ -1610,13 +1736,9 @@ va_end:
 ; --- END TEXT BLOCK
 
 ; --- BEGIN DATA BLOCK
-_s1_data: .db "Hello World.\n", 0
-_s1: .dw _s1_data
-_s2_data: .db "My Name\n", 0
-_s2: .dw _s2_data
-_s3_data: .db "is Paulo.\n", 0
-_s3: .dw _s3_data
-__s0: .db "Unknown type size in va_arg() call. Size needs to be either 1 or 2.", 0
+__s0: .db "Int: 2, Char: ", 0
+__s1: .db "Hello World", 0
+__s2: .db "Unknown type size in va_arg() call. Size needs to be either 1 or 2.", 0
 
 _heap_top: .dw _heap
 _heap: .db 0

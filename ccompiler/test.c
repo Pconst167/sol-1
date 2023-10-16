@@ -5,24 +5,51 @@ struct va_list{
 
 };
 
-char *s1 = "Hello World.\n";
-char *s2 = "My Name\n";
-char *s3 = "is Paulo.\n";
 
 void main(){
-  print(3, s1, s2, s3);
+  print("Int: %d, Char: %c, String: %s", 123, 'a', "Hello World");
 
 }
 
-void print(int count, ...){
-  char **p;
-  int i;
+// printf("Int: %d, Char: %c, String: %s", 123, 'A', "Hello World");
 
-  p = &count;
-  p = p - 2;
-  for(i = 0; i < count; i++){
-    printf(*p);
-    p = p - 2;
+void print(char *format, ...){
+  void **p;
+  char *fp;
+  int i;
+  fp = format;
+  p = &format;
+  for(;;){
+    if(!*fp) break;
+    if(*fp == '%'){
+      fp++;
+      switch(*fp){
+        case 'd':
+        case 'i':
+          fp++;
+          p = p - 2;
+          prints(*(int*)p);
+          break;
+
+        case 's':
+          fp++;
+          p = p - 2;
+          printf(*(char**)p);
+          break;
+
+        case 'c':
+          fp++;
+          p = p - 2;
+          putchar(*(char*)p);
+          break;
+
+        default:
+          putchar(*fp);
+      }
+    }
+    else{
+      putchar(*fp++);
+    }
   }
   //va_start(args, &count);  
 }
