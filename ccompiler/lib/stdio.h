@@ -2,6 +2,10 @@
 
 #define NULL 0
 
+struct va_list{
+  char *p; // pointer to current argument
+
+};
 struct FILE {
     int fd;            // file descriptor for the open file
     unsigned char *buf;// pointer to buffer for I/O operations
@@ -11,7 +15,68 @@ struct FILE {
     int error;         // error flag
 };
 
+inline int va_arg(struct va_list *arg, int size){
+  int val;
+  if(size == 1){
+    val = *(char*)arg->p;
+  }
+  else if(size == 2){
+    val = *(int*)arg->p;
+  }
+  else{
+    print("Unknown type size in va_arg() call. Size needs to be either 1 or 2.");
+  }
+  arg->p = arg->p + size;
+  return val;
+}
 
+void printf(char *format, ...){
+  void *p;
+  char *fp;
+  int i;
+  fp = format;
+  p = &format;
+
+  for(;;){
+    if(!*fp) break;
+    if(*fp == '%'){
+      fp++;
+      switch(*fp){
+        case 'd':
+        case 'i':
+          p = p - 2;
+          prints(*(int*)p);
+          break;
+
+        case 'u':
+          p = p - 2;
+          printu(*(unsigned int*)p);
+          break;
+
+        case 'x':
+          p = p - 2;
+          printx16(*(unsigned int*)p);
+          break;
+
+        case 'c':
+          p = p - 2;
+          putchar(*(char*)p);
+          break;
+
+        case 's':
+          p = p - 2;
+          print(*(char**)p);
+          break;
+
+        default:
+          print("Error: Unknown argument type.\n");
+      }
+      fp++;
+    }
+    else 
+      putchar(*fp++);
+  }
+}
 
 void printx16(int hex) {
   asm{
@@ -186,40 +251,12 @@ void puts(char *s){
   }
 }
 
-void printf(char *s){
+void print(char *s){
   asm{
     meta mov d, s
     mov a, [d]
     mov d, a
     call _puts
-  }
-}
-
-void printfn(char *s, int num){
-  char digits[5];
-  int i;
-
-  asm{
-    meta mov d, s
-    mov a, [d]
-    mov d, a
-    call _puts
-  }
-  
-  i = 0;
-  if(num == 0){
-    putchar('0');
-    return;
-  }
-  while (num > 0) {
-      digits[i] = '0' + (num % 10);
-      num = num / 10;
-      i++;
-  }
-  // Print the digits in reverse order using putchar()
-  while (i > 0) {
-      i--;
-      putchar(digits[i]);
   }
 }
 

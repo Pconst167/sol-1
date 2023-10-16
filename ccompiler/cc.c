@@ -2135,6 +2135,7 @@ t_type parse_atomic(void){
   }
   else if(tok == STAR){ // is a pointer operator
     expr_in = parse_atomic(); // parse expression after STAR, which could be inside parenthesis. result in B
+    if(expr_in.basic_type == DT_VOID && expr_in.ind_level <= 1) error("Dereferencing void pointer with indirection level of 1 or less.");
     emitln("  mov d, b");// now we have the pointer value. we then get the data at the address.
     if(expr_in.basic_type == DT_INT || expr_in.ind_level > 1)
       emitln("  mov b, [d]"); 
@@ -2214,6 +2215,7 @@ t_type parse_atomic(void){
     else{
       if(tok == SIGNED){
         _signed = 1;
+        _unsigned = 0;
         get();
       }
       else if(tok == UNSIGNED){
@@ -2228,7 +2230,7 @@ t_type parse_atomic(void){
           get();
         }
         expect(CLOSING_PAREN, "Closing paren expected");
-        if(ind_level == 0) error("Invalid data type 'void'.");
+        if(ind_level == 0) error("Invalid data type of pure 'void'.");
         expr_in = parse_atomic();
         expr_out = expr_in;
         expr_out.basic_type = DT_VOID;
@@ -2738,16 +2740,23 @@ unsigned int add_string_data(char *str){
 }
 
 void emit_string_table_data(void){
-  int i;
-  char temp[256];
+  int i, j;
+  char temp[512];
+  char *p;
 
   for(i = 0; string_table[i][0]; i++){
-    // emit the declaration of this string, into the data block
-    emit_data("__s%d", i);
-    emit_data(": .db \"");
-    emit_data(string_table[i]);
-    emit_data("\", 0\n");
-    }
+      // emit the declaration of this string, into the data block
+    p = temp;
+    for(j = 0; string_table[i][j]; j++){
+      if(string_table[i][j] == '%'){
+        *p++ = '%';
+        *p++ = '%';
+      }
+      else *p++ = string_table[i][j];
+    }  
+    *p = '\0';
+    emit_data("__s%d: .db \"%s\", 0\n", i, temp);
+  }
 }
 
 int search_string(char *str){
