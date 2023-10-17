@@ -1,203 +1,213 @@
-#define STRING_TABLE_SIZE          256
-#define STRING_CONST_SIZE          512
-#define MAX_USER_FUNC              128
-#define MAX_GLOBAL_VARS            128
-#define MAX_LOCAL_VARS             128
-#define ID_LEN                     128
 #define CONST_LEN                  128
-#define PROG_SIZE                  1024 * 1024
-#define MAX_MATRIX_DIMS            10
-#define MAX_ENUM_ELEMENTS          128
-#define MAX_TYPEDEFS               128
+#define ID_LEN                     128
+#define MAX_DEFINES                128
 #define MAX_ENUM_DECLARATIONS      128
+#define MAX_ENUM_ELEMENTS          128
+#define MAX_ERRORS                 4
+#define MAX_GLOBAL_VARS            128
+#define MAX_GOTO_LABELS_PER_FUNC   32
+#define MAX_LOCAL_VARS             128
+#define MAX_MATRIX_DIMS            10
 #define MAX_STRUCT_DECLARATIONS    128
 #define MAX_STRUCT_ELEMENTS        32
-#define MAX_DEFINES                128
-#define MAX_GOTO_LABELS_PER_FUNC   32
-#define MAX_ERRORS                 4
+#define MAX_TYPEDEFS               128
+#define MAX_USER_FUNC              128
+#define PROG_SIZE                  1024 * 1024
+#define STRING_CONST_SIZE          512
+#define STRING_TABLE_SIZE          256
 
 #define true 1
 #define false 0
 
 typedef enum {
   TOK_UNDEF = 0, 
-  DIRECTIVE, 
-  PRAGMA, 
-  INCLUDE, 
-  DEFINE,
-  INLINE,
 
-  VAR_ARG_DOTS,
-  TYPEDEF,
-  REGISTER,
-  AUTO,
-  VOLATILE,
-  EXTERN,
-  STATIC,
-  VOID,
-  CHAR,
-  INT,
-  FLOAT,
-  DOUBLE,
-  SHORT,
-  LONG,
-  SIGNED,
-  UNSIGNED,
-  UNION,
-  STRUCT,
-  STRUCT_DOT,
-  STRUCT_ARROW,
-  ENUM,
-  IF,
-  ELSE,
-  FOR,
-  DO,
-  WHILE,
-  BREAK,
-  CONTINUE,
-  SWITCH,
-  CASE,
-  DEFAULT,
-  RETURN,
-  CONST,
-  SIZEOF,
-  GOTO,
-  PLUS,
-  MINUS,
-  STAR,
-  FSLASH,
-  INCREMENT,
-  DECREMENT,
-  MOD,
-  EQUAL,
-  NOT_EQUAL,
-  LESS_THAN,
-  LESS_THAN_OR_EQUAL,
-  GREATER_THAN,
-  GREATER_THAN_OR_EQUAL,
-  LOGICAL_AND,
-  LOGICAL_OR,
-  LOGICAL_NOT,
+  AMPERSAND,
+  ASM,
   ASSIGNMENT,
-  DOLLAR,
-  CARET,
   AT,
-  TERNARY_OP,
-  BITWISE_AND,
-  AMPERSAND = BITWISE_AND,
-  BITWISE_XOR,
-  BITWISE_OR,
+  AUTO,
   BITWISE_NOT,
+  BITWISE_OR,
   BITWISE_SHL,
   BITWISE_SHR,
-  OPENING_PAREN,
-  CLOSING_PAREN,
-  OPENING_BRACE,
+  BITWISE_XOR,
+  BREAK,
+  CARET,
+  CASE,
+  CHAR,
   CLOSING_BRACE,
-  OPENING_BRACKET,
   CLOSING_BRACKET,
+  CLOSING_PAREN,
   COLON,
-  SEMICOLON,
   COMMA,
-  ASM
+  CONST,
+  CONTINUE,
+  DECREMENT,
+  DEFAULT,
+  DEFINE,
+  DIRECTIVE, 
+  DO,
+  DOLLAR,
+  DOUBLE,
+  ELSE,
+  ENUM,
+  EQUAL,
+  EXTERN,
+  FLOAT,
+  FOR,
+  FSLASH,
+  GOTO,
+  GREATER_THAN,
+  GREATER_THAN_OR_EQUAL,
+  IF,
+  INCLUDE, 
+  INCREMENT,
+  INLINE,
+  INT,
+  LESS_THAN,
+  LESS_THAN_OR_EQUAL,
+  LOGICAL_AND,
+  LOGICAL_NOT,
+  LOGICAL_OR,
+  LONG,
+  MINUS,
+  MOD,
+  NOT_EQUAL,
+  OPENING_BRACE,
+  OPENING_BRACKET,
+  OPENING_PAREN,
+  PLUS,
+  PRAGMA, 
+  REGISTER,
+  RETURN,
+  SEMICOLON,
+  SHORT,
+  SIGNED,
+  SIZEOF,
+  STAR,
+  STATIC,
+  STRUCT,
+  STRUCT_ARROW,
+  STRUCT_DOT,
+  SWITCH,
+  TERNARY_OP,
+  TYPEDEF,
+  UNION,
+  UNSIGNED,
+  VAR_ARG_DOTS,
+  VOID,
+  VOLATILE,
+  WHILE,
+  __ASM
 } t_token; // internal token representation
 
 typedef enum {
-  TYPE_UNDEF, 
-  DELIMITER,
   CHAR_CONST, 
-  STRING_CONST, 
-  INTEGER_CONST,
-  FLOAT_CONST,
+  DELIMITER,
   DOUBLE_CONST,
+  END,
+  FLOAT_CONST,
   IDENTIFIER, 
+  INTEGER_CONST,
   RESERVED, 
-  END
+  STRING_CONST, 
+  TYPE_UNDEF
 } t_token_type;
 
 struct{
   char *as_str;
   t_token token;
 } token_to_str[] = {
-  "tok_undef",               TOK_UNDEF,                                            
-  "directive",               DIRECTIVE, 
-  "pragma",                  PRAGMA, 
-  "include",                 INCLUDE, 
-  "define",                  DEFINE,
-  "inline",                  INLINE,
-  "typedef",                 TYPEDEF,
-  "register",                REGISTER,
-  "auto",                    AUTO,
-  "volatile",                VOLATILE,
-  "extern",                  EXTERN,
-  "static",                  STATIC,
-  "void",                    VOID,
-  "char",                    CHAR,
-  "int",                     INT,
-  "float",                   FLOAT,
-  "double",                  DOUBLE,
-  "short",                   SHORT,
-  "long",                    LONG,
-  "signed",                  SIGNED,
-  "unsigned",                UNSIGNED,
-  "union",                   UNION,
-  "struct",                  STRUCT,
-  "struct_dot",              STRUCT_DOT,
-  "struct_arrow",            STRUCT_ARROW,
-  "enum",                    ENUM,
-  "if",                      IF,
-  "else",                    ELSE,
-  "for",                     FOR,
-  "do",                      DO,
-  "while",                   WHILE,
-  "break",                   BREAK,
-  "continue",                CONTINUE,
-  "switch",                  SWITCH,
-  "case",                    CASE,
-  "default",                 DEFAULT,
-  "return",                  RETURN,
-  "const",                   CONST,
-  "sizeof",                  SIZEOF,
-  "goto",                    GOTO,
-  "plus",                    PLUS,
-  "minus",                   MINUS,
-  "star",                    STAR,
-  "fslash",                  FSLASH,
-  "increment",               INCREMENT,
-  "decrement",               DECREMENT,
-  "mod",                     MOD,
-  "equal",                   EQUAL, 
-  "not_equal",               NOT_EQUAL, 
-  "less_than",               LESS_THAN, 
-  "less_than_or_equal",      LESS_THAN_OR_EQUAL, 
-  "greater_than",            GREATER_THAN, 
-  "greater_than_or_equal",   GREATER_THAN_OR_EQUAL, 
-  "logical_and",             LOGICAL_AND, 
-  "logical_or",              LOGICAL_OR, 
-  "logical_not",             LOGICAL_NOT, 
-  "assignment",              ASSIGNMENT,
-  "dollar",                  DOLLAR, 
-  "caret",                   CARET, 
-  "at",                      AT, 
-  "ternary_op",              TERNARY_OP, 
-  "bitwise_and",             BITWISE_AND, 
+  "__asm",                   __ASM,
   "ampersand = bitwise_and", AMPERSAND, 
-  "bitwise_xor",             BITWISE_XOR, 
-  "bitwise_or",              BITWISE_OR, 
+  "asm",                     ASM,
+  "assignment",              ASSIGNMENT,
+  "at",                      AT, 
+  "auto",                    AUTO,
   "bitwise_not",             BITWISE_NOT, 
+  "bitwise_or",              BITWISE_OR, 
   "bitwise_shl",             BITWISE_SHL,
   "bitwise_shr",             BITWISE_SHR,
-  "opening_paren",           OPENING_PAREN,
-  "closing_paren",           CLOSING_PAREN,
-  "opening_brace",           OPENING_BRACE,
+  "bitwise_xor",             BITWISE_XOR, 
+  "break",                   BREAK,
+  "caret",                   CARET, 
+  "case",                    CASE,
+  "char",                    CHAR,
   "closing_brace",           CLOSING_BRACE,
-  "opening_bracket",         OPENING_BRACKET,
   "closing_bracket",         CLOSING_BRACKET,
+  "closing_paren",           CLOSING_PAREN,
   "colon",                   COLON,
-  "semicolon",               SEMICOLON,
   "comma",                   COMMA,
-  "asm",                     ASM
+  "const",                   CONST,
+  "continue",                CONTINUE,
+  "decrement",               DECREMENT,
+  "default",                 DEFAULT,
+  "define",                  DEFINE,
+  "directive",               DIRECTIVE, 
+  "do",                      DO,
+  "dollar",                  DOLLAR, 
+  "double",                  DOUBLE,
+  "else",                    ELSE,
+  "enum",                    ENUM,
+  "equal",                   EQUAL, 
+  "extern",                  EXTERN,
+  "float",                   FLOAT,
+  "for",                     FOR,
+  "fslash",                  FSLASH,
+  "goto",                    GOTO,
+  "greater_than",            GREATER_THAN, 
+  "greater_than_or_equal",   GREATER_THAN_OR_EQUAL, 
+  "if",                      IF,
+  "include",                 INCLUDE, 
+  "increment",               INCREMENT,
+  "inline",                  INLINE,
+  "int",                     INT,
+  "less_than",               LESS_THAN, 
+  "less_than_or_equal",      LESS_THAN_OR_EQUAL, 
+  "logical_and",             LOGICAL_AND, 
+  "logical_not",             LOGICAL_NOT, 
+  "logical_or",              LOGICAL_OR, 
+  "long",                    LONG,
+  "minus",                   MINUS,
+  "mod",                     MOD,
+  "not_equal",               NOT_EQUAL, 
+  "opening_brace",           OPENING_BRACE,
+  "opening_bracket",         OPENING_BRACKET,
+  "opening_paren",           OPENING_PAREN,
+  "plus",                    PLUS,
+  "pragma",                  PRAGMA, 
+  "register",                REGISTER,
+  "return",                  RETURN,
+  "semicolon",               SEMICOLON,
+  "short",                   SHORT,
+  "signed",                  SIGNED,
+  "sizeof",                  SIZEOF,
+  "star",                    STAR,
+  "static",                  STATIC,
+  "struct",                  STRUCT,
+  "struct_arrow",            STRUCT_ARROW,
+  "struct_dot",              STRUCT_DOT,
+  "switch",                  SWITCH,
+  "ternary_op",              TERNARY_OP, 
+  "tok_undef",               TOK_UNDEF,                                            
+  "typedef",                 TYPEDEF,
+  "union",                   UNION,
+  "unsigned",                UNSIGNED,
+  "void",                    VOID,
+  "volatile",                VOLATILE,
+  "while",                   WHILE
 };
+
+typedef struct{
+  t_token_type type;
+  t_token tok;
+  char token[ID_LEN]; 
+  char *addr;
+  int int_const;
+  char string_const[STRING_CONST_SIZE];
+  char c;
+} t_Token;
 
 typedef unsigned char bool;
 
@@ -205,16 +215,16 @@ struct{
   char *as_str;
   t_token_type toktype;
 } toktype_to_str[] = {
-  "undefined", TYPE_UNDEF, 
-  "delimiter", DELIMITER,
   "char constant", CHAR_CONST, 
-  "string constant", STRING_CONST, 
-  "integer constant", INTEGER_CONST, 
-  "float constant", FLOAT_CONST, 
+  "delimiter", DELIMITER,
   "double constant", DOUBLE_CONST,
+  "end", END,
+  "float constant", FLOAT_CONST, 
   "identifier", IDENTIFIER, 
+  "integer constant", INTEGER_CONST, 
   "reserved", RESERVED, 
-  "end", END
+  "string constant", STRING_CONST, 
+  "undefined", TYPE_UNDEF
 };
 
 typedef enum{
@@ -326,6 +336,7 @@ struct _keyword_table{
   "pragma",   PRAGMA,
   "define",   DEFINE,
   "asm",      ASM,
+  "__asm",    __ASM,
   "inline",   INLINE,
 
   "register", REGISTER,
@@ -616,3 +627,4 @@ char is_constant(char *varname);
 void optimize();
 void dbg(char *s);
 int has_var_args(int func_id);
+t_type parse___asm();

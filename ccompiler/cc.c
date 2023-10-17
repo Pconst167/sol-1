@@ -31,10 +31,8 @@
 #include <math.h>
 #include "def.h"
 
-
-int main(
-  int argc, 
-  char *argv[]
+int main( int argc, 
+          char *argv[]
 ){
   int main_index;
 
@@ -1909,10 +1907,10 @@ t_type parse_bitwise_and(void){
   type1 = parse_relational();
   type2.basic_type = DT_CHAR;
   type2.ind_level = 0; // initialize so that cast works even if 'while' below does not trigger
-  if(tok == BITWISE_AND){
+  if(tok == AMPERSAND){
     emitln("  push a");
     emitln("  mov a, b");
-    while(tok == BITWISE_AND){
+    while(tok == AMPERSAND){
       type2 = parse_relational();
       emitln("  and a, b ; &");
     }
@@ -2299,18 +2297,15 @@ t_type parse_atomic(void){
     emit_var_addr_into_d(temp_name);
     emit_var_assignment__addr_in_d(expr_in);
     expr_out = expr_in;
+  }
+  else if(tok == __ASM){
+    parse___asm();
   }    
   else if(toktype == IDENTIFIER){
     strcpy(temp_name, token);
     get();
     if(tok == OPENING_PAREN){ // function call      
-      if(!strcmp(temp_name, "__register")){
-        expr_out.basic_type = DT_INT;
-        expr_out.dims[0] = 0;
-        expr_out.ind_level = 0;
-        parse_register();
-      }
-      else if((func_id = search_function(temp_name)) != -1){
+      if((func_id = search_function(temp_name)) != -1){
         expr_out = function_table[func_id].return_type; // get function's return type
         parse_function_call(func_id);
         /*
@@ -2385,6 +2380,27 @@ t_type parse_atomic(void){
     get(); // gets the next token (it must be a delimiter)
   } 
 
+  return expr_out;
+}
+
+t_type parse___asm(){
+  int var_id;
+  t_type expr_out;
+
+  expr_out.basic_type  = DT_INT;
+  expr_out.dims[0]     = 0;
+  expr_out.ind_level   = 0;
+  expr_out.is_constant = 0;
+  expr_out.signedness  = SNESS_UNSIGNED;
+  expr_out.longness    = LNESS_NORMAL;
+  get(); expect(OPENING_PAREN, "'(' expected.");
+
+  get();
+  if(toktype != STRING_CONST) error("Register name expected.");
+
+  emitln("  mov b, %s", string_const);
+
+  get(); expect(CLOSING_PAREN, "')' expected.");
   return expr_out;
 }
 
@@ -3922,6 +3938,10 @@ t_var get_internal_var_ptr(char *var_name){
 }
 
 void expect(t_token _tok, char *message){
+  if(tok != _tok) error(message);
+}
+
+void expect_type(t_token _tok, char *message){
   if(tok != _tok) error(message);
 }
 

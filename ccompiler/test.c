@@ -4,12 +4,9 @@ char *string1 = "This is a string via a pointer.";
 
 void main(){
 
+  __asm("a");
 
-  printf("Int : %d, %i, %u, %x", 0xFFFF, 65535, 0xFFFF, 65535);
-  printf("Char: %c, %c, %c, %c, %c, %c", 'a', 'A', 0x61, 0x41, 97, 65);
-  printf("Str : %s, %s", "Hello World this is a string.", string1);
-  printf("Int : %d, %i, %u, %x", 0xFFFF, 65535, 0xFFFF, 65535);
-  printf("Char: %c, %c, %c, %c, %c, %c", 'a', 'A', 0x61, 0x41, 97, 65);
+
 
 }
 

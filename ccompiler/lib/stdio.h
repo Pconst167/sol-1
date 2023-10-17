@@ -40,7 +40,6 @@ void printf(char *format, ...){
   print("format, &format: "); printx16(format); print(", "); printx16(&format);
   print("\n\n");
 
-  printu(__asm("sp"));
   
 
   for(;;){
