@@ -4,7 +4,7 @@ char *string1 = "This is a string via a pointer.";
 
 void main(){
 
-  __asm("a");
+  printu(__asm("a") + __asm("c"));
 
 
 
