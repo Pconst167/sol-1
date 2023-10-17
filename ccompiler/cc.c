@@ -2304,8 +2304,13 @@ t_type parse_atomic(void){
     strcpy(temp_name, token);
     get();
     if(tok == OPENING_PAREN){ // function call      
-      func_id = search_function(temp_name);
-      if(func_id != -1){
+      if(!strcmp(temp_name, "__register")){
+        expr_out.basic_type = DT_INT;
+        expr_out.dims[0] = 0;
+        expr_out.ind_level = 0;
+        parse_register();
+      }
+      else if((func_id = search_function(temp_name)) != -1){
         expr_out = function_table[func_id].return_type; // get function's return type
         parse_function_call(func_id);
         /*

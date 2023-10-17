@@ -4,17 +4,12 @@ char *string1 = "This is a string via a pointer.";
 
 void main(){
 
-  printf("Hello");
 
-  printf("Int : %d, %x\n\n", 0xFFFF, 65535);
-  printf("Int : %d, %x\n\n", 0xFFFF, 65535);
-  printf("Int : %d, %x\n\n", 0xFFFF, 65535);
-  printf("Char: %c, %c\n\n", 'a', 0x61);
-  printf("Char: %c, %c\n\n", 'a', 0x61);
-  printf("Char: %c, %c\n\n", 'a', 0x61);
-  printf("Str : \"%s\", \"%s\"\n\n", "Hello World this is a string.", string1);
-  printf("Str : \"%s\", \"%s\"\n\n", "Hello World this is a string.", string1);
-  printf("Str : \"%s\", \"%s\"\n\n", "Hello World this is a string.", string1);
+  printf("Int : %d, %i, %u, %x", 0xFFFF, 65535, 0xFFFF, 65535);
+  printf("Char: %c, %c, %c, %c, %c, %c", 'a', 'A', 0x61, 0x41, 97, 65);
+  printf("Str : %s, %s", "Hello World this is a string.", string1);
+  printf("Int : %d, %i, %u, %x", 0xFFFF, 65535, 0xFFFF, 65535);
+  printf("Char: %c, %c, %c, %c, %c, %c", 'a', 'A', 0x61, 0x41, 97, 65);
 
 }
 

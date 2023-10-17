@@ -31,11 +31,17 @@ inline int va_arg(struct va_list *arg, int size){
 }
 
 void printf(char *format, ...){
-  void *p;
+  char *p;
   char *fp;
   int i;
   fp = format;
   p = &format;
+
+  print("format, &format: "); printx16(format); print(", "); printx16(&format);
+  print("\n\n");
+
+  printu(__asm("sp"));
+  
 
   for(;;){
     if(!*fp) break;
@@ -73,8 +79,10 @@ void printf(char *format, ...){
       }
       fp++;
     }
-    else 
-      putchar(*fp++);
+    else {
+      putchar(*fp);
+      fp++;
+    }
   }
 }
 
