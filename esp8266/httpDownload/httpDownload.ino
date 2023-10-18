@@ -13,7 +13,7 @@ uint16_t len;
 uint16_t baud = 9600;
 
 // Telnet
-const int  MAX_CLIENTS = 3;
+const int  MAX_CLIENTS = 1;
 WiFiServer server(51515); // Telnet server on port 23
 WiFiClient serverClients[MAX_CLIENTS];
 String     commandBuffer = "";
@@ -35,7 +35,19 @@ void setup() {
 
 void loop() {
   int len = 0;
-  
+    
+  for (uint8_t i = 0; i < MAX_CLIENTS; i++) {
+    if (serverClients[i] && serverClients[i].connected()) {
+      while(serverClients[i].available()) {
+        char c = serverClients[i].read();
+        if(c != 0x0D) Serial.write(c);
+        if(len % 100 == 0) yield();  // Yield every 100 iterations
+        if(len % 512 == 0) delay(200);
+        len++;
+      }
+    }
+  }
+
   if (server.hasClient()) {
     for (int i = 0; i < MAX_CLIENTS; i++) {
       // Find first available slot for new client
@@ -49,20 +61,6 @@ void loop() {
     WiFiClient serverClient = server.available();
     serverClient.stop();
   }
-
-  
-  for (uint8_t i = 0; i < MAX_CLIENTS; i++) {
-    if (serverClients[i] && serverClients[i].connected()) {
-      while(serverClients[i].available()) {
-        char c = serverClients[i].read();
-        if(c != 0x0D) Serial.write(c);
-        if(len % 100 == 0) yield();  // Yield every 100 iterations
-        if(len % 512 == 0) delay(200);
-        len++;
-      }
-    }
-  }
-
   
   while(Serial.available()){
     char c = Serial.read();
@@ -106,6 +104,7 @@ void processCommand(const String& command) {
       case '0':{
         String baudRateStr = command.substring(3, command.lastIndexOf(")"));
         baud = baudRateStr.toInt();
+        delay(3000);
         if (baud > 0) {
           Serial.begin(baud);
         } 
@@ -113,11 +112,11 @@ void processCommand(const String& command) {
       }
       case '1':{  // download and display only (browse)
         String url = command.substring(3, command.lastIndexOf(")"));
-        downloadFile(url, 32*1024);
-        for(int i = 0; i < len; i++) {
-          sendCharToAllClients(buffer[i]);
-          if(i % 100 == 0) yield();  // Yield every 100 iterations
-        }
+        downloadFile(url, 30*1024);
+        delay(3000);
+        sendStrToAllClients(String((char*)buffer));
+          
+        
         break;
       }
       case '2':{  // download and send status
@@ -136,9 +135,8 @@ void processCommand(const String& command) {
           if(i % 100 == 0) yield();  // Yield every 100 iterations
           else if(i % 512 == 0) delay(200);
         }
-        delay(1000);
+        delay(300);
         Serial.write(0x0A); // End stream 
-        delay(1000);
         break;
       }
       case '4':{  // get file size
@@ -149,7 +147,7 @@ void processCommand(const String& command) {
         break;
       }
       default:{
-        Serial.write("cmd_unknown\n");
+        Serial.write("bad_cmd\n");
         break;
       }
     }

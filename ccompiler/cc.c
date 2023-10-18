@@ -2398,7 +2398,10 @@ t_type parse___asm(){
   get();
   if(toktype != STRING_CONST) error("Register name expected.");
 
-  emitln("  mov b, %s", string_const);
+  emitln("  push a");
+  emitln("  mov a, %s", string_const);
+  emitln("  mov b, a", string_const);
+  emitln("  pop a");
 
   get(); expect(CLOSING_PAREN, "')' expected.");
   return expr_out;

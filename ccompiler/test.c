@@ -1,35 +1,154 @@
-#include "lib/stdio.h"
-
-char *string1 = "This is a string via a pointer.";
-
 void main(){
 
-  printu(__asm("a") + __asm("c"));
-
-
+  printf("Int : %d, %i, %u, %x\n\n", 0xFFFF, 65535, 0xFFFF, 65535);
 
 }
 
 /*
 
-  print("Int : %d, %i, %u, %x\n\n", 0xFFFF, 65535, 0xFFFF, 65535);
+  printf("Int : %d, %i, %u, %x\n\n", 0xFFFF, 65535, 0xFFFF, 65535);
   printf("Char: %c, %c, %c, %c, %c, %c\n\n", 'a', 'A', 0x61, 0x41, 97, 65);
   printf("Str : \"%s\", \"%s\"\n\n", "Hello World this is a string.", string1);
 */
-void f1(){
+void printf(char *format, ...){
+  char *p;
+  char *fp;
+  int i;
+  fp = format;
+  p = &format;
+
+  for(;;){
+    if(!*fp) break;
+    if(*fp == '%'){
+      fp++;
+      switch(*fp){
+        case 'd':
+        case 'i':
+          p = p - 2;
+          prints(*(int*)p);
+          break;
+
+        case 'u':
+          p = p - 2;
+          printu(*(unsigned int*)p);
+          break;
+
+        case 'x':
+          p = p - 2;
+          printx16(*(unsigned int*)p);
+          break;
+
+        case 'c':
+          p = p - 2;
+          putchar(*(char*)p);
+          break;
+
+        case 's':
+          p = p - 2;
+          print(*(char**)p);
+          break;
+
+        default:
+          print("Error: Unknown argument type.\n");
+      }
+      fp++;
+    }
+    else {
+      putchar(*fp);
+      fp++;
+    }
+  }
+}
+
+void print(char *s){
+  asm{
+    meta mov d, s
+    mov a, [d]
+    mov d, a
+    call _puts
+  }
+}
+
+void putchar(char c){
+  asm{
+    meta mov d, c
+    mov al, [d]
+    mov ah, al
+    call _putchar
+  }
+}
+
+void printx16(int hex) {
+  asm{
+    meta mov d, hex
+    mov b, [d]
+    call print_u16x
+  }
+}
+
+void printx8(char hex) {
+  asm{
+    meta mov d, hex
+    mov bl, [d]
+    call print_u8x
+  }
+}
+void prints(int num) {
+  char digits[5];
+  int i = 0;
+
+  if (num < 0) {
+    putchar('-');
+    num = -num;
+  }
+  else if (num == 0) {
+    putchar('0');
+    return;
+  }
+
+  while (num > 0) {
+    digits[i] = '0' + (num % 10);
+    num = num / 10;
+    i++;
+  }
+
+  while (i > 0) {
+    i--;
+    putchar(digits[i]);
+  }
+}
+
+void printu(unsigned int num) {
+  char digits[5];
+  int i;
+  i = 0;
+  if(num == 0){
+    putchar('0');
+    return;
+  }
+  while (num > 0) {
+      digits[i] = '0' + (num % 10);
+      num = num / 10;
+      i++;
+  }
+  // Print the digits in reverse order using putchar()
+  while (i > 0) {
+      i--;
+      putchar(digits[i]);
+  }
+}
+
+
+
+void stdio(){
+asm{
+
+.include "lib/stdio.asm"
+
 
 }
 
-void f2(){
-
 }
-
-void f3(){
-
-
-}
-
-
 /*
 void print_info(const char* format, ...){
   char tempbuffer[1024];

@@ -37,11 +37,6 @@ void printf(char *format, ...){
   fp = format;
   p = &format;
 
-  print("format, &format: "); printx16(format); print(", "); printx16(&format);
-  print("\n\n");
-
-  
-
   for(;;){
     if(!*fp) break;
     if(*fp == '%'){
