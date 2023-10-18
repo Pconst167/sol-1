@@ -207,17 +207,14 @@ int_0:
   push a
   push d
   pushf
-
   mov a, [fifo_pi]
   mov d, a
-
   mov al, [_UART1_DATA]  ; get character
   cmp al, $03        ; CTRL-C
   je CTRLC
   cmp al, $1A        ; CTRL-Z
   je CTRLZ
   mov [d], al        ; add to fifo
-  
   mov a, [fifo_pi]
   inc a
   cmp a, fifo + FIFO_SIZE         ; check if pointer reached the end of the fifo
@@ -296,17 +293,14 @@ int_7:
   push a
   push d
   pushf
-      
   mov a, [fifo_pi]
   mov d, a
-
   mov al, [_UART0_DATA]  ; get character
   cmp al, $03        ; CTRL-C
   je CTRLC
   cmp al, $1A        ; CTRL-Z
   je CTRLZ
   mov [d], al        ; add to fifo
-  
   mov a, [fifo_pi]
   inc a
   cmp a, fifo + FIFO_SIZE         ; check if pointer reached the end of the fifo
