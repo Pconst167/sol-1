@@ -209,7 +209,7 @@ typedef struct{
   char c;
 } t_Token;
 
-typedef unsigned char bool;
+typedef unsigned char _bool;
 
 struct{
   char *as_str;
@@ -292,8 +292,8 @@ typedef struct{
 typedef struct {
   char name[ID_LEN];
   t_type type; // holds the type of data and the value itself
-  bool is_parameter;
-  bool is_var_args;
+  _bool is_parameter;
+  _bool is_var_args;
   char is_static;
   int bp_offset; // if var is local, this holds the offset of the var from BP.
   int function_id; // the function does var belong to? (if it is a local var)

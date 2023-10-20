@@ -13,7 +13,7 @@ uint16_t len;
 uint16_t baud = 9600;
 
 // Telnet
-const int  MAX_CLIENTS = 1;
+const int  MAX_CLIENTS = 3;
 WiFiServer server(51515); // Telnet server on port 23
 WiFiClient serverClients[MAX_CLIENTS];
 String     commandBuffer = "";
@@ -35,32 +35,42 @@ void setup() {
 
 void loop() {
   int len = 0;
+  bool newClientAdded = false;
     
   for (uint8_t i = 0; i < MAX_CLIENTS; i++) {
     if (serverClients[i] && serverClients[i].connected()) {
       while(serverClients[i].available()) {
         char c = serverClients[i].read();
         if(c != 0x0D) Serial.write(c);
-        if(len % 100 == 0) yield();  // Yield every 100 iterations
-        if(len % 512 == 0) delay(200);
+        if(len % 512 == 0){
+          delay(200);
+          yield();
+        }
         len++;
       }
     }
   }
 
+
+
   if (server.hasClient()) {
     for (int i = 0; i < MAX_CLIENTS; i++) {
-      // Find first available slot for new client
+      // Find the first available slot for a new client
       if (!serverClients[i] || !serverClients[i].connected()) {
         if (serverClients[i]) serverClients[i].stop();
         serverClients[i] = server.available();
-        continue;
+        newClientAdded = true;
+        break;  // exit the loop
       }
     }
-    // No slots available, reject additional client
-    WiFiClient serverClient = server.available();
-    serverClient.stop();
+  
+    if (!newClientAdded) {
+      // No slots available, so reject the additional client
+      WiFiClient serverClient = server.available();
+      serverClient.stop();
+    }
   }
+
   
   while(Serial.available()){
     char c = Serial.read();
@@ -86,11 +96,11 @@ void sendCharToAllClients(char c){
 }
 
 
-void sendStrToAllClients(String s){
+void sendStrToAllClients(char *s, int len){
   int j;
   for (int i = 0; i < MAX_CLIENTS; i++) {
       if (serverClients[i] && serverClients[i].connected()) {
-        for(j = 0; j < s.length(); j++)
+        for(j = 0; j < len; j++)
           serverClients[i].write(s[j]);
       }
     }
@@ -114,9 +124,10 @@ void processCommand(const String& command) {
         String url = command.substring(3, command.lastIndexOf(")"));
         downloadFile(url, 30*1024);
         delay(3000);
-        sendStrToAllClients(String((char*)buffer));
-          
-        
+        for(int i = 0; i < len; i++){
+          sendCharToAllClients(buffer[i]);
+        }
+        //sendStrToAllClients(String((char*)buffer));
         break;
       }
       case '2':{  // download and send status

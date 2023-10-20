@@ -326,13 +326,13 @@ system_jmptbl:
   .dw system_uname
   .dw system_whoami
   .dw system_post_update
-  .dw change_debug_mode
+  .dw system_chg_dbg_mode
 syscall_system:
   jmp [system_jmptbl + al]
 
 ; debug mode in register bl
-change_debug_mode:
-  mov [kernel_debug_mode], bl
+system_chg_dbg_mode:
+  mov [sys_debug_mode], bl
   sysret
 
 system_uname:
@@ -765,7 +765,7 @@ ide_serv_tbl:
   .dw ide_write_sect_wrapper
 syscall_ide:
   push bl
-  mov bl, [kernel_debug_mode]
+  mov bl, [sys_debug_mode]
   ; debug block
   cmp bl, 0
   pop bl
@@ -815,7 +815,7 @@ ide_read_sect:
   mov [_ide_R6], al
 ide_read_sect_wait:
   mov al, [_ide_R7]  
-  and al, $80                     ; BUSY FLAG
+  test al, $80                     ; BUSY FLAG
   jnz ide_read_sect_wait
   mov al, $20
   mov [_ide_R7], al               ; read sector cmd
@@ -835,7 +835,7 @@ ide_write_sect:
   mov [_ide_R6], al
 ide_write_sect_wait:
   mov al, [_ide_R7]  
-  and al, $80                     ; BUSY FLAG
+  test al, $80                     ; BUSY FLAG
   jnz ide_write_sect_wait
   mov al, $30
   mov [_ide_R7], al               ; write sector cmd
@@ -850,11 +850,11 @@ ide_read:
   push d
 ide_read_loop:
   mov al, [_ide_R7]  
-  and al, 80h                     ; BUSY FLAG
+  test al, 80h                     ; BUSY FLAG
   jnz ide_read_loop               ; wait loop
   
   mov al, [_ide_R7]
-  and al, %00001000               ; DRQ FLAG
+  test al, %00001000               ; DRQ FLAG
   jz ide_read_end
   mov al, [_ide_R0]
   mov [d], al
@@ -872,11 +872,11 @@ ide_write:
   push d
 ide_write_loop:
   mov al, [_ide_R7]  
-  and al, 80h             ; BUSY FLAG
+  test al, 80h             ; BUSY FLAG
   jnz ide_write_loop      ; wait loop
   
   mov al, [_ide_R7]
-  and al, %00001000       ; DRQ FLAG
+  test al, %00001000       ; DRQ FLAG
   jz ide_write_end
   mov al, [d]
   mov [_ide_R0], al
@@ -891,7 +891,7 @@ ide_write_end:
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ide_wait:
   mov al, [_ide_R7]  
-  and al, 80h        ; BUSY FLAG
+  test al, 80h        ; BUSY FLAG
   jnz ide_wait
   ret
 
@@ -925,6 +925,7 @@ io_uart_setup:
   mov byte[_UART0_IER], 1      ; enable interrupt: receive data available
   mov byte[_UART0_FCR], 0      ; disable FIFO
   sysret
+
 ; char in ah
 io_putchar:
 io_putchar_L0:
@@ -934,6 +935,7 @@ io_putchar_L0:
   mov al, ah
   mov [_UART0_DATA], al        ; write char to Transmitter Holding Register
   sysret
+
 ; char in ah
 ; al = sucess code
 io_getchar:
@@ -944,19 +946,16 @@ io_getchar_L0:
   mov b, [fifo_pi]
   cmp a, b
   je io_getchar_fail
-  
   mov d, a
-  mov al, [d]
-  push al
-  
+  mov bl, [d]
   mov a, [fifo_pr]
   inc a
   cmp a, fifo + FIFO_SIZE      ; check if pointer reached the end of the fifo
-  jne io_getchar_cont
+  jne io_getchar_updt
   mov a, fifo  
-io_getchar_cont:  
+io_getchar_updt:  
   mov [fifo_pr], a             ; update fifo pointer
-  pop ah
+  mov ah, bl
 ; here we just echo the char back to the console
 io_getchar_echo_L0:
   mov al, [_UART0_LSR]         ; read Line Status Register
@@ -964,9 +963,10 @@ io_getchar_echo_L0:
   jz io_getchar_echo_L0
   mov al, ah
   mov [_UART0_DATA], al        ; write char to Transmitter Holding Register
-  mov al, 1                    ; AL = 1 means a char successfully received
+io_getchar_end:
   pop d
   pop b
+  mov al, 1                    ; AL = 1 means a char successfully received
   sysret
 io_getchar_fail:
   pop d
@@ -1063,7 +1063,7 @@ file_system_jmptbl:
 s_syscall_fs_dbg0: .db "\n> syscall_file_system called: ", 0
 syscall_file_system:
   push bl
-  mov bl, [kernel_debug_mode]
+  mov bl, [sys_debug_mode]
   ; debug block
   cmp bl, 0
   pop bl
@@ -2783,7 +2783,8 @@ __load_hex_sil_ret:
 f_find:
   ret
 
-kernel_debug_mode:  .db 0 ; debug modes: 0 (normal mode)
+; Kernel parameters
+sys_debug_mode:     .db 0 ; debug modes: 0 (normal mode)
                           ;              1 (level 1 debug)
 
 nbr_active_procs:   .db 0

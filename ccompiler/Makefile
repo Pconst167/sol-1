@@ -1,6 +1,6 @@
 CC = gcc
 CFLAGS = -std=c99
-LIBS = -lm
+LIBS = -lm -lncurses
 
 .PHONY: compile_file
 

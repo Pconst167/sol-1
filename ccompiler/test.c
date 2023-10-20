@@ -1,6 +1,8 @@
+char *string1 = "This is another string.";
 void main(){
 
   printf("Int : %d, %i, %u, %x\n\n", 0xFFFF, 65535, 0xFFFF, 65535);
+  printf("Char: %c, %c, %c, %c, %c, %c\n\n", 'a', 'A', 0x61, 0x41, 97, 65);
 
 }
 
@@ -11,53 +13,10 @@ void main(){
   printf("Str : \"%s\", \"%s\"\n\n", "Hello World this is a string.", string1);
 */
 void printf(char *format, ...){
-  char *p;
-  char *fp;
-  int i;
-  fp = format;
-  p = &format;
 
-  for(;;){
-    if(!*fp) break;
-    if(*fp == '%'){
-      fp++;
-      switch(*fp){
-        case 'd':
-        case 'i':
-          p = p - 2;
-          prints(*(int*)p);
-          break;
+  print("\n");
+  print("Format: "); print(format); print("\n");
 
-        case 'u':
-          p = p - 2;
-          printu(*(unsigned int*)p);
-          break;
-
-        case 'x':
-          p = p - 2;
-          printx16(*(unsigned int*)p);
-          break;
-
-        case 'c':
-          p = p - 2;
-          putchar(*(char*)p);
-          break;
-
-        case 's':
-          p = p - 2;
-          print(*(char**)p);
-          break;
-
-        default:
-          print("Error: Unknown argument type.\n");
-      }
-      fp++;
-    }
-    else {
-      putchar(*fp);
-      fp++;
-    }
-  }
 }
 
 void print(char *s){

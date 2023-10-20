@@ -29,10 +29,11 @@
 #include <string.h>
 #include <ctype.h>
 #include <math.h>
+#include <ncurses.h>
 #include "def.h"
 
-int main( int argc, 
-          char *argv[]
+int main(int argc, 
+         char *argv[]
 ){
   int main_index;
 
@@ -2417,9 +2418,7 @@ int parse_variable_args(int func_id){
   do{
     expr_in = parse_expr();
     current_func_call_total_args += get_type_size_for_func_arg_parsing(expr_in);
-    if(expr_in.ind_level > 0 || 
-      is_array(expr_in)
-    ){
+    if(expr_in.ind_level > 0 || is_array(expr_in)){
       emitln("  swp b");
       emitln("  push b");
     }
