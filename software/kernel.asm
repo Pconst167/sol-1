@@ -67,7 +67,7 @@ _TIMER_C_2        .equ $FFE2            ; TIMER COUNTER 2
 _TIMER_CTRL       .equ $FFE3            ; TIMER CONTROL REGISTER
 
 STACK_BEGIN       .equ $F7FF            ; beginning of stack
-FIFO_SIZE         .equ (1024 * 4)
+FIFO_SIZE         .equ (1024 * 8)
 
 TEXT_ORG     .equ $400
 
@@ -202,31 +202,8 @@ sys_boot_install     .equ 13
 .export sys_boot_install
 
 ; EXTERNAL INTERRUPTS' CODE BLOCK
-; uart1
 int_0:
-  push a
-  push d
-  pushf
-  mov a, [fifo_pi]
-  mov d, a
-  mov al, [_UART1_DATA]  ; get character
-  cmp al, $03        ; CTRL-C
-  je CTRLC
-  cmp al, $1A        ; CTRL-Z
-  je CTRLZ
-  mov [d], al        ; add to fifo
-  mov a, [fifo_pi]
-  inc a
-  cmp a, fifo + FIFO_SIZE         ; check if pointer reached the end of the fifo
-  jne int_0_continue
-  mov a, fifo  
-int_0_continue:  
-  mov [fifo_pi], a      ; update fifo pointer
-  popf
-  pop d
-  pop a  
   sysret
-
 int_1:
   sysret
 int_2:
