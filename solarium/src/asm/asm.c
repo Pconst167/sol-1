@@ -77,7 +77,7 @@ char *symbols[8] = {
 
 int main(){
   char *p;
-  printf("\n");
+  print("\n");
 
   program = alloc(16384);
   bin_out = alloc(16384);
@@ -106,7 +106,7 @@ int main(){
 
 
 void parse_data(){
-  printf("Parsing DATA section...");
+  print("Parsing DATA section...");
 
   for(;;){
     get();
@@ -121,7 +121,7 @@ void parse_data(){
     get();
     if(tok == SEGMENT_END) break;
     if(tok == DB){
-      printf(".db: ");
+      print(".db: ");
       for(;;){
         get();
         if(toktype == CHAR_CONST){
@@ -137,12 +137,12 @@ void parse_data(){
           back();
           break;
         }
-        printf(", ");
+        print(", ");
       }
-      printf("\n");
+      print("\n");
     }
     else if(tok == DW){
-      printf(".dw: ");
+      print(".dw: ");
       for(;;){
         get();
         if(toktype == CHAR_CONST){
@@ -159,13 +159,13 @@ void parse_data(){
           back();
           break;
         }
-        printf(", ");
+        print(", ");
       }
-      printf("\n");
+      print("\n");
     }
   }
 
-  printf("Done.\n");
+  print("Done.\n");
 }
 
 void parse_directive(char emit_override){
@@ -176,7 +176,7 @@ void parse_directive(char emit_override){
     _org = int_const;
   }
   else if(tok == DB){
-    //printf("\n.db: ");
+    //print("\n.db: ");
     for(;;){
       get();
       if(toktype == CHAR_CONST){
@@ -195,7 +195,7 @@ void parse_directive(char emit_override){
     }
   }
   else if(tok == DW){
-    //printf("\n.dw: ");
+    //print("\n.dw: ");
     for(;;){
       get();
       if(toktype == CHAR_CONST){
@@ -224,7 +224,7 @@ void label_directive_scan(){
   bin_p = bin_out + _org;
   pc = _org;
 
-  printf("Parsing labels and directives...\n");
+  print("Parsing labels and directives...\n");
   for(;;){
     get(); back();
     temp_prog = prog;
@@ -242,25 +242,25 @@ void label_directive_scan(){
       if(tok == COLON){
         prog = temp_prog;
         parse_label();
-        printf(".");
+        print(".");
       }
       else{
         prog = temp_prog;
         parse_instr(1);      
-        printf(".");
+        print(".");
       }
     }
   }
-  printf("\nDone.\n");
+  print("\nDone.\n");
   print_info2("Org: ", _org, "\n");
-  printf("\nLabels list:\n");
+  print("\nLabels list:\n");
   for(i = 0; label_table[i].name[0]; i++){
-    printf(label_table[i].name);
-    printf(": ");
+    print(label_table[i].name);
+    print(": ");
     printx16(label_table[i].address);
-    printf("\n");
+    print("\n");
   }
-  printf("\n");
+  print("\n");
 }
 
 void label_parse_instr(){
@@ -436,8 +436,8 @@ void parse_instr(char emit_override){
     }
     emit_byte(op.opcode, emit_override);
     if(!emit_override){
-      printx16(old_pc); printf(" ("); printu(instr_len); printf(") : ");
-      printf(code_line); putchar('\n');
+      printx16(old_pc); print(" ("); printu(instr_len); print(") : ");
+      print(code_line); putchar('\n');
     }
   } 
   else{
@@ -512,8 +512,8 @@ void parse_instr(char emit_override){
         }
       }
       if(!emit_override){
-        printx16(old_pc); printf(" ("); printu(instr_len); printf(") : ");
-        printf(code_line); putchar('\n');
+        printx16(old_pc); print(" ("); printu(instr_len); print(") : ");
+        print(code_line); putchar('\n');
       }
       break;
     }
@@ -524,7 +524,7 @@ void parse_instr(char emit_override){
 void parse_text(){
   char *temp_prog;
 
-  printf("Parsing TEXT section...\n");
+  print("Parsing TEXT section...\n");
   prog = program;
   bin_p = bin_out + _org;
   pc = _org;
@@ -558,29 +558,29 @@ void parse_text(){
     }
   }
 
-  printf("Done.\n\n");
+  print("Done.\n\n");
 }
 
 void debug(){
-  printf("\n");
-  printf("Prog Offset: "); printx16(prog-program); printf(", ");
-  printf("Prog value : "); putchar(*prog); printf("\n");
-  printf("Token       : "); printf(token); printf(", ");
-  printf("Tok: "); printu(tok); printf(", ");
-  printf("Toktype: "); printu(toktype); printf("\n");
-  printf("StringConst : "); printf(string_const); printf("\n");
-  printf("PC          : "); printx16(pc);
-  printf("\n");
+  print("\n");
+  print("Prog Offset: "); printx16(prog-program); print(", ");
+  print("Prog value : "); putchar(*prog); print("\n");
+  print("Token       : "); print(token); print(", ");
+  print("Tok: "); printu(tok); print(", ");
+  print("Toktype: "); printu(toktype); print("\n");
+  print("StringConst : "); print(string_const); print("\n");
+  print("PC          : "); printx16(pc);
+  print("\n");
 }
 
 void display_output(){
   int i;
   unsigned char *p;
-  printf("\nAssembly complete.\n");
+  print("\nAssembly complete.\n");
   print_info2("Program size: ", prog_size, "\n");
 
 
-  printf("Listing: \n");
+  print("Listing: \n");
   p = bin_out + _org;
   for(;;){
     if(p == bin_p) break;
@@ -588,7 +588,7 @@ void display_output(){
     p++;
   }
 
-  printf("\n");
+  print("\n");
 }
 
 char is_reserved(char *name){
@@ -663,17 +663,17 @@ int label_exists(char *name){
 
 void print_info(char *s1, char *s2, char *s3){
   if(print_information){
-    printf(s1);
-    printf(s2);
-    printf(s3);
+    print(s1);
+    print(s2);
+    print(s3);
   }
 }
 
 void print_info2(char *s1, unsigned int n, char *s2){
   if(print_information){
-    printf(s1);
+    print(s1);
     printu(n);
-    printf(s2);
+    print(s2);
   }
 }
 
@@ -927,10 +927,10 @@ void get(){
   *t = '\0';
 
   if(toktype == TYPE_UNDEF){
-    printf("TOKEN ERROR. Prog: "); printx16((int)(prog-program)); 
-    printf(", ProgVal: "); putchar(*prog); 
-    printf("\n Text after prog: \n");
-    printf(prog);
+    print("TOKEN ERROR. Prog: "); printx16((int)(prog-program)); 
+    print(", ProgVal: "); putchar(*prog); 
+    print("\n Text after prog: \n");
+    print(prog);
     exit();
   }
 }
@@ -996,17 +996,17 @@ void convert_constant(){
 }
 
 void error(char *msg){
-  printf("\nError: ");
-  printf(msg);
-  printf("\n");
+  print("\nError: ");
+  print(msg);
+  print("\n");
   exit();
 }
 
 void error_s(char *msg, char *param){
-  printf("\nError: ");
-  printf(msg);
-  printf(param);
-  printf("\n");
+  print("\nError: ");
+  print(msg);
+  print(param);
+  print("\n");
   exit();
 }
 
@@ -1119,7 +1119,7 @@ void putchar(char c){
 }
 
 
-void printf(char *s){
+void print(char *s){
   asm{
     meta mov d, s
     mov a, [d]

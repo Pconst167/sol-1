@@ -29,19 +29,31 @@
 #include <string.h>
 #include <ctype.h>
 #include <math.h>
-#include <ncurses.h>
+#include <libgen.h>
 #include "def.h"
 
 int main(int argc, 
          char *argv[]
 ){
   int main_index;
+  char *filename_no_ext;
+  char filename_out[ID_LEN];
+  int i;
 
   if(argc > 1) load_program(argv[1]);  
   else{
     printf("Usage: cc [filename]\n");
     return 0;
   }
+
+  filename_no_ext = basename(argv[1]);
+  for(i = 0; i < strlen(filename_no_ext); i++){
+    if(filename_no_ext[i] == '.'){
+      filename_no_ext[i] = '\0';
+      break;
+    }
+  }
+
   asm_p = asm_out;  // set ASM out pointer to the ASM array beginning
   data_block_p = data_block_asm; // data block pointer
 
@@ -79,7 +91,11 @@ int main(int argc,
 
   emitln("\n.end");
   *asm_p = '\0';
-  generate_file("a.s"); // generate a.s assembly file
+  strcpy(filename_out, "out/");
+  strcat(filename_out, filename_no_ext);
+  strcat(filename_out, ".asm");
+  generate_file(filename_out); // generate named assembly file
+  generate_file("out.asm"); // generate a.s assembly file
 
   return 0;
 }
@@ -3557,7 +3573,7 @@ void emit_global_var_initialization(t_var *var){
       else if(toktype == STRING_CONST){
         int string_id;
         string_id = add_string_data(string_const);
-        emit_data("_s%u, ", string_id);
+        emit_data("__s%u, ", string_id);
       }
       else error("Unknown data type");
       if(toktype == CHAR_CONST || toktype == INTEGER_CONST || toktype == STRING_CONST) j++;

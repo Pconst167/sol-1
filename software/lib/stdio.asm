@@ -223,72 +223,28 @@ _gets_end:
   ret
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; INPUT A STRING
-;; terminates with null
+;; INPUT BINARY
 ;; pointer in D
+;; size in b
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-_gets_sil:
+_load_binary:
   push a
   push d
-_gets_sil_loop:
-  sti
+  push c
+  mov c, 0
+_load_binary_loop:
   mov al, 3
-  syscall sys_io      ; receive in AH
+  syscall sys_io      ; receive in AH with no echo
   cmp al, 0        ; check error code (AL)
-  je _gets_sil_loop      ; if no char received, retry
-
-  cmp ah, $0A        ; LF
-  je _gets_sil_end
-  cmp ah, $0D        ; CR
-  je _gets_sil_end
-  cmp ah, $5C        ; '\\'
-  je _gets_sil_escape
-  
+  je _load_binary_loop    ; if no char received, retry
   mov al, ah
   mov [d], al
   inc d
-  jmp _gets_sil_loop
-_gets_sil_escape:
-  sti
-  mov al, 3
-  syscall sys_io      ; receive in AH
-  cmp al, 0        ; check error code (AL)
-  je _gets_sil_escape      ; if no char received, retry
-  cmp ah, 'n'
-  je _gets_sil_LF
-  cmp ah, 'r'
-  je _gets_sil_CR
-  cmp ah, '0'
-  je _gets_sil_NULL
-  cmp ah, $5C  ; '\'
-  je _gets_sil_slash
-  mov al, ah        ; if not a known escape, it is just a normal letter
-  mov [d], al
-  inc d
-  jmp _gets_sil_loop
-_gets_sil_slash:
-  mov al, $5C
-  mov [d], al
-  inc d
-  jmp _gets_sil_loop
-_gets_sil_LF:
-  mov al, $0A
-  mov [d], al
-  inc d
-  jmp _gets_sil_loop
-_gets_sil_CR:
-  mov al, $0D
-  mov [d], al
-  inc d
-  jmp _gets_sil_loop
-_gets_sil_NULL:
-  mov al, $00
-  mov [d], al
-  inc d
-  jmp _gets_sil_loop
-_gets_sil_end:
-  mov al, 0
-  mov [d], al        ; terminate string
+  inc c
+  cmp b, c
+  jne _load_binary_loop
+_load_binary_end:
+  pop c
   pop d
   pop a
   ret

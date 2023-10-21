@@ -2,14 +2,12 @@ CC = gcc
 CFLAGS = -std=c99
 LIBS = -lm
 
-.PHONY: compile_file
+sol1_disk_creator: sol1_disk_creator.o 
+	@$(CC) $(CFLAGS) -o sol1_disk_creator sol1_disk_creator.o $(LIBS)
+	@rm sol1_disk_creator.o
 
-extern_setup: extern_setup.o 
-	@$(CC) $(CFLAGS) -o extern_setup extern_setup.o $(LIBS)
-	@rm extern_setup.o
-
-extern_setup.o: extern_setup.c
-	@$(CC) $(CFLAGS) -c extern_setup.c
+sol1_disk_creator.o: sol1_disk_creator.c
+	@$(CC) $(CFLAGS) -c sol1_disk_creator.c
 
 clean:
-	@rm -f extern_setup extern_setup.o
+	@rm -f sol1_disk_creator sol1_disk_creator.o

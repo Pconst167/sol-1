@@ -10,7 +10,7 @@ unsigned int divides;
 unsigned int top;
 
 void main(void){
-	printf("Max: ");
+	print("Max: ");
 	top = scann();
 	date();
 	primes();
@@ -39,7 +39,7 @@ void primes(void){
 		if(divides == 0){
 			count = count+1;	
 			printu(n);
-			printf("\n");
+			print("\n");
 			asm{
 				meta mov d, n
 				mov bl, [d]
