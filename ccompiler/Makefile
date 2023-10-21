@@ -12,12 +12,11 @@ ifeq ($(FILE),)
 	@echo "Error: Please provide a file to compile using FILE=<filename>"
 	@exit 1
 else
-	echo $(BASENAME)
 	./cc $(FILE)
 	@echo
 	@wine tasm -1 -b out/$(BASENAME).asm out/obj/$(BASENAME).obj out/lst/$(BASENAME).lst
 	@echo
-	@xxd -ps $(BASENAME).obj | sed -z 's/\n//g' | tr 'abcdef' 'ABCDEF' | xclip -selection c
+	@xxd -ps out/obj/$(BASENAME).obj | sed -z 's/\n//g' | tr 'abcdef' 'ABCDEF' | xclip -selection c
 	@echo "> .obj copied to clipboard in intel-hex format"
 	
 	@echo

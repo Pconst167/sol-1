@@ -25,7 +25,7 @@ year (1)
 packet size = 32 bytes
 */
 
-int loadfile(char *filename, char *dest);
+int loadfile(char *filename, unsigned char *dest);
 __uint16_t create_dir(char *dirname, __uint16_t parent_id);
 void install_bootloader(__uint16_t kernel_lba);
 void list_dirs();
@@ -52,12 +52,12 @@ unsigned char disk_image[BOOT_SECT_SIZE * 512 + FS_TOTAL_SECTORS * 512];
 unsigned char temp_buffer[64 * 1024];
 unsigned int largest_used_lba;
 
-void main(void){ 
+int main(void){ 
   __uint16_t root_id;
   __uint16_t usr_id;
   __uint16_t bin0_id;
   __uint16_t bin1_id;
-  __uint16_t sbin0_id;
+  __uint16_t sbin_id;
   __uint16_t boot_id;
   __uint16_t etc_id;
   __uint16_t asm_id;
@@ -83,7 +83,7 @@ void main(void){
   asm_id = create_dir("asm", root_id);
   create_dir("tmp", root_id);
   create_dir("bin", root_id);
-  sbin0_id = create_dir("sbin", root_id);
+  sbin_id = create_dir("sbin", root_id);
   create_dir("home", root_id);
   create_dir("dev", root_id);
   create_dir("doc", root_id);
@@ -94,7 +94,7 @@ void main(void){
   // -----------------------------------------------------------------------------------------------
   // /sbin
   file_size = loadfile("../../software/obj/init.obj", temp_buffer);
-  create_file("init", sbin0_id, temp_buffer, file_size, 0x07);
+  create_file("init", sbin_id, temp_buffer, file_size, 0x07);
 
   // /boot
   file_size = loadfile("../../software/obj/kernel.obj", temp_buffer);
@@ -115,7 +115,7 @@ void main(void){
   create_file("asm", asm_id, temp_buffer, file_size, 0x03);
 
   // /bin0
-  file_size = loadfile("usr/bin/shell.obj", temp_buffer);
+  file_size = loadfile("../../ccompiler/out/obj/shell.obj", temp_buffer);
   create_file("shell", bin0_id, temp_buffer, file_size, 0x07);
   file_size = loadfile("../../software/obj/ls.obj", temp_buffer);
   create_file("ls", bin0_id, temp_buffer, file_size, 0x07);
@@ -163,7 +163,7 @@ void main(void){
   printf("\n");
   list_files(root_id);  
   printf("\n");
-  list_files(sbin0_id);  
+  list_files(sbin_id);  
   printf("\n");
   list_files(boot_id);  
   printf("\n");
@@ -186,6 +186,7 @@ void main(void){
   printf("[OK]\n");
   printf("Disk image size: %d bytes.\n", largest_used_lba * 512 + 32 * 512);
 
+  return 0;
 }
 
 void install_bootloader(__uint16_t kernel_lba){
@@ -346,7 +347,7 @@ void list_files(__uint16_t dir_id){
   printf("\n");
 }
 
-int loadfile(char *filename, char *dest){
+int loadfile(char *filename, unsigned char *dest){
   FILE *fp;
   int size;
   char *p;

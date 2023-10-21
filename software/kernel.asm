@@ -2232,13 +2232,12 @@ kernel_reset_vector:
   
   mov d, s_kernel_started
   call _puts
-  
-  mov d, s_prompt_init
-  call _puts
 
   mov al, 16
   syscall sys_filesystem        ; set root dirID
 
+  mov d, s_prompt_init
+  call _puts
   mov d, s_init_path
   syscall sys_spawn_proc              ; launch init as a new process
 
