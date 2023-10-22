@@ -99,7 +99,6 @@ _hex_to_int_ret:
 _getchar:
   push al
 _getchar_retry:
-  sti
   mov al, 1
   syscall sys_io      ; receive in AH
   cmp al, 0      ; check if any char was received
@@ -127,7 +126,6 @@ _gets:
   push a
   push d
 _gets_loop:
-  sti
   mov al, 1
   syscall sys_io      ; receive in AH
   cmp al, 0        ; check error code (AL)
@@ -153,7 +151,6 @@ _gets_backspace:
   dec d
   jmp _gets_loop
 _gets_ansi_esc:
-  sti
   mov al, 1
   syscall sys_io        ; receive in AH without echo
   cmp al, 0          ; check error code (AL)
@@ -161,7 +158,6 @@ _gets_ansi_esc:
   cmp ah, '['
   jne _gets_loop
 _gets_ansi_esc_2:
-  sti
   mov al, 1
   syscall sys_io          ; receive in AH without echo
   cmp al, 0            ; check error code (AL)
@@ -178,7 +174,6 @@ _gets_right_arrow:
   inc d
   jmp _gets_loop
 _gets_escape:
-  sti
   mov al, 1
   syscall sys_io      ; receive in AH
   cmp al, 0        ; check error code (AL)
@@ -222,32 +217,6 @@ _gets_end:
   pop a
   ret
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; INPUT BINARY
-;; pointer in D
-;; size in b
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-_load_binary:
-  push a
-  push d
-  push c
-  mov c, 0
-_load_binary_loop:
-  mov al, 3
-  syscall sys_io      ; receive in AH with no echo
-  cmp al, 0        ; check error code (AL)
-  je _load_binary_loop    ; if no char received, retry
-  mov al, ah
-  mov [d], al
-  inc d
-  inc c
-  cmp b, c
-  jne _load_binary_loop
-_load_binary_end:
-  pop c
-  pop d
-  pop a
-  ret
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; INPUT TEXT

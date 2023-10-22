@@ -1,4 +1,4 @@
-; --- FILENAME: test.c
+; --- FILENAME: test
 .include "lib/kernel.exp"
 .include "lib/bios.exp"
 .org TEXT_ORG
@@ -7,72 +7,52 @@
 main:
   mov bp, $FFE0 ;
   mov sp, $FFE0 ; Make space for argc(2 bytes) and for 10 pointers in argv (local variables)
-;; printf("Int : %d, %i, %u, %x\n\n", 0xFFFF, 65535, 0xFFFF, 65535); 
-  mov b, __s0 ; "Int : %d, %i, %u, %x\n\n"
-  swp b
-  push b
-  mov b, $ffff
-  swp b
-  push b
-  mov b, $ffff
-  swp b
-  push b
-  mov b, $ffff
-  swp b
-  push b
-  mov b, $ffff
-  swp b
-  push b
-  call printf
-  add sp, 10
-;; printf("Char: %c, %c, %c, %c, %c, %c\n\n", 'a', 'A', 0x61, 0x41, 97, 65); 
-  mov b, __s1 ; "Char: %c, %c, %c, %c, %c, %c\n\n"
-  swp b
-  push b
-  mov b, $61
-  swp b
-  push b
-  mov b, $41
-  swp b
-  push b
-  mov b, $61
-  swp b
-  push b
-  mov b, $41
-  swp b
-  push b
-  mov b, $61
-  swp b
-  push b
-  mov b, $41
-  swp b
-  push b
-  call printf
-  add sp, 14
+
+; --- BEGIN INLINE ASM BLOCK
+  mov b, 25
+  push a
+  push d
+  push c
+  mov c, 0
+  mov a, b
+  call print_u16d
+  mov ah, $0A
+  call _putchar
+  mov al, 3
+  syscall sys_io      
+  mov a, b
+  call print_u16d
+  mov ah, $0A
+  call _putchar
+  pop c
+  pop d
+  pop a
+; --- END INLINE ASM BLOCK
+
   syscall sys_terminate_proc
 
 printf:
   enter 0 ; (push bp; mov bp, sp)
 ;; print("\n"); 
-  mov b, __s2 ; "\n"
+  mov b, __s0 ; "\n"
   swp b
   push b
   call print
   add sp, 2
 ;; print("Format: "); print(format); print("\n"); 
-  mov b, __s3 ; "Format: "
+  mov b, __s1 ; "Format: "
   swp b
   push b
   call print
   add sp, 2
 ;; print(format); print("\n"); 
-  mov b, [bp + 17] ; $format             
+  mov b, [bp + 5] ; $format             
   swp b
   push b
   call print
   add sp, 2
 ;; print("\n"); 
-  mov b, __s2 ; "\n"
+  mov b, __s0 ; "\n"
   swp b
   push b
   call print
@@ -425,12 +405,8 @@ stdio:
 ; --- END TEXT BLOCK
 
 ; --- BEGIN DATA BLOCK
-_string1_data: .db "This is another string.", 0
-_string1: .dw _string1_data
-__s0: .db "Int : %d, %i, %u, %x\n\n", 0
-__s1: .db "Char: %c, %c, %c, %c, %c, %c\n\n", 0
-__s2: .db "\n", 0
-__s3: .db "Format: ", 0
+__s0: .db "\n", 0
+__s1: .db "Format: ", 0
 
 _heap_top: .dw _heap
 _heap: .db 0

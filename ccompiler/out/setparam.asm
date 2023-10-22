@@ -1,4 +1,4 @@
-; --- FILENAME: ../solarium/usr/bin/starcom
+; --- FILENAME: ../solarium/src/usr/bin/setparam
 .include "lib/kernel.exp"
 .include "lib/bios.exp"
 .org TEXT_ORG
@@ -7,77 +7,14 @@
 main:
   mov bp, $FFE0 ;
   mov sp, $FFE0 ; Make space for argc(2 bytes) and for 10 pointers in argv (local variables)
-; $i 
-  sub sp, 2
-;; print("\nStarcom 1.0\n"); 
-  mov b, __s0 ; "\nStarcom 1.0\n"
-  swp b
-  push b
-  call print
-  add sp, 2
-;; get(); // get filename 
+;; prog = 0; 
+  mov d, _prog ; $prog         
+  mov b, $0        
+  mov [d], b
+;; get(); 
   call get
-;; if(toktype == END){ 
-_if1_cond:
-  mov b, [_toktype] ; $toktype           
-; START RELATIONAL
-  push a
-  mov a, b
-  mov b, 6; END
-  cmp a, b
-  seq ; ==
-  pop a
-; END RELATIONAL
-  cmp b, 0
-  je _if1_exit
-_if1_true:
-;; print("\nusage: starcom <filename> <size>\n"); 
-  mov b, __s1 ; "\nusage: starcom <filename> <size>\n"
-  swp b
-  push b
-  call print
-  add sp, 2
-;; exit(); 
-  call exit
-  jmp _if1_exit
-_if1_exit:
-;; strcpy(data, token); 
-  mov b, _data_data ; $data           
-  swp b
-  push b
-  mov b, _token_data ; $token           
-  swp b
-  push b
-  call strcpy
-  add sp, 4
-;; get(); // get size 
-  call get
-;; if(toktype == END){ 
-_if2_cond:
-  mov b, [_toktype] ; $toktype           
-; START RELATIONAL
-  push a
-  mov a, b
-  mov b, 6; END
-  cmp a, b
-  seq ; ==
-  pop a
-; END RELATIONAL
-  cmp b, 0
-  je _if2_exit
-_if2_true:
-;; print("\nusage: starcom <filename> <size>\n"); 
-  mov b, __s1 ; "\nusage: starcom <filename> <size>\n"
-  swp b
-  push b
-  call print
-  add sp, 2
-;; exit(); 
-  call exit
-  jmp _if2_exit
-_if2_exit:
-;; size = atoi(token); 
-  mov d, _size ; $size
+;; address = atoi(token); 
+  mov d, _address ; $address
   push d
   mov b, _token_data ; $token           
   swp b
@@ -86,92 +23,25 @@ _if2_exit:
   add sp, 2
   pop d
   mov [d], b
-;; print("\nOK. Start transfer now.\n"); 
-  mov b, __s2 ; "\nOK. Start transfer now.\n"
-  swp b
-  push b
-  call print
-  add sp, 2
-
-; --- BEGIN INLINE ASM BLOCK
-  mov b, [_size] 
-  mov d, _data_data
-  call _load_binary
-; --- END INLINE ASM BLOCK
-
-;; for(i=0; i< size;i++){ 
-_for3_init:
-  lea d, [bp + -1] ; $i         
-  mov b, $0        
-  mov [d], b
-_for3_cond:
-  mov b, [bp + -1] ; $i             
-; START RELATIONAL
-  push a
-  mov a, b
-  mov b, [_size] ; $size           
-  cmp a, b
-  slt ; < 
-  pop a
-; END RELATIONAL
-  cmp b, 0
-  je _for3_exit
-_for3_block:
-;; printx8(data[i]); print(" "); 
-  mov d, _data_data ; $data
-  push a         
-  mov b, [bp + -1] ; $i                     
-  add d, b
-  pop a
-  mov bl, [d]
-  mov bh, 0
-  push bl
-  call printx8
-  add sp, 1
-;; print(" "); 
-  mov b, __s3 ; " "
-  swp b
-  push b
-  call print
-  add sp, 2
-_for3_update:
-  mov b, [bp + -1] ; $i             
-  mov g, b
-  inc b
-  lea d, [bp + -1] ; $i
-  mov [d], b
-  mov b, g
-  jmp _for3_cond
-_for3_exit:
-;; return; 
-  leave
-  syscall sys_terminate_proc
-
-; --- BEGIN INLINE ASM BLOCK
-  
-  
-  
-  
-  
-_load_binary:
-  push a
+;; get(); 
+  call get
+;; data = atoi(token); 
+  mov d, _data ; $data
   push d
-  push c
-_load_binary_loop:
-  mov a, b
-  call print_u16d
-  call printnl
-  mov al, ah
-  mov [d], al
-  inc d
-  dec b
-  cmp b, 0
-  jne _load_binary_loop
-_load_binary_end:
-  pop c
+  mov b, _token_data ; $token           
+  swp b
+  push b
+  call atoi
+  add sp, 2
   pop d
-  pop a
-  ret
+  mov [d], bl
+
+; --- BEGIN INLINE ASM BLOCK
+  mov al, 2     
+  mov d, _address
+  mov d, [d]
+  mov bl, [_data]
+  syscall sys_system
 ; --- END INLINE ASM BLOCK
 
   syscall sys_terminate_proc
@@ -343,7 +213,7 @@ is_alpha:
 is_delimiter:
   enter 0 ; (push bp; mov bp, sp)
 ;; if( 
-_if4_cond:
+_if1_cond:
   mov bl, [bp + 5] ; $c
   mov bh, 0             
 ; START RELATIONAL
@@ -645,19 +515,19 @@ _if4_cond:
   sor a, b ; ||
   pop a
   cmp b, 0
-  je _if4_else
-_if4_true:
+  je _if1_else
+_if1_true:
 ;; return 1; 
   mov b, $1
   leave
   ret
-  jmp _if4_exit
-_if4_else:
+  jmp _if1_exit
+_if1_else:
 ;; return 0; 
   mov b, $0
   leave
   ret
-_if4_exit:
+_if1_exit:
   leave
   ret
 
@@ -675,14 +545,14 @@ strcpy:
   mov b, [bp + 7] ; $dest                     
   mov [d], b
 ;; while(*psrc) *pdest++ = *psrc++; 
-_while5_cond:
+_while2_cond:
   mov b, [bp + -1] ; $psrc             
   mov d, b
   mov bl, [d]
   mov bh, 0
   cmp b, 0
-  je _while5_exit
-_while5_block:
+  je _while2_exit
+_while2_block:
 ;; *pdest++ = *psrc++; 
   mov b, [bp + -3] ; $pdest             
   mov g, b
@@ -702,8 +572,8 @@ _while5_block:
   mov bh, 0
   pop d
   mov [d], bl
-  jmp _while5_cond
-_while5_exit:
+  jmp _while2_cond
+_while2_exit:
 ;; *pdest = '\0'; 
   mov b, [bp + -3] ; $pdest             
   push b
@@ -716,7 +586,7 @@ _while5_exit:
 strcmp:
   enter 0 ; (push bp; mov bp, sp)
 ;; while (*s1 && (*s1 == *s2)) { 
-_while6_cond:
+_while3_cond:
   mov b, [bp + 7] ; $s1             
   mov d, b
   mov bl, [d]
@@ -741,8 +611,8 @@ _while6_cond:
   sand a, b ; &&
   pop a
   cmp b, 0
-  je _while6_exit
-_while6_block:
+  je _while3_exit
+_while3_block:
 ;; s1++; 
   mov b, [bp + 7] ; $s1             
   mov g, b
@@ -757,8 +627,8 @@ _while6_block:
   lea d, [bp + 5] ; $s2
   mov [d], b
   mov b, g
-  jmp _while6_cond
-_while6_exit:
+  jmp _while3_cond
+_while3_exit:
 ;; return *s1 - *s2; 
   mov b, [bp + 7] ; $s1             
   mov d, b
@@ -794,11 +664,11 @@ strcat:
   pop d
   mov [d], b
 ;; for (i = 0; src[i] != 0; i=i+1) { 
-_for7_init:
+_for4_init:
   lea d, [bp + -3] ; $i         
   mov b, $0        
   mov [d], b
-_for7_cond:
+_for4_cond:
   lea d, [bp + 5] ; $src
   mov d, [d]
   push a         
@@ -816,8 +686,8 @@ _for7_cond:
   pop a
 ; END RELATIONAL
   cmp b, 0
-  je _for7_exit
-_for7_block:
+  je _for4_exit
+_for4_block:
 ;; dest[dest_len + i] = src[i]; 
   lea d, [bp + 7] ; $dest
   mov d, [d]
@@ -844,7 +714,7 @@ _for7_block:
   mov bh, 0
   pop d
   mov [d], bl
-_for7_update:
+_for4_update:
   lea d, [bp + -3] ; $i         
   mov b, [bp + -3] ; $i             
 ; START TERMS
@@ -856,8 +726,8 @@ _for7_update:
   pop a
 ; END TERMS        
   mov [d], b
-  jmp _for7_cond
-_for7_exit:
+  jmp _for4_cond
+_for4_exit:
 ;; dest[dest_len + i] = 0; 
   lea d, [bp + 7] ; $dest
   mov d, [d]
@@ -889,7 +759,7 @@ strlen:
   mov b, $0        
   mov [d], b
 ;; while (str[length] != 0) { 
-_while8_cond:
+_while5_cond:
   lea d, [bp + 5] ; $str
   mov d, [d]
   push a         
@@ -907,8 +777,8 @@ _while8_cond:
   pop a
 ; END RELATIONAL
   cmp b, 0
-  je _while8_exit
-_while8_block:
+  je _while5_exit
+_while5_block:
 ;; length++; 
   mov b, [bp + -1] ; $length             
   mov g, b
@@ -916,8 +786,8 @@ _while8_block:
   lea d, [bp + -1] ; $length
   mov [d], b
   mov b, g
-  jmp _while8_cond
-_while8_exit:
+  jmp _while5_cond
+_while5_exit:
 ;; return length; 
   mov b, [bp + -1] ; $length             
   leave
@@ -928,7 +798,7 @@ va_arg:
 ; $val 
   sub sp, 2
 ;; if(size == 1){ 
-_if9_cond:
+_if6_cond:
   mov b, [bp + 5] ; $size             
 ; START RELATIONAL
   push a
@@ -939,8 +809,8 @@ _if9_cond:
   pop a
 ; END RELATIONAL
   cmp b, 0
-  je _if9_else
-_if9_true:
+  je _if6_else
+_if6_true:
 ;; val = *(char*)arg->p; 
   lea d, [bp + -1] ; $val
   push d
@@ -954,10 +824,10 @@ _if9_true:
   mov bh, 0
   pop d
   mov [d], b
-  jmp _if9_exit
-_if9_else:
+  jmp _if6_exit
+_if6_else:
 ;; if(size == 2){ 
-_if10_cond:
+_if7_cond:
   mov b, [bp + 5] ; $size             
 ; START RELATIONAL
   push a
@@ -968,8 +838,8 @@ _if10_cond:
   pop a
 ; END RELATIONAL
   cmp b, 0
-  je _if10_else
-_if10_true:
+  je _if7_else
+_if7_true:
 ;; val = *(int*)arg->p; 
   lea d, [bp + -1] ; $val
   push d
@@ -982,16 +852,16 @@ _if10_true:
   mov b, [d]
   pop d
   mov [d], b
-  jmp _if10_exit
-_if10_else:
+  jmp _if7_exit
+_if7_else:
 ;; print("Unknown type size in va_arg() call. Size needs to be either 1 or 2."); 
-  mov b, __s4 ; "Unknown type size in va_arg() call. Size needs to be either 1 or 2."
+  mov b, __s0 ; "Unknown type size in va_arg() call. Size needs to be either 1 or 2."
   swp b
   push b
   call print
   add sp, 2
-_if10_exit:
-_if9_exit:
+_if7_exit:
+_if6_exit:
 ;; arg->p = arg->p + size; 
   lea d, [bp + 7] ; $arg
   mov d, [d]
@@ -1036,11 +906,11 @@ printf:
   pop d
   mov [d], b
 ;; for(;;){ 
-_for11_init:
-_for11_cond:
-_for11_block:
+_for8_init:
+_for8_cond:
+_for8_block:
 ;; if(!*fp) break; 
-_if12_cond:
+_if9_cond:
   mov b, [bp + -3] ; $fp             
   mov d, b
   mov bl, [d]
@@ -1048,14 +918,14 @@ _if12_cond:
   cmp b, 0
   seq ; !
   cmp b, 0
-  je _if12_exit
-_if12_true:
+  je _if9_exit
+_if9_true:
 ;; break; 
-  jmp _for11_exit ; for break
-  jmp _if12_exit
-_if12_exit:
+  jmp _for8_exit ; for break
+  jmp _if9_exit
+_if9_exit:
 ;; if(*fp == '%'){ 
-_if13_cond:
+_if10_cond:
   mov b, [bp + -3] ; $fp             
   mov d, b
   mov bl, [d]
@@ -1069,8 +939,8 @@ _if13_cond:
   pop a
 ; END RELATIONAL
   cmp b, 0
-  je _if13_else
-_if13_true:
+  je _if10_else
+_if10_true:
 ;; fp++; 
   mov b, [bp + -3] ; $fp             
   mov g, b
@@ -1079,28 +949,28 @@ _if13_true:
   mov [d], b
   mov b, g
 ;; switch(*fp){ 
-_switch14_expr:
+_switch11_expr:
   mov b, [bp + -3] ; $fp             
   mov d, b
   mov bl, [d]
   mov bh, 0
-_switch14_comparisons:
+_switch11_comparisons:
   cmp bl, $64
-  je _switch14_case0
+  je _switch11_case0
   cmp bl, $69
-  je _switch14_case1
+  je _switch11_case1
   cmp bl, $75
-  je _switch14_case2
+  je _switch11_case2
   cmp bl, $78
-  je _switch14_case3
+  je _switch11_case3
   cmp bl, $63
-  je _switch14_case4
+  je _switch11_case4
   cmp bl, $73
-  je _switch14_case5
-  jmp _switch14_default
-  jmp _switch14_exit
-_switch14_case0:
-_switch14_case1:
+  je _switch11_case5
+  jmp _switch11_default
+  jmp _switch11_exit
+_switch11_case0:
+_switch11_case1:
 ;; p = p - 2; 
   lea d, [bp + -1] ; $p         
   mov b, [bp + -1] ; $p             
@@ -1122,8 +992,8 @@ _switch14_case1:
   call prints
   add sp, 2
 ;; break; 
-  jmp _switch14_exit ; case break
-_switch14_case2:
+  jmp _switch11_exit ; case break
+_switch11_case2:
 ;; p = p - 2; 
   lea d, [bp + -1] ; $p         
   mov b, [bp + -1] ; $p             
@@ -1145,8 +1015,8 @@ _switch14_case2:
   call printu
   add sp, 2
 ;; break; 
-  jmp _switch14_exit ; case break
-_switch14_case3:
+  jmp _switch11_exit ; case break
+_switch11_case3:
 ;; p = p - 2; 
   lea d, [bp + -1] ; $p         
   mov b, [bp + -1] ; $p             
@@ -1168,8 +1038,8 @@ _switch14_case3:
   call printx16
   add sp, 2
 ;; break; 
-  jmp _switch14_exit ; case break
-_switch14_case4:
+  jmp _switch11_exit ; case break
+_switch11_case4:
 ;; p = p - 2; 
   lea d, [bp + -1] ; $p         
   mov b, [bp + -1] ; $p             
@@ -1191,8 +1061,8 @@ _switch14_case4:
   call putchar
   add sp, 1
 ;; break; 
-  jmp _switch14_exit ; case break
-_switch14_case5:
+  jmp _switch11_exit ; case break
+_switch11_case5:
 ;; p = p - 2; 
   lea d, [bp + -1] ; $p         
   mov b, [bp + -1] ; $p             
@@ -1214,15 +1084,15 @@ _switch14_case5:
   call print
   add sp, 2
 ;; break; 
-  jmp _switch14_exit ; case break
-_switch14_default:
+  jmp _switch11_exit ; case break
+_switch11_default:
 ;; print("Error: Unknown argument type.\n"); 
-  mov b, __s5 ; "Error: Unknown argument type.\n"
+  mov b, __s1 ; "Error: Unknown argument type.\n"
   swp b
   push b
   call print
   add sp, 2
-_switch14_exit:
+_switch11_exit:
 ;; fp++; 
   mov b, [bp + -3] ; $fp             
   mov g, b
@@ -1230,8 +1100,8 @@ _switch14_exit:
   lea d, [bp + -3] ; $fp
   mov [d], b
   mov b, g
-  jmp _if13_exit
-_if13_else:
+  jmp _if10_exit
+_if10_else:
 ;; putchar(*fp); 
   mov b, [bp + -3] ; $fp             
   mov d, b
@@ -1247,10 +1117,10 @@ _if13_else:
   lea d, [bp + -3] ; $fp
   mov [d], b
   mov b, g
-_if13_exit:
-_for11_update:
-  jmp _for11_cond
-_for11_exit:
+_if10_exit:
+_for8_update:
+  jmp _for8_cond
+_for8_exit:
   leave
   ret
 
@@ -1297,11 +1167,11 @@ hex_to_int:
   pop d
   mov [d], b
 ;; for (i = 0; i < len; i++) { 
-_for15_init:
+_for12_init:
   lea d, [bp + -3] ; $i         
   mov b, $0        
   mov [d], b
-_for15_cond:
+_for12_cond:
   mov b, [bp + -3] ; $i             
 ; START RELATIONAL
   push a
@@ -1312,8 +1182,8 @@ _for15_cond:
   pop a
 ; END RELATIONAL
   cmp b, 0
-  je _for15_exit
-_for15_block:
+  je _for12_exit
+_for12_block:
 ;; hex_char = hex_string[i]; 
   lea d, [bp + -4] ; $hex_char
   push d
@@ -1328,7 +1198,7 @@ _for15_block:
   pop d
   mov [d], bl
 ;; if (hex_char >= 'a' && hex_char <= 'f')  
-_if16_cond:
+_if13_cond:
   mov bl, [bp + -4] ; $hex_char
   mov bh, 0             
 ; START RELATIONAL
@@ -1354,8 +1224,8 @@ _if16_cond:
   sand a, b ; &&
   pop a
   cmp b, 0
-  je _if16_else
-_if16_true:
+  je _if13_else
+_if13_true:
 ;; value = (value * 16) + (hex_char - 'a' + 10); 
   lea d, [bp + -1] ; $value         
   mov b, [bp + -1] ; $value             
@@ -1388,10 +1258,10 @@ _if16_true:
   pop a
 ; END TERMS        
   mov [d], b
-  jmp _if16_exit
-_if16_else:
+  jmp _if13_exit
+_if13_else:
 ;; if (hex_char >= 'A' && hex_char <= 'F')  
-_if17_cond:
+_if14_cond:
   mov bl, [bp + -4] ; $hex_char
   mov bh, 0             
 ; START RELATIONAL
@@ -1417,8 +1287,8 @@ _if17_cond:
   sand a, b ; &&
   pop a
   cmp b, 0
-  je _if17_else
-_if17_true:
+  je _if14_else
+_if14_true:
 ;; value = (value * 16) + (hex_char - 'A' + 10); 
   lea d, [bp + -1] ; $value         
   mov b, [bp + -1] ; $value             
@@ -1451,8 +1321,8 @@ _if17_true:
   pop a
 ; END TERMS        
   mov [d], b
-  jmp _if17_exit
-_if17_else:
+  jmp _if14_exit
+_if14_else:
 ;; value = (value * 16) + (hex_char - '0'); 
   lea d, [bp + -1] ; $value         
   mov b, [bp + -1] ; $value             
@@ -1483,17 +1353,17 @@ _if17_else:
   pop a
 ; END TERMS        
   mov [d], b
-_if17_exit:
-_if16_exit:
-_for15_update:
+_if14_exit:
+_if13_exit:
+_for12_update:
   mov b, [bp + -3] ; $i             
   mov g, b
   inc b
   lea d, [bp + -3] ; $i
   mov [d], b
   mov b, g
-  jmp _for15_cond
-_for15_exit:
+  jmp _for12_cond
+_for12_exit:
 ;; return value; 
   mov b, [bp + -1] ; $value             
   leave
@@ -1509,7 +1379,7 @@ atoi:
   mov [bp + -3], a
   sub sp, 4
 ;; while (*str == ' ') str++; 
-_while18_cond:
+_while15_cond:
   mov b, [bp + 5] ; $str             
   mov d, b
   mov bl, [d]
@@ -1523,8 +1393,8 @@ _while18_cond:
   pop a
 ; END RELATIONAL
   cmp b, 0
-  je _while18_exit
-_while18_block:
+  je _while15_exit
+_while15_block:
 ;; str++; 
   mov b, [bp + 5] ; $str             
   mov g, b
@@ -1532,10 +1402,10 @@ _while18_block:
   lea d, [bp + 5] ; $str
   mov [d], b
   mov b, g
-  jmp _while18_cond
-_while18_exit:
+  jmp _while15_cond
+_while15_exit:
 ;; if (*str == '-' || *str == '+') { 
-_if19_cond:
+_if16_cond:
   mov b, [bp + 5] ; $str             
   mov d, b
   mov bl, [d]
@@ -1565,10 +1435,10 @@ _if19_cond:
   sor a, b ; ||
   pop a
   cmp b, 0
-  je _if19_exit
-_if19_true:
+  je _if16_exit
+_if16_true:
 ;; if (*str == '-') sign = -1; 
-_if20_cond:
+_if17_cond:
   mov b, [bp + 5] ; $str             
   mov d, b
   mov bl, [d]
@@ -1582,15 +1452,15 @@ _if20_cond:
   pop a
 ; END RELATIONAL
   cmp b, 0
-  je _if20_exit
-_if20_true:
+  je _if17_exit
+_if17_true:
 ;; sign = -1; 
   lea d, [bp + -3] ; $sign         
   mov b, $1
   neg b        
   mov [d], b
-  jmp _if20_exit
-_if20_exit:
+  jmp _if17_exit
+_if17_exit:
 ;; str++; 
   mov b, [bp + 5] ; $str             
   mov g, b
@@ -1598,10 +1468,10 @@ _if20_exit:
   lea d, [bp + 5] ; $str
   mov [d], b
   mov b, g
-  jmp _if19_exit
-_if19_exit:
+  jmp _if16_exit
+_if16_exit:
 ;; while (*str >= '0' && *str <= '9') { 
-_while21_cond:
+_while18_cond:
   mov b, [bp + 5] ; $str             
   mov d, b
   mov bl, [d]
@@ -1631,8 +1501,8 @@ _while21_cond:
   sand a, b ; &&
   pop a
   cmp b, 0
-  je _while21_exit
-_while21_block:
+  je _while18_exit
+_while18_block:
 ;; result = result * 10 + (*str - '0'); 
   lea d, [bp + -1] ; $result
   push d
@@ -1674,8 +1544,8 @@ _while21_block:
   lea d, [bp + 5] ; $str
   mov [d], b
   mov b, g
-  jmp _while21_cond
-_while21_exit:
+  jmp _while18_cond
+_while18_exit:
 ;; return sign * result; 
   mov b, [bp + -3] ; $sign             
 ; START FACTORS
@@ -1716,7 +1586,7 @@ prints:
   mov [bp + -6], a
   sub sp, 7
 ;; if (num < 0) { 
-_if22_cond:
+_if19_cond:
   mov b, [bp + 5] ; $num             
 ; START RELATIONAL
   push a
@@ -1727,8 +1597,8 @@ _if22_cond:
   pop a
 ; END RELATIONAL
   cmp b, 0
-  je _if22_else
-_if22_true:
+  je _if19_else
+_if19_true:
 ;; putchar('-'); 
   mov b, $2d
   push bl
@@ -1739,9 +1609,140 @@ _if22_true:
   mov b, [bp + 5] ; $num             
   neg b        
   mov [d], b
-  jmp _if22_exit
-_if22_else:
+  jmp _if19_exit
+_if19_else:
 ;; if (num == 0) { 
+_if20_cond:
+  mov b, [bp + 5] ; $num             
+; START RELATIONAL
+  push a
+  mov a, b
+  mov b, $0
+  cmp a, b
+  seq ; ==
+  pop a
+; END RELATIONAL
+  cmp b, 0
+  je _if20_exit
+_if20_true:
+;; putchar('0'); 
+  mov b, $30
+  push bl
+  call putchar
+  add sp, 1
+;; return; 
+  leave
+  ret
+  jmp _if20_exit
+_if20_exit:
+_if19_exit:
+;; while (num > 0) { 
+_while21_cond:
+  mov b, [bp + 5] ; $num             
+; START RELATIONAL
+  push a
+  mov a, b
+  mov b, $0
+  cmp a, b
+  sgt ; >
+  pop a
+; END RELATIONAL
+  cmp b, 0
+  je _while21_exit
+_while21_block:
+;; digits[i] = '0' + (num % 10); 
+  lea d, [bp + -4] ; $digits
+  push a         
+  mov b, [bp + -6] ; $i                     
+  add d, b
+  pop a         
+  mov b, $30
+; START TERMS
+  push a
+  mov a, b
+  mov b, [bp + 5] ; $num             
+; START FACTORS
+  push a
+  mov a, b
+  mov b, $a
+  div a, b ; 
+  mov a, b
+  mov b, a
+  pop a
+; END FACTORS
+  add a, b
+  mov b, a
+  pop a
+; END TERMS        
+  mov [d], bl
+;; num = num / 10; 
+  lea d, [bp + 5] ; $num         
+  mov b, [bp + 5] ; $num             
+; START FACTORS
+  push a
+  mov a, b
+  mov b, $a
+  div a, b
+  mov b, a
+  pop a
+; END FACTORS        
+  mov [d], b
+;; i++; 
+  mov b, [bp + -6] ; $i             
+  mov g, b
+  inc b
+  lea d, [bp + -6] ; $i
+  mov [d], b
+  mov b, g
+  jmp _while21_cond
+_while21_exit:
+;; while (i > 0) { 
+_while22_cond:
+  mov b, [bp + -6] ; $i             
+; START RELATIONAL
+  push a
+  mov a, b
+  mov b, $0
+  cmp a, b
+  sgt ; >
+  pop a
+; END RELATIONAL
+  cmp b, 0
+  je _while22_exit
+_while22_block:
+;; i--; 
+  mov b, [bp + -6] ; $i             
+  mov g, b
+  dec b
+  lea d, [bp + -6] ; $i
+  mov [d], b
+  mov b, g
+;; putchar(digits[i]); 
+  lea d, [bp + -4] ; $digits
+  push a         
+  mov b, [bp + -6] ; $i                     
+  add d, b
+  pop a
+  mov bl, [d]
+  mov bh, 0
+  push bl
+  call putchar
+  add sp, 1
+  jmp _while22_cond
+_while22_exit:
+  leave
+  ret
+
+printu:
+  enter 0 ; (push bp; mov bp, sp)
+; $digits 
+; $i 
+  sub sp, 7
+;; i = 0; 
+  lea d, [bp + -6] ; $i         
+  mov b, $0        
+  mov [d], b
+;; if(num == 0){ 
 _if23_cond:
   mov b, [bp + 5] ; $num             
 ; START RELATIONAL
@@ -1765,7 +1766,6 @@ _if23_true:
   ret
   jmp _if23_exit
 _if23_exit:
-_if22_exit:
 ;; while (num > 0) { 
 _while24_cond:
   mov b, [bp + 5] ; $num             
@@ -1774,7 +1774,7 @@ _while24_cond:
   mov a, b
   mov b, $0
   cmp a, b
-  sgt ; >
+  sgu ; > (unsigned)
   pop a
 ; END RELATIONAL
   cmp b, 0
@@ -1860,136 +1860,6 @@ _while25_block:
   add sp, 1
   jmp _while25_cond
 _while25_exit:
-  leave
-  ret
-
-printu:
-  enter 0 ; (push bp; mov bp, sp)
-; $digits 
-; $i 
-  sub sp, 7
-;; i = 0; 
-  lea d, [bp + -6] ; $i         
-  mov b, $0        
-  mov [d], b
-;; if(num == 0){ 
-_if26_cond:
-  mov b, [bp + 5] ; $num             
-; START RELATIONAL
-  push a
-  mov a, b
-  mov b, $0
-  cmp a, b
-  seq ; ==
-  pop a
-; END RELATIONAL
-  cmp b, 0
-  je _if26_exit
-_if26_true:
-;; putchar('0'); 
-  mov b, $30
-  push bl
-  call putchar
-  add sp, 1
-;; return; 
-  leave
-  ret
-  jmp _if26_exit
-_if26_exit:
-;; while (num > 0) { 
-_while27_cond:
-  mov b, [bp + 5] ; $num             
-; START RELATIONAL
-  push a
-  mov a, b
-  mov b, $0
-  cmp a, b
-  sgu ; > (unsigned)
-  pop a
-; END RELATIONAL
-  cmp b, 0
-  je _while27_exit
-_while27_block:
-;; digits[i] = '0' + (num % 10); 
-  lea d, [bp + -4] ; $digits
-  push a         
-  mov b, [bp + -6] ; $i                     
-  add d, b
-  pop a         
-  mov b, $30
-; START TERMS
-  push a
-  mov a, b
-  mov b, [bp + 5] ; $num             
-; START FACTORS
-  push a
-  mov a, b
-  mov b, $a
-  div a, b ; 
-  mov a, b
-  mov b, a
-  pop a
-; END FACTORS
-  add a, b
-  mov b, a
-  pop a
-; END TERMS        
-  mov [d], bl
-;; num = num / 10; 
-  lea d, [bp + 5] ; $num         
-  mov b, [bp + 5] ; $num             
-; START FACTORS
-  push a
-  mov a, b
-  mov b, $a
-  div a, b
-  mov b, a
-  pop a
-; END FACTORS        
-  mov [d], b
-;; i++; 
-  mov b, [bp + -6] ; $i             
-  mov g, b
-  inc b
-  lea d, [bp + -6] ; $i
-  mov [d], b
-  mov b, g
-  jmp _while27_cond
-_while27_exit:
-;; while (i > 0) { 
-_while28_cond:
-  mov b, [bp + -6] ; $i             
-; START RELATIONAL
-  push a
-  mov a, b
-  mov b, $0
-  cmp a, b
-  sgt ; >
-  pop a
-; END RELATIONAL
-  cmp b, 0
-  je _while28_exit
-_while28_block:
-;; i--; 
-  mov b, [bp + -6] ; $i             
-  mov g, b
-  dec b
-  lea d, [bp + -6] ; $i
-  mov [d], b
-  mov b, g
-;; putchar(digits[i]); 
-  lea d, [bp + -4] ; $digits
-  push a         
-  mov b, [bp + -6] ; $i                     
-  add d, b
-  pop a
-  mov bl, [d]
-  mov bh, 0
-  push bl
-  call putchar
-  add sp, 1
-  jmp _while28_cond
-_while28_exit:
   leave
   ret
 
@@ -2269,7 +2139,7 @@ back:
   mov b, _token_data ; $token                   
   mov [d], b
 ;; while(*t++) prog--; 
-_while29_cond:
+_while26_cond:
   mov b, [bp + -1] ; $t             
   mov g, b
   inc b
@@ -2280,8 +2150,8 @@ _while29_cond:
   mov bl, [d]
   mov bh, 0
   cmp b, 0
-  je _while29_exit
-_while29_block:
+  je _while26_exit
+_while26_block:
 ;; prog--; 
   mov b, [_prog] ; $prog           
   mov g, b
@@ -2289,8 +2159,8 @@ _while29_block:
   mov d, _prog ; $prog
   mov [d], b
   mov b, g
-  jmp _while29_cond
-_while29_exit:
+  jmp _while26_cond
+_while26_exit:
 ;; tok = TOK_UNDEF; 
   mov d, _tok ; $tok         
   mov b, 0; TOK_UNDEF        
@@ -2325,7 +2195,7 @@ get_path:
   mov b, _token_data ; $token                   
   mov [d], b
 ;; while(is_space(*prog)) prog++; 
-_while30_cond:
+_while27_cond:
   mov b, [_prog] ; $prog           
   mov d, b
   mov bl, [d]
@@ -2334,8 +2204,8 @@ _while30_cond:
   call is_space
   add sp, 1
   cmp b, 0
-  je _while30_exit
-_while30_block:
+  je _while27_exit
+_while27_block:
 ;; prog++; 
   mov b, [_prog] ; $prog           
   mov g, b
@@ -2343,10 +2213,10 @@ _while30_block:
   mov d, _prog ; $prog
   mov [d], b
   mov b, g
-  jmp _while30_cond
-_while30_exit:
+  jmp _while27_cond
+_while27_exit:
 ;; if(*prog == '\0'){ 
-_if31_cond:
+_if28_cond:
   mov b, [_prog] ; $prog           
   mov d, b
   mov bl, [d]
@@ -2360,15 +2230,15 @@ _if31_cond:
   pop a
 ; END RELATIONAL
   cmp b, 0
-  je _if31_exit
-_if31_true:
+  je _if28_exit
+_if28_true:
 ;; return; 
   leave
   ret
-  jmp _if31_exit
-_if31_exit:
+  jmp _if28_exit
+_if28_exit:
 ;; while( 
-_while32_cond:
+_while29_cond:
   mov b, [_prog] ; $prog           
   mov d, b
   mov bl, [d]
@@ -2516,8 +2386,8 @@ _while32_cond:
   sor a, b ; ||
   pop a
   cmp b, 0
-  je _while32_exit
-_while32_block:
+  je _while29_exit
+_while29_block:
 ;; *t++ = *prog++; 
   mov b, [bp + -1] ; $t             
   mov g, b
@@ -2537,8 +2407,8 @@ _while32_block:
   mov bh, 0
   pop d
   mov [d], bl
-  jmp _while32_cond
-_while32_exit:
+  jmp _while29_cond
+_while29_exit:
 ;; *t = '\0'; 
   mov b, [bp + -1] ; $t             
   push b
@@ -2571,7 +2441,7 @@ get:
   mov b, _token_data ; $token                   
   mov [d], b
 ;; while(is_space(*prog)) prog++; 
-_while33_cond:
+_while30_cond:
   mov b, [_prog] ; $prog           
   mov d, b
   mov bl, [d]
@@ -2580,8 +2450,8 @@ _while33_cond:
   call is_space
   add sp, 1
   cmp b, 0
-  je _while33_exit
-_while33_block:
+  je _while30_exit
+_while30_block:
 ;; prog++; 
   mov b, [_prog] ; $prog           
   mov g, b
@@ -2589,10 +2459,10 @@ _while33_block:
   mov d, _prog ; $prog
   mov [d], b
   mov b, g
-  jmp _while33_cond
-_while33_exit:
+  jmp _while30_cond
+_while30_exit:
 ;; if(*prog == '\0'){ 
-_if34_cond:
+_if31_cond:
   mov b, [_prog] ; $prog           
   mov d, b
   mov bl, [d]
@@ -2606,8 +2476,8 @@ _if34_cond:
   pop a
 ; END RELATIONAL
   cmp b, 0
-  je _if34_exit
-_if34_true:
+  je _if31_exit
+_if31_true:
 ;; toktype = END; 
   mov d, _toktype ; $toktype         
   mov b, 6; END        
@@ -2615,10 +2485,10 @@ _if34_true:
 ;; return; 
   leave
   ret
-  jmp _if34_exit
-_if34_exit:
+  jmp _if31_exit
+_if31_exit:
 ;; if(is_digit(*prog)){ 
-_if35_cond:
+_if32_cond:
   mov b, [_prog] ; $prog           
   mov d, b
   mov bl, [d]
@@ -2627,10 +2497,10 @@ _if35_cond:
   call is_digit
   add sp, 1
   cmp b, 0
-  je _if35_else
-_if35_true:
+  je _if32_else
+_if32_true:
 ;; while(is_digit(*prog)){ 
-_while36_cond:
+_while33_cond:
   mov b, [_prog] ; $prog           
   mov d, b
   mov bl, [d]
@@ -2639,8 +2509,8 @@ _while36_cond:
   call is_digit
   add sp, 1
   cmp b, 0
-  je _while36_exit
-_while36_block:
+  je _while33_exit
+_while33_block:
 ;; *t++ = *prog++; 
   mov b, [bp + -1] ; $t             
   mov g, b
@@ -2660,8 +2530,8 @@ _while36_block:
   mov bh, 0
   pop d
   mov [d], bl
-  jmp _while36_cond
-_while36_exit:
+  jmp _while33_cond
+_while33_exit:
 ;; *t = '\0'; 
   mov b, [bp + -1] ; $t             
   push b
@@ -2675,10 +2545,10 @@ _while36_exit:
 ;; return; // return to avoid *t = '\0' line at the end of function 
   leave
   ret
-  jmp _if35_exit
-_if35_else:
+  jmp _if32_exit
+_if32_else:
 ;; if(is_alpha(*prog)){ 
-_if37_cond:
+_if34_cond:
   mov b, [_prog] ; $prog           
   mov d, b
   mov bl, [d]
@@ -2687,10 +2557,10 @@ _if37_cond:
   call is_alpha
   add sp, 1
   cmp b, 0
-  je _if37_else
-_if37_true:
+  je _if34_else
+_if34_true:
 ;; while(is_alpha(*prog) || is_digit(*prog)){ 
-_while38_cond:
+_while35_cond:
   mov b, [_prog] ; $prog           
   mov d, b
   mov bl, [d]
@@ -2710,8 +2580,8 @@ _while38_cond:
   sor a, b ; ||
   pop a
   cmp b, 0
-  je _while38_exit
-_while38_block:
+  je _while35_exit
+_while35_block:
 ;; *t++ = *prog++; 
   mov b, [bp + -1] ; $t             
   mov g, b
@@ -2731,8 +2601,8 @@ _while38_block:
   mov bh, 0
   pop d
   mov [d], bl
-  jmp _while38_cond
-_while38_exit:
+  jmp _while35_cond
+_while35_exit:
 ;; *t = '\0'; 
   mov b, [bp + -1] ; $t             
   push b
@@ -2743,10 +2613,10 @@ _while38_exit:
   mov d, _toktype ; $toktype         
   mov b, 5; IDENTIFIER        
   mov [d], b
-  jmp _if37_exit
-_if37_else:
+  jmp _if34_exit
+_if34_else:
 ;; if(*prog == '\"'){ 
-_if39_cond:
+_if36_cond:
   mov b, [_prog] ; $prog           
   mov d, b
   mov bl, [d]
@@ -2760,8 +2630,8 @@ _if39_cond:
   pop a
 ; END RELATIONAL
   cmp b, 0
-  je _if39_else
-_if39_true:
+  je _if36_else
+_if36_true:
 ;; *t++ = '\"'; 
   mov b, [bp + -1] ; $t             
   mov g, b
@@ -2781,7 +2651,7 @@ _if39_true:
   mov [d], b
   mov b, g
 ;; while(*prog != '\"' && *prog){ 
-_while40_cond:
+_while37_cond:
   mov b, [_prog] ; $prog           
   mov d, b
   mov bl, [d]
@@ -2803,8 +2673,8 @@ _while40_cond:
   sand a, b ; &&
   pop a
   cmp b, 0
-  je _while40_exit
-_while40_block:
+  je _while37_exit
+_while37_block:
 ;; *t++ = *prog++; 
   mov b, [bp + -1] ; $t             
   mov g, b
@@ -2824,10 +2694,10 @@ _while40_block:
   mov bh, 0
   pop d
   mov [d], bl
-  jmp _while40_cond
-_while40_exit:
+  jmp _while37_cond
+_while37_exit:
 ;; if(*prog != '\"') error("Double quotes expected"); 
-_if41_cond:
+_if38_cond:
   mov b, [_prog] ; $prog           
   mov d, b
   mov bl, [d]
@@ -2841,16 +2711,16 @@ _if41_cond:
   pop a
 ; END RELATIONAL
   cmp b, 0
-  je _if41_exit
-_if41_true:
+  je _if38_exit
+_if38_true:
 ;; error("Double quotes expected"); 
-  mov b, __s6 ; "Double quotes expected"
+  mov b, __s2 ; "Double quotes expected"
   swp b
   push b
   call error
   add sp, 2
-  jmp _if41_exit
-_if41_exit:
+  jmp _if38_exit
+_if38_exit:
 ;; *t++ = '\"'; 
   mov b, [bp + -1] ; $t             
   mov g, b
@@ -2881,10 +2751,10 @@ _if41_exit:
   mov [d], bl
 ;; convert_constant(); // converts this string token qith quotation marks to a non quotation marks string, and also converts escape sequences to their real bytes 
   call convert_constant
-  jmp _if39_exit
-_if39_else:
+  jmp _if36_exit
+_if36_else:
 ;; if(*prog == '#'){ 
-_if42_cond:
+_if39_cond:
   mov b, [_prog] ; $prog           
   mov d, b
   mov bl, [d]
@@ -2898,8 +2768,8 @@ _if42_cond:
   pop a
 ; END RELATIONAL
   cmp b, 0
-  je _if42_else
-_if42_true:
+  je _if39_else
+_if39_true:
 ;; *t++ = *prog++; 
   mov b, [bp + -1] ; $t             
   mov g, b
@@ -2927,10 +2797,10 @@ _if42_true:
   mov d, _toktype ; $toktype         
   mov b, 1; DELIMITER        
   mov [d], b
-  jmp _if42_exit
-_if42_else:
+  jmp _if39_exit
+_if39_else:
 ;; if(*prog == '{'){ 
-_if43_cond:
+_if40_cond:
   mov b, [_prog] ; $prog           
   mov d, b
   mov bl, [d]
@@ -2944,8 +2814,8 @@ _if43_cond:
   pop a
 ; END RELATIONAL
   cmp b, 0
-  je _if43_else
-_if43_true:
+  je _if40_else
+_if40_true:
 ;; *t++ = *prog++; 
   mov b, [bp + -1] ; $t             
   mov g, b
@@ -2973,10 +2843,10 @@ _if43_true:
   mov d, _toktype ; $toktype         
   mov b, 1; DELIMITER        
   mov [d], b
-  jmp _if43_exit
-_if43_else:
+  jmp _if40_exit
+_if40_else:
 ;; if(*prog == '}'){ 
-_if44_cond:
+_if41_cond:
   mov b, [_prog] ; $prog           
   mov d, b
   mov bl, [d]
@@ -2990,8 +2860,8 @@ _if44_cond:
   pop a
 ; END RELATIONAL
   cmp b, 0
-  je _if44_else
-_if44_true:
+  je _if41_else
+_if41_true:
 ;; *t++ = *prog++; 
   mov b, [bp + -1] ; $t             
   mov g, b
@@ -3019,10 +2889,10 @@ _if44_true:
   mov d, _toktype ; $toktype         
   mov b, 1; DELIMITER        
   mov [d], b
-  jmp _if44_exit
-_if44_else:
+  jmp _if41_exit
+_if41_else:
 ;; if(*prog == '['){ 
-_if45_cond:
+_if42_cond:
   mov b, [_prog] ; $prog           
   mov d, b
   mov bl, [d]
@@ -3036,8 +2906,8 @@ _if45_cond:
   pop a
 ; END RELATIONAL
   cmp b, 0
-  je _if45_else
-_if45_true:
+  je _if42_else
+_if42_true:
 ;; *t++ = *prog++; 
   mov b, [bp + -1] ; $t             
   mov g, b
@@ -3065,10 +2935,10 @@ _if45_true:
   mov d, _toktype ; $toktype         
   mov b, 1; DELIMITER        
   mov [d], b
-  jmp _if45_exit
-_if45_else:
+  jmp _if42_exit
+_if42_else:
 ;; if(*prog == ']'){ 
-_if46_cond:
+_if43_cond:
   mov b, [_prog] ; $prog           
   mov d, b
   mov bl, [d]
@@ -3082,8 +2952,8 @@ _if46_cond:
   pop a
 ; END RELATIONAL
   cmp b, 0
-  je _if46_else
-_if46_true:
+  je _if43_else
+_if43_true:
 ;; *t++ = *prog++; 
   mov b, [bp + -1] ; $t             
   mov g, b
@@ -3111,10 +2981,10 @@ _if46_true:
   mov d, _toktype ; $toktype         
   mov b, 1; DELIMITER        
   mov [d], b
-  jmp _if46_exit
-_if46_else:
+  jmp _if43_exit
+_if43_else:
 ;; if(*prog == '='){ 
-_if47_cond:
+_if44_cond:
   mov b, [_prog] ; $prog           
   mov d, b
   mov bl, [d]
@@ -3123,6 +2993,131 @@ _if47_cond:
   push a
   mov a, b
   mov b, $3d
+  cmp a, b
+  seq ; ==
+  pop a
+; END RELATIONAL
+  cmp b, 0
+  je _if44_else
+_if44_true:
+;; *t++ = *prog++; 
+  mov b, [bp + -1] ; $t             
+  mov g, b
+  inc b
+  lea d, [bp + -1] ; $t
+  mov [d], b
+  mov b, g
+  push b
+  mov b, [_prog] ; $prog           
+  mov g, b
+  inc b
+  mov d, _prog ; $prog
+  mov [d], b
+  mov b, g
+  mov d, b
+  mov bl, [d]
+  mov bh, 0
+  pop d
+  mov [d], bl
+;; if (*prog == '='){ 
+_if45_cond:
+  mov b, [_prog] ; $prog           
+  mov d, b
+  mov bl, [d]
+  mov bh, 0
+; START RELATIONAL
+  push a
+  mov a, b
+  mov b, $3d
+  cmp a, b
+  seq ; ==
+  pop a
+; END RELATIONAL
+  cmp b, 0
+  je _if45_else
+_if45_true:
+;; *t++ = *prog++; 
+  mov b, [bp + -1] ; $t             
+  mov g, b
+  inc b
+  lea d, [bp + -1] ; $t
+  mov [d], b
+  mov b, g
+  push b
+  mov b, [_prog] ; $prog           
+  mov g, b
+  inc b
+  mov d, _prog ; $prog
+  mov [d], b
+  mov b, g
+  mov d, b
+  mov bl, [d]
+  mov bh, 0
+  pop d
+  mov [d], bl
+;; tok = EQUAL; 
+  mov d, _tok ; $tok         
+  mov b, 8; EQUAL        
+  mov [d], b
+  jmp _if45_exit
+_if45_else:
+;; tok = ASSIGNMENT; 
+  mov d, _tok ; $tok         
+  mov b, 17; ASSIGNMENT        
+  mov [d], b
+_if45_exit:
+;; toktype = DELIMITER;   
+  mov d, _toktype ; $toktype         
+  mov b, 1; DELIMITER        
+  mov [d], b
+  jmp _if44_exit
+_if44_else:
+;; if(*prog == '&'){ 
+_if46_cond:
+  mov b, [_prog] ; $prog           
+  mov d, b
+  mov bl, [d]
+  mov bh, 0
+; START RELATIONAL
+  push a
+  mov a, b
+  mov b, $26
+  cmp a, b
+  seq ; ==
+  pop a
+; END RELATIONAL
+  cmp b, 0
+  je _if46_else
+_if46_true:
+;; *t++ = *prog++; 
+  mov b, [bp + -1] ; $t             
+  mov g, b
+  inc b
+  lea d, [bp + -1] ; $t
+  mov [d], b
+  mov b, g
+  push b
+  mov b, [_prog] ; $prog           
+  mov g, b
+  inc b
+  mov d, _prog ; $prog
+  mov [d], b
+  mov b, g
+  mov d, b
+  mov bl, [d]
+  mov bh, 0
+  pop d
+  mov [d], bl
+;; if(*prog == '&'){ 
+_if47_cond:
+  mov b, [_prog] ; $prog           
+  mov d, b
+  mov bl, [d]
+  mov bh, 0
+; START RELATIONAL
+  push a
+  mov a, b
+  mov b, $26
   cmp a, b
   seq ; ==
   pop a
@@ -3149,7 +3144,24 @@ _if47_true:
   mov bh, 0
   pop d
   mov [d], bl
-;; if (*prog == '='){ 
+;; tok = LOGICAL_AND; 
+  mov d, _tok ; $tok         
+  mov b, 14; LOGICAL_AND        
+  mov [d], b
+  jmp _if47_exit
+_if47_else:
+;; tok = AMPERSAND; 
+  mov d, _tok ; $tok         
+  mov b, 22; AMPERSAND        
+  mov [d], b
+_if47_exit:
+;; toktype = DELIMITER;   
+  mov d, _toktype ; $toktype         
+  mov b, 1; DELIMITER        
+  mov [d], b
+  jmp _if46_exit
+_if46_else:
+;; if(*prog == '|'){ 
 _if48_cond:
   mov b, [_prog] ; $prog           
   mov d, b
@@ -3158,7 +3170,7 @@ _if48_cond:
 ; START RELATIONAL
   push a
   mov a, b
-  mov b, $3d
+  mov b, $7c
   cmp a, b
   seq ; ==
   pop a
@@ -3185,24 +3197,7 @@ _if48_true:
   mov bh, 0
   pop d
   mov [d], bl
-;; tok = EQUAL; 
-  mov d, _tok ; $tok         
-  mov b, 8; EQUAL        
-  mov [d], b
-  jmp _if48_exit
-_if48_else:
-;; tok = ASSIGNMENT; 
-  mov d, _tok ; $tok         
-  mov b, 17; ASSIGNMENT        
-  mov [d], b
-_if48_exit:
-;; toktype = DELIMITER;   
-  mov d, _toktype ; $toktype         
-  mov b, 1; DELIMITER        
-  mov [d], b
-  jmp _if47_exit
-_if47_else:
-;; if(*prog == '&'){ 
+;; if (*prog == '|'){ 
 _if49_cond:
   mov b, [_prog] ; $prog           
   mov d, b
@@ -3211,7 +3206,7 @@ _if49_cond:
 ; START RELATIONAL
   push a
   mov a, b
-  mov b, $26
+  mov b, $7c
   cmp a, b
   seq ; ==
   pop a
@@ -3238,150 +3233,25 @@ _if49_true:
   mov bh, 0
   pop d
   mov [d], bl
-;; if(*prog == '&'){ 
-_if50_cond:
-  mov b, [_prog] ; $prog           
-  mov d, b
-  mov bl, [d]
-  mov bh, 0
-; START RELATIONAL
-  push a
-  mov a, b
-  mov b, $26
-  cmp a, b
-  seq ; ==
-  pop a
-; END RELATIONAL
-  cmp b, 0
-  je _if50_else
-_if50_true:
-;; *t++ = *prog++; 
-  mov b, [bp + -1] ; $t             
-  mov g, b
-  inc b
-  lea d, [bp + -1] ; $t
-  mov [d], b
-  mov b, g
-  push b
-  mov b, [_prog] ; $prog           
-  mov g, b
-  inc b
-  mov d, _prog ; $prog
-  mov [d], b
-  mov b, g
-  mov d, b
-  mov bl, [d]
-  mov bh, 0
-  pop d
-  mov [d], bl
-;; tok = LOGICAL_AND; 
-  mov d, _tok ; $tok         
-  mov b, 14; LOGICAL_AND        
-  mov [d], b
-  jmp _if50_exit
-_if50_else:
-;; tok = AMPERSAND; 
-  mov d, _tok ; $tok         
-  mov b, 22; AMPERSAND        
-  mov [d], b
-_if50_exit:
-;; toktype = DELIMITER;   
-  mov d, _toktype ; $toktype         
-  mov b, 1; DELIMITER        
-  mov [d], b
-  jmp _if49_exit
-_if49_else:
-;; if(*prog == '|'){ 
-_if51_cond:
-  mov b, [_prog] ; $prog           
-  mov d, b
-  mov bl, [d]
-  mov bh, 0
-; START RELATIONAL
-  push a
-  mov a, b
-  mov b, $7c
-  cmp a, b
-  seq ; ==
-  pop a
-; END RELATIONAL
-  cmp b, 0
-  je _if51_else
-_if51_true:
-;; *t++ = *prog++; 
-  mov b, [bp + -1] ; $t             
-  mov g, b
-  inc b
-  lea d, [bp + -1] ; $t
-  mov [d], b
-  mov b, g
-  push b
-  mov b, [_prog] ; $prog           
-  mov g, b
-  inc b
-  mov d, _prog ; $prog
-  mov [d], b
-  mov b, g
-  mov d, b
-  mov bl, [d]
-  mov bh, 0
-  pop d
-  mov [d], bl
-;; if (*prog == '|'){ 
-_if52_cond:
-  mov b, [_prog] ; $prog           
-  mov d, b
-  mov bl, [d]
-  mov bh, 0
-; START RELATIONAL
-  push a
-  mov a, b
-  mov b, $7c
-  cmp a, b
-  seq ; ==
-  pop a
-; END RELATIONAL
-  cmp b, 0
-  je _if52_else
-_if52_true:
-;; *t++ = *prog++; 
-  mov b, [bp + -1] ; $t             
-  mov g, b
-  inc b
-  lea d, [bp + -1] ; $t
-  mov [d], b
-  mov b, g
-  push b
-  mov b, [_prog] ; $prog           
-  mov g, b
-  inc b
-  mov d, _prog ; $prog
-  mov [d], b
-  mov b, g
-  mov d, b
-  mov bl, [d]
-  mov bh, 0
-  pop d
-  mov [d], bl
 ;; tok = LOGICAL_OR; 
   mov d, _tok ; $tok         
   mov b, 15; LOGICAL_OR        
   mov [d], b
-  jmp _if52_exit
-_if52_else:
+  jmp _if49_exit
+_if49_else:
 ;; tok = BITWISE_OR; 
   mov d, _tok ; $tok         
   mov b, 24; BITWISE_OR        
   mov [d], b
-_if52_exit:
+_if49_exit:
 ;; toktype = DELIMITER;   
   mov d, _toktype ; $toktype         
   mov b, 1; DELIMITER        
   mov [d], b
-  jmp _if51_exit
-_if51_else:
+  jmp _if48_exit
+_if48_else:
 ;; if(*prog == '~'){ 
-_if53_cond:
+_if50_cond:
   mov b, [_prog] ; $prog           
   mov d, b
   mov bl, [d]
@@ -3395,8 +3265,8 @@ _if53_cond:
   pop a
 ; END RELATIONAL
   cmp b, 0
-  je _if53_else
-_if53_true:
+  je _if50_else
+_if50_true:
 ;; *t++ = *prog++; 
   mov b, [bp + -1] ; $t             
   mov g, b
@@ -3424,10 +3294,10 @@ _if53_true:
   mov d, _toktype ; $toktype         
   mov b, 1; DELIMITER        
   mov [d], b
-  jmp _if53_exit
-_if53_else:
+  jmp _if50_exit
+_if50_else:
 ;; if(*prog == '<'){ 
-_if54_cond:
+_if51_cond:
   mov b, [_prog] ; $prog           
   mov d, b
   mov bl, [d]
@@ -3436,6 +3306,138 @@ _if54_cond:
   push a
   mov a, b
   mov b, $3c
+  cmp a, b
+  seq ; ==
+  pop a
+; END RELATIONAL
+  cmp b, 0
+  je _if51_else
+_if51_true:
+;; *t++ = *prog++; 
+  mov b, [bp + -1] ; $t             
+  mov g, b
+  inc b
+  lea d, [bp + -1] ; $t
+  mov [d], b
+  mov b, g
+  push b
+  mov b, [_prog] ; $prog           
+  mov g, b
+  inc b
+  mov d, _prog ; $prog
+  mov [d], b
+  mov b, g
+  mov d, b
+  mov bl, [d]
+  mov bh, 0
+  pop d
+  mov [d], bl
+;; if (*prog == '='){ 
+_if52_cond:
+  mov b, [_prog] ; $prog           
+  mov d, b
+  mov bl, [d]
+  mov bh, 0
+; START RELATIONAL
+  push a
+  mov a, b
+  mov b, $3d
+  cmp a, b
+  seq ; ==
+  pop a
+; END RELATIONAL
+  cmp b, 0
+  je _if52_else
+_if52_true:
+;; *t++ = *prog++; 
+  mov b, [bp + -1] ; $t             
+  mov g, b
+  inc b
+  lea d, [bp + -1] ; $t
+  mov [d], b
+  mov b, g
+  push b
+  mov b, [_prog] ; $prog           
+  mov g, b
+  inc b
+  mov d, _prog ; $prog
+  mov [d], b
+  mov b, g
+  mov d, b
+  mov bl, [d]
+  mov bh, 0
+  pop d
+  mov [d], bl
+;; tok = LESS_THAN_OR_EQUAL; 
+  mov d, _tok ; $tok         
+  mov b, 11; LESS_THAN_OR_EQUAL        
+  mov [d], b
+  jmp _if52_exit
+_if52_else:
+;; if (*prog == '<'){ 
+_if53_cond:
+  mov b, [_prog] ; $prog           
+  mov d, b
+  mov bl, [d]
+  mov bh, 0
+; START RELATIONAL
+  push a
+  mov a, b
+  mov b, $3c
+  cmp a, b
+  seq ; ==
+  pop a
+; END RELATIONAL
+  cmp b, 0
+  je _if53_else
+_if53_true:
+;; *t++ = *prog++; 
+  mov b, [bp + -1] ; $t             
+  mov g, b
+  inc b
+  lea d, [bp + -1] ; $t
+  mov [d], b
+  mov b, g
+  push b
+  mov b, [_prog] ; $prog           
+  mov g, b
+  inc b
+  mov d, _prog ; $prog
+  mov [d], b
+  mov b, g
+  mov d, b
+  mov bl, [d]
+  mov bh, 0
+  pop d
+  mov [d], bl
+;; tok = BITWISE_SHL; 
+  mov d, _tok ; $tok         
+  mov b, 26; BITWISE_SHL        
+  mov [d], b
+  jmp _if53_exit
+_if53_else:
+;; tok = LESS_THAN; 
+  mov d, _tok ; $tok         
+  mov b, 10; LESS_THAN        
+  mov [d], b
+_if53_exit:
+_if52_exit:
+;; toktype = DELIMITER;   
+  mov d, _toktype ; $toktype         
+  mov b, 1; DELIMITER        
+  mov [d], b
+  jmp _if51_exit
+_if51_else:
+;; if(*prog == '>'){ 
+_if54_cond:
+  mov b, [_prog] ; $prog           
+  mov d, b
+  mov bl, [d]
+  mov bh, 0
+; START RELATIONAL
+  push a
+  mov a, b
+  mov b, $3e
   cmp a, b
   seq ; ==
   pop a
@@ -3498,13 +3500,13 @@ _if55_true:
   mov bh, 0
   pop d
   mov [d], bl
-;; tok = LESS_THAN_OR_EQUAL; 
+;; tok = GREATER_THAN_OR_EQUAL; 
   mov d, _tok ; $tok         
-  mov b, 11; LESS_THAN_OR_EQUAL        
+  mov b, 13; GREATER_THAN_OR_EQUAL        
   mov [d], b
   jmp _if55_exit
 _if55_else:
-;; if (*prog == '<'){ 
+;; if (*prog == '>'){ 
 _if56_cond:
   mov b, [_prog] ; $prog           
   mov d, b
@@ -3513,7 +3515,7 @@ _if56_cond:
 ; START RELATIONAL
   push a
   mov a, b
-  mov b, $3c
+  mov b, $3e
   cmp a, b
   seq ; ==
   pop a
@@ -3540,15 +3542,15 @@ _if56_true:
   mov bh, 0
   pop d
   mov [d], bl
-;; tok = BITWISE_SHL; 
+;; tok = BITWISE_SHR; 
   mov d, _tok ; $tok         
-  mov b, 26; BITWISE_SHL        
+  mov b, 27; BITWISE_SHR        
   mov [d], b
   jmp _if56_exit
 _if56_else:
-;; tok = LESS_THAN; 
+;; tok = GREATER_THAN; 
   mov d, _tok ; $tok         
-  mov b, 10; LESS_THAN        
+  mov b, 12; GREATER_THAN        
   mov [d], b
 _if56_exit:
 _if55_exit:
@@ -3558,7 +3560,7 @@ _if55_exit:
   mov [d], b
   jmp _if54_exit
 _if54_else:
-;; if(*prog == '>'){ 
+;; if(*prog == '!'){ 
 _if57_cond:
   mov b, [_prog] ; $prog           
   mov d, b
@@ -3567,7 +3569,7 @@ _if57_cond:
 ; START RELATIONAL
   push a
   mov a, b
-  mov b, $3e
+  mov b, $21
   cmp a, b
   seq ; ==
   pop a
@@ -3594,7 +3596,7 @@ _if57_true:
   mov bh, 0
   pop d
   mov [d], bl
-;; if (*prog == '='){ 
+;; if(*prog == '='){ 
 _if58_cond:
   mov b, [_prog] ; $prog           
   mov d, b
@@ -3630,13 +3632,24 @@ _if58_true:
   mov bh, 0
   pop d
   mov [d], bl
-;; tok = GREATER_THAN_OR_EQUAL; 
+;; tok = NOT_EQUAL; 
   mov d, _tok ; $tok         
-  mov b, 13; GREATER_THAN_OR_EQUAL        
+  mov b, 9; NOT_EQUAL        
   mov [d], b
   jmp _if58_exit
 _if58_else:
-;; if (*prog == '>'){ 
+;; tok = LOGICAL_NOT; 
+  mov d, _tok ; $tok         
+  mov b, 16; LOGICAL_NOT        
+  mov [d], b
+_if58_exit:
+;; toktype = DELIMITER;   
+  mov d, _toktype ; $toktype         
+  mov b, 1; DELIMITER        
+  mov [d], b
+  jmp _if57_exit
+_if57_else:
+;; if(*prog == '+'){ 
 _if59_cond:
   mov b, [_prog] ; $prog           
   mov d, b
@@ -3645,7 +3658,7 @@ _if59_cond:
 ; START RELATIONAL
   push a
   mov a, b
-  mov b, $3e
+  mov b, $2b
   cmp a, b
   seq ; ==
   pop a
@@ -3672,25 +3685,7 @@ _if59_true:
   mov bh, 0
   pop d
   mov [d], bl
-;; tok = BITWISE_SHR; 
-  mov d, _tok ; $tok         
-  mov b, 27; BITWISE_SHR        
-  mov [d], b
-  jmp _if59_exit
-_if59_else:
-;; tok = GREATER_THAN; 
-  mov d, _tok ; $tok         
-  mov b, 12; GREATER_THAN        
-  mov [d], b
-_if59_exit:
-_if58_exit:
-;; toktype = DELIMITER;   
-  mov d, _toktype ; $toktype         
-  mov b, 1; DELIMITER        
-  mov [d], b
-  jmp _if57_exit
-_if57_else:
-;; if(*prog == '!'){ 
+;; if(*prog == '+'){ 
 _if60_cond:
   mov b, [_prog] ; $prog           
   mov d, b
@@ -3699,7 +3694,7 @@ _if60_cond:
 ; START RELATIONAL
   push a
   mov a, b
-  mov b, $21
+  mov b, $2b
   cmp a, b
   seq ; ==
   pop a
@@ -3726,7 +3721,24 @@ _if60_true:
   mov bh, 0
   pop d
   mov [d], bl
-;; if(*prog == '='){ 
+;; tok = INCREMENT; 
+  mov d, _tok ; $tok         
+  mov b, 5; INCREMENT        
+  mov [d], b
+  jmp _if60_exit
+_if60_else:
+;; tok = PLUS; 
+  mov d, _tok ; $tok         
+  mov b, 1; PLUS        
+  mov [d], b
+_if60_exit:
+;; toktype = DELIMITER;   
+  mov d, _toktype ; $toktype         
+  mov b, 1; DELIMITER        
+  mov [d], b
+  jmp _if59_exit
+_if59_else:
+;; if(*prog == '-'){ 
 _if61_cond:
   mov b, [_prog] ; $prog           
   mov d, b
@@ -3735,7 +3747,7 @@ _if61_cond:
 ; START RELATIONAL
   push a
   mov a, b
-  mov b, $3d
+  mov b, $2d
   cmp a, b
   seq ; ==
   pop a
@@ -3762,24 +3774,7 @@ _if61_true:
   mov bh, 0
   pop d
   mov [d], bl
-;; tok = NOT_EQUAL; 
-  mov d, _tok ; $tok         
-  mov b, 9; NOT_EQUAL        
-  mov [d], b
-  jmp _if61_exit
-_if61_else:
-;; tok = LOGICAL_NOT; 
-  mov d, _tok ; $tok         
-  mov b, 16; LOGICAL_NOT        
-  mov [d], b
-_if61_exit:
-;; toktype = DELIMITER;   
-  mov d, _toktype ; $toktype         
-  mov b, 1; DELIMITER        
-  mov [d], b
-  jmp _if60_exit
-_if60_else:
-;; if(*prog == '+'){ 
+;; if(*prog == '-'){ 
 _if62_cond:
   mov b, [_prog] ; $prog           
   mov d, b
@@ -3788,7 +3783,7 @@ _if62_cond:
 ; START RELATIONAL
   push a
   mov a, b
-  mov b, $2b
+  mov b, $2d
   cmp a, b
   seq ; ==
   pop a
@@ -3815,150 +3810,25 @@ _if62_true:
   mov bh, 0
   pop d
   mov [d], bl
-;; if(*prog == '+'){ 
-_if63_cond:
-  mov b, [_prog] ; $prog           
-  mov d, b
-  mov bl, [d]
-  mov bh, 0
-; START RELATIONAL
-  push a
-  mov a, b
-  mov b, $2b
-  cmp a, b
-  seq ; ==
-  pop a
-; END RELATIONAL
-  cmp b, 0
-  je _if63_else
-_if63_true:
-;; *t++ = *prog++; 
-  mov b, [bp + -1] ; $t             
-  mov g, b
-  inc b
-  lea d, [bp + -1] ; $t
-  mov [d], b
-  mov b, g
-  push b
-  mov b, [_prog] ; $prog           
-  mov g, b
-  inc b
-  mov d, _prog ; $prog
-  mov [d], b
-  mov b, g
-  mov d, b
-  mov bl, [d]
-  mov bh, 0
-  pop d
-  mov [d], bl
-;; tok = INCREMENT; 
-  mov d, _tok ; $tok         
-  mov b, 5; INCREMENT        
-  mov [d], b
-  jmp _if63_exit
-_if63_else:
-;; tok = PLUS; 
-  mov d, _tok ; $tok         
-  mov b, 1; PLUS        
-  mov [d], b
-_if63_exit:
-;; toktype = DELIMITER;   
-  mov d, _toktype ; $toktype         
-  mov b, 1; DELIMITER        
-  mov [d], b
-  jmp _if62_exit
-_if62_else:
-;; if(*prog == '-'){ 
-_if64_cond:
-  mov b, [_prog] ; $prog           
-  mov d, b
-  mov bl, [d]
-  mov bh, 0
-; START RELATIONAL
-  push a
-  mov a, b
-  mov b, $2d
-  cmp a, b
-  seq ; ==
-  pop a
-; END RELATIONAL
-  cmp b, 0
-  je _if64_else
-_if64_true:
-;; *t++ = *prog++; 
-  mov b, [bp + -1] ; $t             
-  mov g, b
-  inc b
-  lea d, [bp + -1] ; $t
-  mov [d], b
-  mov b, g
-  push b
-  mov b, [_prog] ; $prog           
-  mov g, b
-  inc b
-  mov d, _prog ; $prog
-  mov [d], b
-  mov b, g
-  mov d, b
-  mov bl, [d]
-  mov bh, 0
-  pop d
-  mov [d], bl
-;; if(*prog == '-'){ 
-_if65_cond:
-  mov b, [_prog] ; $prog           
-  mov d, b
-  mov bl, [d]
-  mov bh, 0
-; START RELATIONAL
-  push a
-  mov a, b
-  mov b, $2d
-  cmp a, b
-  seq ; ==
-  pop a
-; END RELATIONAL
-  cmp b, 0
-  je _if65_else
-_if65_true:
-;; *t++ = *prog++; 
-  mov b, [bp + -1] ; $t             
-  mov g, b
-  inc b
-  lea d, [bp + -1] ; $t
-  mov [d], b
-  mov b, g
-  push b
-  mov b, [_prog] ; $prog           
-  mov g, b
-  inc b
-  mov d, _prog ; $prog
-  mov [d], b
-  mov b, g
-  mov d, b
-  mov bl, [d]
-  mov bh, 0
-  pop d
-  mov [d], bl
 ;; tok = DECREMENT; 
   mov d, _tok ; $tok         
   mov b, 6; DECREMENT        
   mov [d], b
-  jmp _if65_exit
-_if65_else:
+  jmp _if62_exit
+_if62_else:
 ;; tok = MINUS; 
   mov d, _tok ; $tok         
   mov b, 2; MINUS        
   mov [d], b
-_if65_exit:
+_if62_exit:
 ;; toktype = DELIMITER;   
   mov d, _toktype ; $toktype         
   mov b, 1; DELIMITER        
   mov [d], b
-  jmp _if64_exit
-_if64_else:
+  jmp _if61_exit
+_if61_else:
 ;; if(*prog == '$'){ 
-_if66_cond:
+_if63_cond:
   mov b, [_prog] ; $prog           
   mov d, b
   mov bl, [d]
@@ -3972,8 +3842,8 @@ _if66_cond:
   pop a
 ; END RELATIONAL
   cmp b, 0
-  je _if66_else
-_if66_true:
+  je _if63_else
+_if63_true:
 ;; *t++ = *prog++; 
   mov b, [bp + -1] ; $t             
   mov g, b
@@ -4001,10 +3871,10 @@ _if66_true:
   mov d, _toktype ; $toktype         
   mov b, 1; DELIMITER        
   mov [d], b
-  jmp _if66_exit
-_if66_else:
+  jmp _if63_exit
+_if63_else:
 ;; if(*prog == '^'){ 
-_if67_cond:
+_if64_cond:
   mov b, [_prog] ; $prog           
   mov d, b
   mov bl, [d]
@@ -4018,8 +3888,8 @@ _if67_cond:
   pop a
 ; END RELATIONAL
   cmp b, 0
-  je _if67_else
-_if67_true:
+  je _if64_else
+_if64_true:
 ;; *t++ = *prog++; 
   mov b, [bp + -1] ; $t             
   mov g, b
@@ -4047,10 +3917,10 @@ _if67_true:
   mov d, _toktype ; $toktype         
   mov b, 1; DELIMITER        
   mov [d], b
-  jmp _if67_exit
-_if67_else:
+  jmp _if64_exit
+_if64_else:
 ;; if(*prog == '@'){ 
-_if68_cond:
+_if65_cond:
   mov b, [_prog] ; $prog           
   mov d, b
   mov bl, [d]
@@ -4064,8 +3934,8 @@ _if68_cond:
   pop a
 ; END RELATIONAL
   cmp b, 0
-  je _if68_else
-_if68_true:
+  je _if65_else
+_if65_true:
 ;; *t++ = *prog++; 
   mov b, [bp + -1] ; $t             
   mov g, b
@@ -4093,10 +3963,10 @@ _if68_true:
   mov d, _toktype ; $toktype         
   mov b, 1; DELIMITER        
   mov [d], b
-  jmp _if68_exit
-_if68_else:
+  jmp _if65_exit
+_if65_else:
 ;; if(*prog == '*'){ 
-_if69_cond:
+_if66_cond:
   mov b, [_prog] ; $prog           
   mov d, b
   mov bl, [d]
@@ -4110,8 +3980,8 @@ _if69_cond:
   pop a
 ; END RELATIONAL
   cmp b, 0
-  je _if69_else
-_if69_true:
+  je _if66_else
+_if66_true:
 ;; *t++ = *prog++; 
   mov b, [bp + -1] ; $t             
   mov g, b
@@ -4139,10 +4009,10 @@ _if69_true:
   mov d, _toktype ; $toktype         
   mov b, 1; DELIMITER        
   mov [d], b
-  jmp _if69_exit
-_if69_else:
+  jmp _if66_exit
+_if66_else:
 ;; if(*prog == '/'){ 
-_if70_cond:
+_if67_cond:
   mov b, [_prog] ; $prog           
   mov d, b
   mov bl, [d]
@@ -4156,8 +4026,8 @@ _if70_cond:
   pop a
 ; END RELATIONAL
   cmp b, 0
-  je _if70_else
-_if70_true:
+  je _if67_else
+_if67_true:
 ;; *t++ = *prog++; 
   mov b, [bp + -1] ; $t             
   mov g, b
@@ -4185,10 +4055,10 @@ _if70_true:
   mov d, _toktype ; $toktype         
   mov b, 1; DELIMITER        
   mov [d], b
-  jmp _if70_exit
-_if70_else:
+  jmp _if67_exit
+_if67_else:
 ;; if(*prog == '%'){ 
-_if71_cond:
+_if68_cond:
   mov b, [_prog] ; $prog           
   mov d, b
   mov bl, [d]
@@ -4202,8 +4072,8 @@ _if71_cond:
   pop a
 ; END RELATIONAL
   cmp b, 0
-  je _if71_else
-_if71_true:
+  je _if68_else
+_if68_true:
 ;; *t++ = *prog++; 
   mov b, [bp + -1] ; $t             
   mov g, b
@@ -4231,10 +4101,10 @@ _if71_true:
   mov d, _toktype ; $toktype         
   mov b, 1; DELIMITER        
   mov [d], b
-  jmp _if71_exit
-_if71_else:
+  jmp _if68_exit
+_if68_else:
 ;; if(*prog == '('){ 
-_if72_cond:
+_if69_cond:
   mov b, [_prog] ; $prog           
   mov d, b
   mov bl, [d]
@@ -4248,8 +4118,8 @@ _if72_cond:
   pop a
 ; END RELATIONAL
   cmp b, 0
-  je _if72_else
-_if72_true:
+  je _if69_else
+_if69_true:
 ;; *t++ = *prog++; 
   mov b, [bp + -1] ; $t             
   mov g, b
@@ -4277,10 +4147,10 @@ _if72_true:
   mov d, _toktype ; $toktype         
   mov b, 1; DELIMITER        
   mov [d], b
-  jmp _if72_exit
-_if72_else:
+  jmp _if69_exit
+_if69_else:
 ;; if(*prog == ')'){ 
-_if73_cond:
+_if70_cond:
   mov b, [_prog] ; $prog           
   mov d, b
   mov bl, [d]
@@ -4294,8 +4164,8 @@ _if73_cond:
   pop a
 ; END RELATIONAL
   cmp b, 0
-  je _if73_else
-_if73_true:
+  je _if70_else
+_if70_true:
 ;; *t++ = *prog++; 
   mov b, [bp + -1] ; $t             
   mov g, b
@@ -4323,10 +4193,10 @@ _if73_true:
   mov d, _toktype ; $toktype         
   mov b, 1; DELIMITER        
   mov [d], b
-  jmp _if73_exit
-_if73_else:
+  jmp _if70_exit
+_if70_else:
 ;; if(*prog == ';'){ 
-_if74_cond:
+_if71_cond:
   mov b, [_prog] ; $prog           
   mov d, b
   mov bl, [d]
@@ -4340,8 +4210,8 @@ _if74_cond:
   pop a
 ; END RELATIONAL
   cmp b, 0
-  je _if74_else
-_if74_true:
+  je _if71_else
+_if71_true:
 ;; *t++ = *prog++; 
   mov b, [bp + -1] ; $t             
   mov g, b
@@ -4369,10 +4239,10 @@ _if74_true:
   mov d, _toktype ; $toktype         
   mov b, 1; DELIMITER        
   mov [d], b
-  jmp _if74_exit
-_if74_else:
+  jmp _if71_exit
+_if71_else:
 ;; if(*prog == ':'){ 
-_if75_cond:
+_if72_cond:
   mov b, [_prog] ; $prog           
   mov d, b
   mov bl, [d]
@@ -4386,8 +4256,8 @@ _if75_cond:
   pop a
 ; END RELATIONAL
   cmp b, 0
-  je _if75_else
-_if75_true:
+  je _if72_else
+_if72_true:
 ;; *t++ = *prog++; 
   mov b, [bp + -1] ; $t             
   mov g, b
@@ -4415,10 +4285,10 @@ _if75_true:
   mov d, _toktype ; $toktype         
   mov b, 1; DELIMITER        
   mov [d], b
-  jmp _if75_exit
-_if75_else:
+  jmp _if72_exit
+_if72_else:
 ;; if(*prog == ','){ 
-_if76_cond:
+_if73_cond:
   mov b, [_prog] ; $prog           
   mov d, b
   mov bl, [d]
@@ -4432,8 +4302,8 @@ _if76_cond:
   pop a
 ; END RELATIONAL
   cmp b, 0
-  je _if76_else
-_if76_true:
+  je _if73_else
+_if73_true:
 ;; *t++ = *prog++; 
   mov b, [bp + -1] ; $t             
   mov g, b
@@ -4461,10 +4331,10 @@ _if76_true:
   mov d, _toktype ; $toktype         
   mov b, 1; DELIMITER        
   mov [d], b
-  jmp _if76_exit
-_if76_else:
+  jmp _if73_exit
+_if73_else:
 ;; if(*prog == '.'){ 
-_if77_cond:
+_if74_cond:
   mov b, [_prog] ; $prog           
   mov d, b
   mov bl, [d]
@@ -4478,8 +4348,8 @@ _if77_cond:
   pop a
 ; END RELATIONAL
   cmp b, 0
-  je _if77_exit
-_if77_true:
+  je _if74_exit
+_if74_true:
 ;; *t++ = *prog++; 
   mov b, [bp + -1] ; $t             
   mov g, b
@@ -4507,10 +4377,7 @@ _if77_true:
   mov d, _toktype ; $toktype         
   mov b, 1; DELIMITER        
   mov [d], b
-  jmp _if77_exit
-_if77_exit:
-_if76_exit:
-_if75_exit:
+  jmp _if74_exit
 _if74_exit:
 _if73_exit:
 _if72_exit:
@@ -4520,23 +4387,26 @@ _if69_exit:
 _if68_exit:
 _if67_exit:
 _if66_exit:
+_if65_exit:
 _if64_exit:
-_if62_exit:
-_if60_exit:
+_if63_exit:
+_if61_exit:
+_if59_exit:
 _if57_exit:
 _if54_exit:
-_if53_exit:
 _if51_exit:
-_if49_exit:
-_if47_exit:
+_if50_exit:
+_if48_exit:
 _if46_exit:
-_if45_exit:
 _if44_exit:
 _if43_exit:
 _if42_exit:
+_if41_exit:
+_if40_exit:
 _if39_exit:
-_if37_exit:
-_if35_exit:
+_if36_exit:
+_if34_exit:
+_if32_exit:
 ;; *t = '\0'; 
   mov b, [bp + -1] ; $t             
   push b
@@ -4560,7 +4430,7 @@ convert_constant:
   mov b, _string_const_data ; $string_const                   
   mov [d], b
 ;; if(toktype == CHAR_CONST){ 
-_if78_cond:
+_if75_cond:
   mov b, [_toktype] ; $toktype           
 ; START RELATIONAL
   push a
@@ -4571,8 +4441,8 @@ _if78_cond:
   pop a
 ; END RELATIONAL
   cmp b, 0
-  je _if78_else
-_if78_true:
+  je _if75_else
+_if75_true:
 ;; t++; 
   mov b, [bp + -3] ; $t             
   mov g, b
@@ -4581,7 +4451,7 @@ _if78_true:
   mov [d], b
   mov b, g
 ;; if(*t == '\\'){ 
-_if79_cond:
+_if76_cond:
   mov b, [bp + -3] ; $t             
   mov d, b
   mov bl, [d]
@@ -4595,8 +4465,8 @@ _if79_cond:
   pop a
 ; END RELATIONAL
   cmp b, 0
-  je _if79_else
-_if79_true:
+  je _if76_else
+_if76_true:
 ;; t++; 
   mov b, [bp + -3] ; $t             
   mov g, b
@@ -4605,36 +4475,36 @@ _if79_true:
   mov [d], b
   mov b, g
 ;; switch(*t){ 
-_switch80_expr:
+_switch77_expr:
   mov b, [bp + -3] ; $t             
   mov d, b
   mov bl, [d]
   mov bh, 0
-_switch80_comparisons:
+_switch77_comparisons:
   cmp bl, $30
-  je _switch80_case0
+  je _switch77_case0
   cmp bl, $61
-  je _switch80_case1
+  je _switch77_case1
   cmp bl, $62
-  je _switch80_case2
+  je _switch77_case2
   cmp bl, $66
-  je _switch80_case3
+  je _switch77_case3
   cmp bl, $6e
-  je _switch80_case4
+  je _switch77_case4
   cmp bl, $72
-  je _switch80_case5
+  je _switch77_case5
   cmp bl, $74
-  je _switch80_case6
+  je _switch77_case6
   cmp bl, $76
-  je _switch80_case7
+  je _switch77_case7
   cmp bl, $5c
-  je _switch80_case8
+  je _switch77_case8
   cmp bl, $27
-  je _switch80_case9
+  je _switch77_case9
   cmp bl, $22
-  je _switch80_case10
-  jmp _switch80_exit
-_switch80_case0:
+  je _switch77_case10
+  jmp _switch77_exit
+_switch77_case0:
 ;; *s++ = '\0'; 
   mov b, [bp + -1] ; $s             
   mov g, b
@@ -4647,8 +4517,8 @@ _switch80_case0:
   pop d
   mov [d], bl
 ;; break; 
-  jmp _switch80_exit ; case break
-_switch80_case1:
+  jmp _switch77_exit ; case break
+_switch77_case1:
 ;; *s++ = '\a'; 
   mov b, [bp + -1] ; $s             
   mov g, b
@@ -4661,8 +4531,8 @@ _switch80_case1:
   pop d
   mov [d], bl
 ;; break; 
-  jmp _switch80_exit ; case break
-_switch80_case2:
+  jmp _switch77_exit ; case break
+_switch77_case2:
 ;; *s++ = '\b'; 
   mov b, [bp + -1] ; $s             
   mov g, b
@@ -4675,8 +4545,8 @@ _switch80_case2:
   pop d
   mov [d], bl
 ;; break;   
-  jmp _switch80_exit ; case break
-_switch80_case3:
+  jmp _switch77_exit ; case break
+_switch77_case3:
 ;; *s++ = '\f'; 
   mov b, [bp + -1] ; $s             
   mov g, b
@@ -4689,8 +4559,8 @@ _switch80_case3:
   pop d
   mov [d], bl
 ;; break; 
-  jmp _switch80_exit ; case break
-_switch80_case4:
+  jmp _switch77_exit ; case break
+_switch77_case4:
 ;; *s++ = '\n'; 
   mov b, [bp + -1] ; $s             
   mov g, b
@@ -4703,8 +4573,8 @@ _switch80_case4:
   pop d
   mov [d], bl
 ;; break; 
-  jmp _switch80_exit ; case break
-_switch80_case5:
+  jmp _switch77_exit ; case break
+_switch77_case5:
 ;; *s++ = '\r'; 
   mov b, [bp + -1] ; $s             
   mov g, b
@@ -4717,8 +4587,8 @@ _switch80_case5:
   pop d
   mov [d], bl
 ;; break; 
-  jmp _switch80_exit ; case break
-_switch80_case6:
+  jmp _switch77_exit ; case break
+_switch77_case6:
 ;; *s++ = '\t'; 
   mov b, [bp + -1] ; $s             
   mov g, b
@@ -4731,8 +4601,8 @@ _switch80_case6:
   pop d
   mov [d], bl
 ;; break; 
-  jmp _switch80_exit ; case break
-_switch80_case7:
+  jmp _switch77_exit ; case break
+_switch77_case7:
 ;; *s++ = '\v'; 
   mov b, [bp + -1] ; $s             
   mov g, b
@@ -4745,8 +4615,8 @@ _switch80_case7:
   pop d
   mov [d], bl
 ;; break; 
-  jmp _switch80_exit ; case break
-_switch80_case8:
+  jmp _switch77_exit ; case break
+_switch77_case8:
 ;; *s++ = '\\'; 
   mov b, [bp + -1] ; $s             
   mov g, b
@@ -4759,8 +4629,8 @@ _switch80_case8:
   pop d
   mov [d], bl
 ;; break; 
-  jmp _switch80_exit ; case break
-_switch80_case9:
+  jmp _switch77_exit ; case break
+_switch77_case9:
 ;; *s++ = '\''; 
   mov b, [bp + -1] ; $s             
   mov g, b
@@ -4773,8 +4643,8 @@ _switch80_case9:
   pop d
   mov [d], bl
 ;; break; 
-  jmp _switch80_exit ; case break
-_switch80_case10:
+  jmp _switch77_exit ; case break
+_switch77_case10:
 ;; *s++ = '\"'; 
   mov b, [bp + -1] ; $s             
   mov g, b
@@ -4786,9 +4656,9 @@ _switch80_case10:
   mov b, $22
   pop d
   mov [d], bl
-_switch80_exit:
-  jmp _if79_exit
-_if79_else:
+_switch77_exit:
+  jmp _if76_exit
+_if76_else:
 ;; *s++ = *t; 
   mov b, [bp + -1] ; $s             
   mov g, b
@@ -4803,11 +4673,11 @@ _if79_else:
   mov bh, 0
   pop d
   mov [d], bl
-_if79_exit:
-  jmp _if78_exit
-_if78_else:
+_if76_exit:
+  jmp _if75_exit
+_if75_else:
 ;; if(toktype == STRING_CONST){ 
-_if81_cond:
+_if78_cond:
   mov b, [_toktype] ; $toktype           
 ; START RELATIONAL
   push a
@@ -4818,8 +4688,8 @@ _if81_cond:
   pop a
 ; END RELATIONAL
   cmp b, 0
-  je _if81_exit
-_if81_true:
+  je _if78_exit
+_if78_true:
 ;; t++; 
   mov b, [bp + -3] ; $t             
   mov g, b
@@ -4828,7 +4698,7 @@ _if81_true:
   mov [d], b
   mov b, g
 ;; while(*t != '\"' && *t){ 
-_while82_cond:
+_while79_cond:
   mov b, [bp + -3] ; $t             
   mov d, b
   mov bl, [d]
@@ -4850,8 +4720,8 @@ _while82_cond:
   sand a, b ; &&
   pop a
   cmp b, 0
-  je _while82_exit
-_while82_block:
+  je _while79_exit
+_while79_block:
 ;; *s++ = *t++; 
   mov b, [bp + -1] ; $s             
   mov g, b
@@ -4871,11 +4741,11 @@ _while82_block:
   mov bh, 0
   pop d
   mov [d], bl
-  jmp _while82_cond
-_while82_exit:
-  jmp _if81_exit
-_if81_exit:
+  jmp _while79_cond
+_while79_exit:
+  jmp _if78_exit
 _if78_exit:
+_if75_exit:
 ;; *s = '\0'; 
   mov b, [bp + -1] ; $s             
   push b
@@ -4888,7 +4758,7 @@ _if78_exit:
 error:
   enter 0 ; (push bp; mov bp, sp)
 ;; printf("\nError: "); 
-  mov b, __s7 ; "\nError: "
+  mov b, __s3 ; "\nError: "
   swp b
   push b
   call printf
@@ -4900,7 +4770,7 @@ error:
   call printf
   add sp, 2
 ;; printf("\n"); 
-  mov b, __s8 ; "\n"
+  mov b, __s4 ; "\n"
   swp b
   push b
   call printf
@@ -4915,18 +4785,13 @@ _toktype: .fill 2, 0
 _prog: .fill 2, 0
 _token_data: .fill 256, 0
 _string_const_data: .fill 256, 0
-_filename_data: .fill 64, 0
-_size: .fill 2, 0
-_data_data: .fill 128, 0
-__s0: .db "\nStarcom 1.0\n", 0
-__s1: .db "\nusage: starcom <filename> <size>\n", 0
-__s2: .db "\nOK. Start transfer now.\n", 0
-__s3: .db " ", 0
-__s4: .db "Unknown type size in va_arg() call. Size needs to be either 1 or 2.", 0
-__s5: .db "Error: Unknown argument type.\n", 0
-__s6: .db "Double quotes expected", 0
-__s7: .db "\nError: ", 0
-__s8: .db "\n", 0
+_address: .fill 2, 0
+_data: .fill 1, 0
+__s0: .db "Unknown type size in va_arg() call. Size needs to be either 1 or 2.", 0
+__s1: .db "Error: Unknown argument type.\n", 0
+__s2: .db "Double quotes expected", 0
+__s3: .db "\nError: ", 0
+__s4: .db "\n", 0
 
 _heap_top: .dw _heap
 _heap: .db 0

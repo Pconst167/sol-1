@@ -1,9 +1,35 @@
-char *string1 = "This is another string.";
+
+
 void main(){
 
-  printf("Int : %d, %i, %u, %x\n\n", 0xFFFF, 65535, 0xFFFF, 65535);
-  printf("Char: %c, %c, %c, %c, %c, %c\n\n", 'a', 'A', 0x61, 0x41, 97, 65);
+asm{
+  mov b, 25
 
+  push a
+  push d
+  push c
+  mov c, 0
+
+  mov a, b
+  call print_u16d
+  mov ah, $0A
+  call _putchar
+  
+  mov al, 3
+  syscall sys_io      ; receive in AH with no echo
+  mov a, b
+  call print_u16d
+  mov ah, $0A
+  call _putchar
+
+  pop c
+  pop d
+  pop a
+}
+
+  /*printf("Int : %d, %i, %u, %x\n\n", 0xFFFF, 65535, 0xFFFF, 65535);
+  printf("Char: %c, %c, %c, %c, %c, %c\n\n", 'a', 'A', 0x61, 0x41, 97, 65);
+*/
 }
 
 /*
