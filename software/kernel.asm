@@ -285,48 +285,55 @@ int_7:
   je CTRLZ
   mov [d], bl        ; add to fifo
   inc a
+  cmp a, fifo + FIFO_SIZE
+  jlu int_7_continue0:
+  mov a, fifo
+int_7_continue0:
   mov [fifo_in], a      ; update fifo pointer
   mov b, [fifo_out]
   ; now make comparisons to see if the buffer is almost full
-  cmp a, b
-
 ; a = fifo_in
 ; b = fifo_out
-; test if fifo_out - fifo_in > 0
-; equivalent to:  fifo_in - fifo_out < 0
-; equivalent to:  fifo_in < fifo_out
-  jl int7_out_gt_in
-; else, fifo_out < fifo_in
-; test if fifo_in - fifo_out > 1024
-  sub a, b  ; fifo_in - fifo_out
-  cmp a, 1024
-  jg int7_in_sub_out_gt_1024
-; else, no overflow
-
-int7_in_sub_out_gt_1024:
-
-int7_out_gt_in:
+; test if fifo_in > fifo_out
+  cmp a, b
+  jg int_7_in_gt_out
+; else, fifo_out > fifo_in
 ; test if fifo_out - fifo_in < 16
 ; equivalent to fifo_in - fifo_out > -16
   sub a, b  ; fifo_in - fifo_out
   cmp a, -16
-  jg int_7_out_sub_in_lt_16
-
-int_7_out_sub_in_lt_16:
-
-int_7_continue:  
+  jg int_7_xoff
+; else, no overflow
+int_7_continue1:  
   popf
   pop d
   pop a  
   sysret
-                      ; fifo_out - fifo_in > 0 && fifo_out - fifo_in < 16
-int_7_fifo_overflow: ; condition: fifo_out>fifo_in && (fifo_out - fifo_in) < 16   or  fifo_in - fifo_out > approx 1024
-  mov ah, XOFF
-  mov al, 0 ; putchar
-  syscall sys_io
-  jmp int_7_continue
+; test if fifo_in - fifo_out > 1024
+int_7_in_gt_out:
+  sub a, b  ; fifo_in - fifo_out
+  cmp a, 1024
+  jg int_7_xoff
+  popf
+  pop d
+  pop a  
+  sysret
+int_7_xoff:  ; fifo_out > fifo_in && fifo_out - fifo_in < 16
+  mov ah, XOFF       ; condition: fifo_out>fifo_in && (fifo_out - fifo_in) < 16   or  fifo_in - fifo_out > approx 1024
+  call _putchar
+  mov d, s_int_7_xoff
+  call _puts
+  mov b, [fifo_out]
+  call print_u16x
+  mov ah, ' '
+  call _putchar
+  mov b, [fifo_in]
+  call print_u16x
+  mov ah, '\n'
+  call _putchar
+  jmp int_7_continue1
 
-s_fifo_overflow: .db "\nFatal: FIFO overflow: ", 0
+s_int_7_xoff: .db "\nFatal: FIFO overflow: ", 0
 
 CTRLC:
   add sp, 5

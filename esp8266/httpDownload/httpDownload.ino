@@ -11,6 +11,8 @@ String    password = "";
 // Serial Port
 uint16_t len;
 uint16_t baud = 9600;
+const char XON = 0x11;  // ASCII code for XON
+const char XOFF = 0x13;  // ASCII code for XOFF
 
 // Telnet
 const int  MAX_CLIENTS = 3;
@@ -36,7 +38,7 @@ void setup() {
 void loop() {
   int len = 0;
   bool newClientAdded = false;
-    
+
   for (uint8_t i = 0; i < MAX_CLIENTS; i++) {
     if (serverClients[i] && serverClients[i].connected()) {
       while(serverClients[i].available()) {
@@ -51,8 +53,6 @@ void loop() {
     }
   }
 
-
-
   if (server.hasClient()) {
     for (int i = 0; i < MAX_CLIENTS; i++) {
       // Find the first available slot for a new client
@@ -63,7 +63,7 @@ void loop() {
         break;  // exit the loop
       }
     }
-  
+
     if (!newClientAdded) {
       // No slots available, so reject the additional client
       WiFiClient serverClient = server.available();
@@ -71,21 +71,36 @@ void loop() {
     }
   }
 
-  
   while(Serial.available()){
     char c = Serial.read();
-    sendCharToAllClients(c);
-    if (c == '\n') {
-      if(commandBuffer != ""){
-        processCommand(commandBuffer);
-        commandBuffer = "";  // Clear the buffer
+    if (c == XOFF) {
+      delay(300);
+/*      
+ *    Instead of normal xon/xoff control. using a delay.
+ *    // Stop sending data until XON is received
+      
+      while (true) {
+        if (Serial.available() > 0 && Serial.read() == XON) {
+          break;
+        }
       }
-    }
-    else{  
-      commandBuffer += c;
+      */
+    } 
+    else{
+      sendCharToAllClients(c);
+      if (c == '\n') {
+        if(commandBuffer != ""){
+          processCommand(commandBuffer);
+          commandBuffer = "";  // Clear the buffer
+        }
+      }
+      else{  
+        commandBuffer += c;
+      }
     }
   }
 }
+
 
 void sendCharToAllClients(char c){
   for (int i = 0; i < MAX_CLIENTS; i++) {
