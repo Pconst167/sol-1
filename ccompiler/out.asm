@@ -158,9 +158,9 @@ _load_binary:
   push d
   push c
 _load_binary_loop:
-  mov a, b
-  call print_u16d
-  call printnl
+  push b
+  call _getchar
+  pop b
   mov al, ah
   mov [d], al
   inc d

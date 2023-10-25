@@ -1,4 +1,4 @@
-; --- FILENAME: ../solarium/src/usr/bin/shell
+; --- FILENAME: ../solarium/usr/bin/shell
 .include "lib/kernel.exp"
 .include "lib/bios.exp"
 .org TEXT_ORG

@@ -10,14 +10,8 @@
   scan thru main program, finding functions and then looking in the resulting include file for the function
   add function to main program.
 
-  ** CORRECT MICROCODE FOR PUSHING INTO STACK !!!!
-
   ** fix goto: at present we cannot jump to a label that is declared after the goto.
 
-  ** implement mov d, [bp + ...] instruction
-  ** implement mov [b+ + ...], b
-  ** implement lea di, [bp+@], etc
-  ** implement lea si, [bp+@], etc
 
   ** fix array variable declarations.
 */

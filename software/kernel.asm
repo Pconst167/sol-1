@@ -42,6 +42,9 @@ _UART1_FCR        .equ $FF92            ; FIFO control register
 _UART1_LCR        .equ $FF93            ; line control register
 _UART1_LSR        .equ $FF95            ; line status register
 
+XON               .equ $11
+XOFF              .equ $13
+
 _ide_BASE         .equ $FFD0            ; IDE BASE
 _ide_R0           .equ _ide_BASE + 0    ; DATA PORT
 _ide_R1           .equ _ide_BASE + 1    ; READ: ERROR CODE, WRITE: FEATURE
@@ -65,7 +68,7 @@ _TIMER_C_2        .equ $FFE2            ; TIMER COUNTER 2
 _TIMER_CTRL       .equ $FFE3            ; TIMER CONTROL REGISTER
 
 STACK_BEGIN       .equ $F7FF            ; beginning of stack
-FIFO_SIZE         .equ (1024 * 7 + 512)
+FIFO_SIZE         .equ (1024 * 4)
 
 TEXT_ORG          .equ $400
 ; ------------------------------------------------------------------------------------------------------------------;
@@ -150,7 +153,7 @@ root_id:                .equ FST_LBA_START
 ; System Call Vector Table
 ; Starts at address $0020
 ; ------------------------------------------------------------------------------------------------------------------;
-.dw syscall_breakpoint
+.dw syscall_break
 .dw syscall_rtc
 .dw syscall_ide
 .dw syscall_io
@@ -167,7 +170,7 @@ root_id:                .equ FST_LBA_START
 ; ------------------------------------------------------------------------------------------------------------------;
 ; System Call Aliases
 ; ------------------------------------------------------------------------------------------------------------------;
-sys_bkpt             .equ 0
+sys_break             .equ 0
 sys_rtc              .equ 1
 sys_ide              .equ 2
 sys_io               .equ 3
@@ -185,7 +188,7 @@ sys_system           .equ 12
 ; Alias Exports
 ; ------------------------------------------------------------------------------------------------------------------;
 .export TEXT_ORG
-.export sys_bkpt
+.export sys_break
 .export sys_ide
 .export sys_io
 .export sys_filesystem
@@ -275,37 +278,52 @@ int_7:
   pushf
   mov a, [fifo_in]
   mov d, a
-  mov al, [_UART0_DATA]  ; get character
-  cmp al, $03        ; CTRL-C
+  mov bl, [_UART0_DATA]  ; get character
+  cmp bl, $03        ; CTRL-C
   je CTRLC
-  cmp al, $1A        ; CTRL-Z
+  cmp bl, $1A        ; CTRL-Z
   je CTRLZ
-  mov [d], al        ; add to fifo
-  mov a, [fifo_in]
+  mov [d], bl        ; add to fifo
   inc a
-  mov b, [fifo_out]
-  cmp a, b
-  je int_7_fifo_overflow
-  cmp a, fifo + FIFO_SIZE         ; check if pointer reached the end of the fifo
-  jne int_7_continue
-  mov a, fifo  
-int_7_continue:  
   mov [fifo_in], a      ; update fifo pointer
+  mov b, [fifo_out]
+  ; now make comparisons to see if the buffer is almost full
+  cmp a, b
+
+; a = fifo_in
+; b = fifo_out
+; test if fifo_out - fifo_in > 0
+; equivalent to:  fifo_in - fifo_out < 0
+; equivalent to:  fifo_in < fifo_out
+  jl int7_out_gt_in
+; else, fifo_out < fifo_in
+; test if fifo_in - fifo_out > 1024
+  sub a, b  ; fifo_in - fifo_out
+  cmp a, 1024
+  jg int7_in_sub_out_gt_1024
+; else, no overflow
+
+int7_in_sub_out_gt_1024:
+
+int7_out_gt_in:
+; test if fifo_out - fifo_in < 16
+; equivalent to fifo_in - fifo_out > -16
+  sub a, b  ; fifo_in - fifo_out
+  cmp a, -16
+  jg int_7_out_sub_in_lt_16
+
+int_7_out_sub_in_lt_16:
+
+int_7_continue:  
   popf
   pop d
   pop a  
   sysret
-int_7_fifo_overflow:
-  mov d, s_fifo_overflow
-  call _puts
-  mov b, [fifo_in]
-  call print_u16x
-  mov ah, ':'
-  call _putchar
-  mov b, [fifo_out]
-  call print_u16x
-  call printnl
-  mov a, fifo  
+                      ; fifo_out - fifo_in > 0 && fifo_out - fifo_in < 16
+int_7_fifo_overflow: ; condition: fifo_out>fifo_in && (fifo_out - fifo_in) < 16   or  fifo_in - fifo_out > approx 1024
+  mov ah, XOFF
+  mov al, 0 ; putchar
+  syscall sys_io
   jmp int_7_continue
 
 s_fifo_overflow: .db "\nFatal: FIFO overflow: ", 0
@@ -458,7 +476,7 @@ trap_privilege:
 ; IMPORTANT: values in the stack are being pushed in big endian. i.e.: MSB at low address
 ; and LSB at high address. *** NEED TO CORRECT THIS IN THE MICROCODE and make it little endian again ***
 ; ------------------------------------------------------------------------------------------------------------------;
-syscall_breakpoint:
+syscall_break:
   pusha
 syscall_break_prompt:
   mov d, s_break1
@@ -518,7 +536,7 @@ back1:
   cmp c, 512
   jne dump_loop
   call printnl
-  jmp syscall_break_prompt  ; go to syscall_breakpoint return point
+  jmp syscall_break_prompt  ; go to syscall_break return point
 print_ascii:
   mov a, $2000
   syscall sys_io
@@ -884,17 +902,17 @@ ide_wait:
 ; 9600    12
 ; 19200    6
 ; 38400    3
-io_jmp:
-  .dw io_putchar
-  .dw io_getchar
-  .dw io_uart_setup
-  .dw io_getchar_noech
+syscall_io_jmp:
+  .dw syscall_io_putchar
+  .dw syscall_io_getch
+  .dw syscall_io_uart_setup
+  .dw syscall_io_getche
 syscall_io:
-  jmp [io_jmp + al]
+  jmp [syscall_io_jmp + al]
 ; bit7 is the Divisor Latch Access Bit (DLAB). It must be set high (logic 1) to access the Divisor Latches
 ; of the Baud Generator during a Read or Write operation. It must be set low (logic 0) to access the Receiver
 ; Buffer, the Transmitter Holding Register, or the Interrupt Enable Register.
-io_uart_setup:
+syscall_io_uart_setup:
   mov al, [sys_uart0_lcr]
   or al, $80                ; set DLAB access bit
   mov [_UART0_LCR], al      ; 8 data, 1 stop, no parity by default
@@ -913,85 +931,76 @@ io_uart_setup:
   sysret
 
 ; char in ah
-io_putchar:
-io_putchar_L0:
+syscall_io_putchar:
+syscall_io_putchar_L0:
   mov al, [_UART0_LSR]         ; read Line Status Register
   test al, $20                 ; isolate Transmitter Empty
-  jz io_putchar_L0    
+  jz syscall_io_putchar_L0    
   mov al, ah
   mov [_UART0_DATA], al        ; write char to Transmitter Holding Register
   sysret
 
 ; char in ah
 ; al = sucess code
-io_getchar:
+syscall_io_getche:
   push b
   push d
-io_getchar_L0:  
+  sti
+syscall_io_getche_L0:  
   mov a, [fifo_out]
   mov b, [fifo_in]
   cmp a, b
-  je io_getchar_fail
+  je syscall_io_getche_L0
   mov d, a
   mov bl, [d]
   mov a, [fifo_out]
   inc a
   cmp a, fifo + FIFO_SIZE      ; check if pointer reached the end of the fifo
-  jne io_getchar_updt
+  jne syscall_io_getche_updt
   mov a, fifo  
-io_getchar_updt:  
+syscall_io_getche_updt:  
   mov [fifo_out], a             ; update fifo pointer
   mov al, [sys_echo_on]
   cmp al, 1
-  mov ah, bl
-  jne io_getchar_end
+  jne syscall_io_getche_end
 ; here we just echo the char back to the console
-io_getchar_echo_L0:
+  mov ah, bl
+syscall_io_getche_L1:
   mov al, [_UART0_LSR]         ; read Line Status Register
   test al, $20                 ; isolate Transmitter Empty
-  jz io_getchar_echo_L0
-  mov al, ah
+  jz syscall_io_getche_L1
   mov [_UART0_DATA], al        ; write char to Transmitter Holding Register
-io_getchar_end:
+syscall_io_getche_end:
+  mov al, 1
   pop d
   pop b
-  mov al, 1                    ; AL = 1 means a char successfully received
-  sysret
-io_getchar_fail:
-  pop d
-  pop b
-  mov al, 0                    ; AL = 0 means no char received
   sysret
 
 ; char in ah
 ; al = sucess code
-io_getchar_noech:
+syscall_io_getch:
   push b
   push d
-io_getchar_noech_L0:  
+  sti
+syscall_io_getch_L0:  
   mov a, [fifo_out]
   mov b, [fifo_in]
   cmp a, b
-  je io_getchar_noech_fail
+  je syscall_io_getch_L0
   mov d, a
   mov al, [d]
   push al
   mov a, [fifo_out]
   inc a
   cmp a, fifo + FIFO_SIZE      ; check if pointer reached the end of the fifo
-  jne io_getchar_noech_cont
+  jne syscall_io_getch_cont
   mov a, fifo  
-io_getchar_noech_cont:  
+syscall_io_getch_cont:  
   mov [fifo_out], a             ; update fifo pointer
   pop ah
   mov al, 1                    ; AL = 1 means a char successfully received
   pop d
   pop b
-  sysret
-io_getchar_noech_fail:
-  pop d
-  pop b
-  mov al, 0                    ; AL = 0 means no char received
   sysret
 
 ;------------------------------------------------------------------------------------------------------;
@@ -1989,7 +1998,6 @@ fs_pwd:
   call _puts
   call printnl
   sysret
-
 
 ;------------------------------------------------------------------------------------------------------;
 ; get current directory LBA

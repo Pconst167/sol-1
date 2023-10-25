@@ -101,8 +101,6 @@ _getchar:
 _getchar_retry:
   mov al, 1
   syscall sys_io      ; receive in AH
-  cmp al, 0      ; check if any char was received
-  je _getchar_retry
   pop al
   ret
 
