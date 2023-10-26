@@ -285,41 +285,17 @@ int_7:
   je CTRLZ
   mov [d], bl        ; add to fifo
   inc a
+  mov [fifo_in], a
   cmp a, fifo + FIFO_SIZE
-  jlu int_7_continue0:
-  mov a, fifo
-int_7_continue0:
-  mov [fifo_in], a      ; update fifo pointer
-  mov b, [fifo_out]
-  ; now make comparisons to see if the buffer is almost full
-; a = fifo_in
-; b = fifo_out
-; test if fifo_in > fifo_out
-  cmp a, b
-  jg int_7_in_gt_out
-; else, fifo_out > fifo_in
-; test if fifo_out - fifo_in < 16
-; equivalent to fifo_in - fifo_out > -16
-  sub a, b  ; fifo_in - fifo_out
-  cmp a, -16
-  jg int_7_xoff
-; else, no overflow
+  je int_7_xoff
 int_7_continue1:  
   popf
   pop d
   pop a  
   sysret
-; test if fifo_in - fifo_out > 1024
-int_7_in_gt_out:
-  sub a, b  ; fifo_in - fifo_out
-  cmp a, 1024
-  jg int_7_xoff
-  popf
-  pop d
-  pop a  
-  sysret
-int_7_xoff:  ; fifo_out > fifo_in && fifo_out - fifo_in < 16
-  mov ah, XOFF       ; condition: fifo_out>fifo_in && (fifo_out - fifo_in) < 16   or  fifo_in - fifo_out > approx 1024
+
+int_7_xoff:    
+  mov ah, XOFF  
   call _putchar
   mov d, s_int_7_xoff
   call _puts
@@ -332,6 +308,12 @@ int_7_xoff:  ; fifo_out > fifo_in && fifo_out - fifo_in < 16
   mov ah, '\n'
   call _putchar
   jmp int_7_continue1
+
+; condition for 'fifo-full':
+; fifo_in == fifo + FIFO_SIZE
+; condition for fifo recovery:
+; fifo must be full and
+; fifo_out == fifo_in
 
 s_int_7_xoff: .db "\nFatal: FIFO overflow: ", 0
 
@@ -999,17 +981,32 @@ syscall_io_getch_L0:
   push al
   mov a, [fifo_out]
   inc a
-  cmp a, fifo + FIFO_SIZE      ; check if pointer reached the end of the fifo
-  jne syscall_io_getch_cont
-  mov a, fifo  
-syscall_io_getch_cont:  
   mov [fifo_out], a             ; update fifo pointer
+  cmp a, fifo + FIFO_SIZE      ; check if pointer reached the end of the fifo
+  je syscall_io_getch_xon
+syscall_io_getch_cont:  
   pop ah
   mov al, 1                    ; AL = 1 means a char successfully received
   pop d
   pop b
   sysret
 
+syscall_io_getch_xon:    
+  mov ah, XON
+  call _putchar
+  mov d, s_syscall_io_getch_xon
+  call _puts
+  mov b, [fifo_out]
+  call print_u16x
+  mov ah, ' '
+  call _putchar
+  mov b, [fifo_in]
+  call print_u16x
+  mov ah, '\n'
+  call _putchar
+  jmp int_7_continue1
+
+s_syscall_io_getch_xon: .db "\nFIFO reset: ", 0
 ;------------------------------------------------------------------------------------------------------;
 ; FILE SYSTEM DATA
 ;------------------------------------------------------------------------------------------------------;
