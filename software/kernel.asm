@@ -68,7 +68,7 @@ _TIMER_C_2        .equ $FFE2            ; TIMER COUNTER 2
 _TIMER_CTRL       .equ $FFE3            ; TIMER CONTROL REGISTER
 
 STACK_BEGIN       .equ $F7FF            ; beginning of stack
-FIFO_SIZE         .equ (1024 * 4)
+FIFO_SIZE         .equ 1024
 
 TEXT_ORG          .equ $400
 ; ------------------------------------------------------------------------------------------------------------------;
@@ -305,7 +305,7 @@ int_7_xoff:
   call _putchar
   mov b, [fifo_in]
   call print_u16x
-  mov ah, '\n'
+  mov ah, $0A
   call _putchar
   jmp int_7_continue1
 
@@ -315,7 +315,7 @@ int_7_xoff:
 ; fifo must be full and
 ; fifo_out == fifo_in
 
-s_int_7_xoff: .db "\nFatal: FIFO overflow: ", 0
+s_int_7_xoff: .db "\nWarning: FIFO is full. Sending XOFF. Ptrs: ", 0
 
 CTRLC:
   add sp, 5
@@ -977,23 +977,20 @@ syscall_io_getch_L0:
   cmp a, b
   je syscall_io_getch_L0
   mov d, a
-  mov al, [d]
-  push al
+  mov bl, [d]
   mov a, [fifo_out]
   inc a
   mov [fifo_out], a             ; update fifo pointer
   cmp a, fifo + FIFO_SIZE      ; check if pointer reached the end of the fifo
   je syscall_io_getch_xon
 syscall_io_getch_cont:  
-  pop ah
+  mov ah, bl
   mov al, 1                    ; AL = 1 means a char successfully received
   pop d
   pop b
   sysret
 
 syscall_io_getch_xon:    
-  mov ah, XON
-  call _putchar
   mov d, s_syscall_io_getch_xon
   call _puts
   mov b, [fifo_out]
@@ -1002,11 +999,16 @@ syscall_io_getch_xon:
   call _putchar
   mov b, [fifo_in]
   call print_u16x
-  mov ah, '\n'
+  mov ah, $0A
+  call _putchar
+  mov a, fifo
+  mov [fifo_in], a
+  mov [fifo_out], a   ; reset fifo pointers
+  mov ah, XON
   call _putchar
   jmp syscall_io_getch_cont
 
-s_syscall_io_getch_xon: .db "\nFIFO reset: ", 0
+s_syscall_io_getch_xon: .db "\nWarning: FIFO reset. Sending XON. Ptrs: ", 0
 ;------------------------------------------------------------------------------------------------------;
 ; FILE SYSTEM DATA
 ;------------------------------------------------------------------------------------------------------;
