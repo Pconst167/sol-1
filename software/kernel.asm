@@ -1004,7 +1004,7 @@ syscall_io_getch_xon:
   call print_u16x
   mov ah, '\n'
   call _putchar
-  jmp int_7_continue1
+  jmp syscall_io_getch_cont
 
 s_syscall_io_getch_xon: .db "\nFIFO reset: ", 0
 ;------------------------------------------------------------------------------------------------------;
