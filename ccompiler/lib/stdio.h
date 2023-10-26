@@ -222,7 +222,7 @@ void putchar(char c){
 char getchar(){
   char c;
   asm{
-    call _getchar
+    call getch
     mov al, ah
     meta mov d, c
     mov [d], al

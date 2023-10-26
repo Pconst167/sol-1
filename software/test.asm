@@ -6,7 +6,7 @@ main:
   mov bp, $FFFF
   mov sp, $FFFF
 
-  call _getchar
+  call getch
 
   syscall sys_terminate_proc
 

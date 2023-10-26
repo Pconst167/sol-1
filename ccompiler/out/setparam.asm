@@ -1912,7 +1912,7 @@ getchar:
   sub sp, 1
 
 ; --- BEGIN INLINE ASM BLOCK
-  call _getchar
+  call getch
   mov al, ah
   lea d, [bp + 0] ; $c
   mov [d], al

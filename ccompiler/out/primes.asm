@@ -1,4 +1,4 @@
-; --- FILENAME: ../solarium/src/usr/bin/setbaud
+; --- FILENAME: programs/primes
 .include "lib/kernel.exp"
 .include "lib/bios.exp"
 .org TEXT_ORG
@@ -7,12 +7,26 @@
 main:
   mov bp, $FFE0 ;
   mov sp, $FFE0 ; Make space for argc(2 bytes) and for 10 pointers in argv (local variables)
-
-; --- BEGIN INLINE ASM BLOCK
-  mov al, 2
-  syscall sys_io
-; --- END INLINE ASM BLOCK
-
+;; print("Max: "); 
+  mov b, __s0 ; "Max: "
+  swp b
+  push b
+  call print
+  add sp, 2
+;; top = scann(); 
+  mov d, _top ; $top
+  push d
+  call scann
+  pop d
+  mov [d], b
+;; date(); 
+  call date
+;; primes(); 
+  call primes
+;; date(); 
+  call date
+;; return; 
+  leave
   syscall sys_terminate_proc
 
 strcpy:
@@ -339,7 +353,7 @@ _if6_true:
   jmp _if6_exit
 _if6_else:
 ;; print("Unknown type size in va_arg() call. Size needs to be either 1 or 2."); 
-  mov b, __s0 ; "Unknown type size in va_arg() call. Size needs to be either 1 or 2."
+  mov b, __s1 ; "Unknown type size in va_arg() call. Size needs to be either 1 or 2."
   swp b
   push b
   call print
@@ -571,7 +585,7 @@ _switch10_case5:
   jmp _switch10_exit ; case break
 _switch10_default:
 ;; print("Error: Unknown argument type.\n"); 
-  mov b, __s1 ; "Error: Unknown argument type.\n"
+  mov b, __s2 ; "Error: Unknown argument type.\n"
   swp b
   push b
   call print
@@ -1613,11 +1627,362 @@ include_stdio_asm:
 
   leave
   ret
+
+sqrt:
+  enter 0 ; (push bp; mov bp, sp)
+; $x 
+; $y 
+  sub sp, 4
+;; if (n <= 1) { 
+_if25_cond:
+  mov b, [bp + 5] ; $n             
+; START RELATIONAL
+  push a
+  mov a, b
+  mov b, $1
+  cmp a, b
+  sle ; <=
+  pop a
+; END RELATIONAL
+  cmp b, 0
+  je _if25_exit
+_if25_true:
+;; return n; 
+  mov b, [bp + 5] ; $n             
+  leave
+  ret
+  jmp _if25_exit
+_if25_exit:
+;; x = n; 
+  lea d, [bp + -1] ; $x         
+  mov b, [bp + 5] ; $n                     
+  mov [d], b
+;; y = (x + n / x) / 2; 
+  lea d, [bp + -3] ; $y         
+  mov b, [bp + -1] ; $x             
+; START TERMS
+  push a
+  mov a, b
+  mov b, [bp + 5] ; $n             
+; START FACTORS
+  push a
+  mov a, b
+  mov b, [bp + -1] ; $x             
+  div a, b
+  mov b, a
+  pop a
+; END FACTORS
+  add a, b
+  mov b, a
+  pop a
+; END TERMS
+; START FACTORS
+  push a
+  mov a, b
+  mov b, $2
+  div a, b
+  mov b, a
+  pop a
+; END FACTORS        
+  mov [d], b
+;; while (y < x) { 
+_while26_cond:
+  mov b, [bp + -3] ; $y             
+; START RELATIONAL
+  push a
+  mov a, b
+  mov b, [bp + -1] ; $x             
+  cmp a, b
+  slt ; < 
+  pop a
+; END RELATIONAL
+  cmp b, 0
+  je _while26_exit
+_while26_block:
+;; x = y; 
+  lea d, [bp + -1] ; $x         
+  mov b, [bp + -3] ; $y                     
+  mov [d], b
+;; y = (x + n / x) / 2; 
+  lea d, [bp + -3] ; $y         
+  mov b, [bp + -1] ; $x             
+; START TERMS
+  push a
+  mov a, b
+  mov b, [bp + 5] ; $n             
+; START FACTORS
+  push a
+  mov a, b
+  mov b, [bp + -1] ; $x             
+  div a, b
+  mov b, a
+  pop a
+; END FACTORS
+  add a, b
+  mov b, a
+  pop a
+; END TERMS
+; START FACTORS
+  push a
+  mov a, b
+  mov b, $2
+  div a, b
+  mov b, a
+  pop a
+; END FACTORS        
+  mov [d], b
+  jmp _while26_cond
+_while26_exit:
+;; return x; 
+  mov b, [bp + -1] ; $x             
+  leave
+  ret
+
+exp:
+  enter 0 ; (push bp; mov bp, sp)
+; $i 
+; $result 
+  mov a, $1
+  mov [bp + -3], a
+  sub sp, 4
+;; for(i = 0; i < exp; i++){ 
+_for27_init:
+  lea d, [bp + -1] ; $i         
+  mov b, $0        
+  mov [d], b
+_for27_cond:
+  mov b, [bp + -1] ; $i             
+; START RELATIONAL
+  push a
+  mov a, b
+  mov b, [bp + 5] ; $exp             
+  cmp a, b
+  slt ; < 
+  pop a
+; END RELATIONAL
+  cmp b, 0
+  je _for27_exit
+_for27_block:
+;; result = result * base; 
+  lea d, [bp + -3] ; $result         
+  mov b, [bp + -3] ; $result             
+; START FACTORS
+  push a
+  mov a, b
+  mov b, [bp + 7] ; $base             
+  mul a, b ; *
+  mov a, b
+  mov b, a
+  pop a
+; END FACTORS        
+  mov [d], b
+_for27_update:
+  mov b, [bp + -1] ; $i             
+  mov g, b
+  inc b
+  lea d, [bp + -1] ; $i
+  mov [d], b
+  mov b, g
+  jmp _for27_cond
+_for27_exit:
+;; return result; 
+  mov b, [bp + -3] ; $result             
+  leave
+  ret
+
+primes:
+  enter 0 ; (push bp; mov bp, sp)
+;; n = 2; 
+  mov d, _n ; $n         
+  mov b, $2        
+  mov [d], b
+;; while(n < top){ 
+_while28_cond:
+  mov b, [_n] ; $n           
+; START RELATIONAL
+  push a
+  mov a, b
+  mov b, [_top] ; $top           
+  cmp a, b
+  slu ; < (unsigned)
+  pop a
+; END RELATIONAL
+  cmp b, 0
+  je _while28_exit
+_while28_block:
+;; s = sqrt(n); 
+  mov d, _s ; $s
+  push d
+  mov b, [_n] ; $n           
+  swp b
+  push b
+  call sqrt
+  add sp, 2
+  pop d
+  mov [d], b
+;; divides = 0; 
+  mov d, _divides ; $divides         
+  mov b, $0        
+  mov [d], b
+;; i = 2; 
+  mov d, _i ; $i         
+  mov b, $2        
+  mov [d], b
+;; while(i <= s){ 
+_while29_cond:
+  mov b, [_i] ; $i           
+; START RELATIONAL
+  push a
+  mov a, b
+  mov b, [_s] ; $s           
+  cmp a, b
+  sleu ; <= (unsigned)
+  pop a
+; END RELATIONAL
+  cmp b, 0
+  je _while29_exit
+_while29_block:
+;; if(n % i == 0){ 
+_if30_cond:
+  mov b, [_n] ; $n           
+; START FACTORS
+  push a
+  mov a, b
+  mov b, [_i] ; $i           
+  div a, b ; 
+  mov a, b
+  mov b, a
+  pop a
+; END FACTORS
+; START RELATIONAL
+  push a
+  mov a, b
+  mov b, $0
+  cmp a, b
+  seq ; ==
+  pop a
+; END RELATIONAL
+  cmp b, 0
+  je _if30_exit
+_if30_true:
+;; divides = 1; 
+  mov d, _divides ; $divides         
+  mov b, $1        
+  mov [d], b
+;; break; 
+  jmp _while29_exit ; while break
+  jmp _if30_exit
+_if30_exit:
+;; i = i + 1; 
+  mov d, _i ; $i         
+  mov b, [_i] ; $i           
+; START TERMS
+  push a
+  mov a, b
+  mov b, $1
+  add a, b
+  mov b, a
+  pop a
+; END TERMS        
+  mov [d], b
+;; if(i == n) break; 
+_if31_cond:
+  mov b, [_i] ; $i           
+; START RELATIONAL
+  push a
+  mov a, b
+  mov b, [_n] ; $n           
+  cmp a, b
+  seq ; ==
+  pop a
+; END RELATIONAL
+  cmp b, 0
+  je _if31_exit
+_if31_true:
+;; break; 
+  jmp _while29_exit ; while break
+  jmp _if31_exit
+_if31_exit:
+  jmp _while29_cond
+_while29_exit:
+;; if(divides == 0){ 
+_if32_cond:
+  mov b, [_divides] ; $divides           
+; START RELATIONAL
+  push a
+  mov a, b
+  mov b, $0
+  cmp a, b
+  seq ; ==
+  pop a
+; END RELATIONAL
+  cmp b, 0
+  je _if32_exit
+_if32_true:
+;; count = count+1;	 
+  mov d, _count ; $count         
+  mov b, [_count] ; $count           
+; START TERMS
+  push a
+  mov a, b
+  mov b, $1
+  add a, b
+  mov b, a
+  pop a
+; END TERMS        
+  mov [d], b
+;; printu(n); 
+  mov b, [_n] ; $n           
+  swp b
+  push b
+  call printu
+  add sp, 2
+;; print("\n"); 
+  mov b, __s3 ; "\n"
+  swp b
+  push b
+  call print
+  add sp, 2
+
+; --- BEGIN INLINE ASM BLOCK
+  mov d, _n ; $n
+  mov bl, [d]
+  mov al, 2
+  syscall sys_system
+; --- END INLINE ASM BLOCK
+
+  jmp _if32_exit
+_if32_exit:
+;; n = n + 1; 
+  mov d, _n ; $n         
+  mov b, [_n] ; $n           
+; START TERMS
+  push a
+  mov a, b
+  mov b, $1
+  add a, b
+  mov b, a
+  pop a
+; END TERMS        
+  mov [d], b
+  jmp _while28_cond
+_while28_exit:
+;; return; 
+  leave
+  ret
 ; --- END TEXT BLOCK
 
 ; --- BEGIN DATA BLOCK
-__s0: .db "Unknown type size in va_arg() call. Size needs to be either 1 or 2.", 0
-__s1: .db "Error: Unknown argument type.\n", 0
+_n: .fill 2, 0
+_i: .fill 2, 0
+_s: .fill 2, 0
+_count: .dw 0
+_divides: .fill 2, 0
+_top: .fill 2, 0
+__s0: .db "Max: ", 0
+__s1: .db "Unknown type size in va_arg() call. Size needs to be either 1 or 2.", 0
+__s2: .db "Error: Unknown argument type.\n", 0
+__s3: .db "\n", 0
 
 _heap_top: .dw _heap
 _heap: .db 0

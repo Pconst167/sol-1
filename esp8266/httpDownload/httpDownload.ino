@@ -5,8 +5,8 @@
 #include <LittleFS.h>
 
 // Wifi
-String    ssid = "";
-String    password = "";
+String    ssid = "BT-7NF9Z2";
+String    password = "aJr6V4FaMkna4n";
 
 // Serial Port
 uint16_t len;
@@ -16,11 +16,10 @@ const char XOFF = 0x13;  // ASCII code for XOFF
 
 // Telnet
 const int  MAX_CLIENTS = 3;
-WiFiServer server(51515); // Telnet server on port 23
+WiFiServer server(51515); // Telnet server on port 51515
 WiFiClient serverClients[MAX_CLIENTS];
 String     commandBuffer = "";
 uint8_t    buffer[32 * 1024];
-bool       text_visible;
 
 
 void setup() {
@@ -31,8 +30,6 @@ void setup() {
     delay(1000);
   }
   server.begin();
-
-  text_visible = true;
 }
 
 void loop() {
@@ -44,7 +41,7 @@ void loop() {
       while(serverClients[i].available()) {
         char c = serverClients[i].read();
         if(c != 0x0D) Serial.write(c);
-        if(len % 512 == 0){
+        if(len % 256 == 0){
           delay(200);
           yield();
         }
@@ -73,18 +70,13 @@ void loop() {
 
   while(Serial.available()){
     char c = Serial.read();
-    if (c == XOFF) {
-      delay(300);
-/*      
- *    Instead of normal xon/xoff control. using a delay.
- *    // Stop sending data until XON is received
-      
+    if (c == XOFF){
+      // Stop sending data until XON is received
       while (true) {
-        if (Serial.available() > 0 && Serial.read() == XON) {
-          break;
-        }
+        if (Serial.available() > 0)
+          if(Serial.read() == XON)
+            break;
       }
-      */
     } 
     else{
       sendCharToAllClients(c);

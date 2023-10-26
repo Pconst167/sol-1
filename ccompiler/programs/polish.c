@@ -118,7 +118,7 @@ int getch(void)
 		return buf[bufp];
 	}
 	else{
-		return _getchar();
+		return getch();
 	}
 	//return (bufp > 0) ? buf[--bufp] : getchar();
 }

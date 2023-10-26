@@ -2666,7 +2666,7 @@ getchar:
   sub sp, 1
 
 ; --- BEGIN INLINE ASM BLOCK
-  call _getchar
+  call getch
   mov al, ah
   lea d, [bp + 0] ; $c
   mov [d], al
@@ -5572,11 +5572,8 @@ shell_gets:
 ; --- BEGIN INLINE ASM BLOCK
   mov d, _command_data ; $command
 __gets_loop:
-  sti
-  mov al, 3
+  mov al, 1
   syscall sys_io      
-  cmp al, 0        
-  je __gets_loop      
   cmp ah, 27
   je __gets_ansi_escape
   cmp ah, $0A        
@@ -5598,18 +5595,14 @@ __gets_backspace:
   jmp __gets_loop
 __gets_ansi_escape:
   sti
-  mov al, 3
+  mov al, 1
   syscall sys_io        
-  cmp al, 0          
-  je __gets_ansi_escape    
   cmp ah, '['
   jne __gets_loop
 __gets_ansi_escape_2:
   sti
-  mov al, 3
+  mov al, 1
   syscall sys_io          
-  cmp al, 0            
-  je __gets_ansi_escape_2  
   cmp ah, 'D'
   je __gets_left_arrow
   cmp ah, 'C'

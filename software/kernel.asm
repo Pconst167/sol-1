@@ -170,7 +170,7 @@ root_id:                .equ FST_LBA_START
 ; ------------------------------------------------------------------------------------------------------------------;
 ; System Call Aliases
 ; ------------------------------------------------------------------------------------------------------------------;
-sys_break             .equ 0
+sys_break            .equ 0
 sys_rtc              .equ 1
 sys_ide              .equ 2
 sys_io               .equ 3
@@ -297,8 +297,12 @@ int_7_continue1:
 int_7_xoff:    
   mov ah, XOFF  
   call _putchar
-  mov d, s_int_7_xoff
-  call _puts
+  mov ah, $0A
+  call _putchar
+  mov ah, '>'
+  call _putchar
+  mov ah, ' '
+  call _putchar
   mov b, [fifo_out]
   call print_u16x
   mov ah, ' '
@@ -895,7 +899,6 @@ syscall_io_jmp:
   .dw syscall_io_putchar
   .dw syscall_io_getch
   .dw syscall_io_uart_setup
-  .dw syscall_io_getche
 syscall_io:
   jmp [syscall_io_jmp + al]
 ; bit7 is the Divisor Latch Access Bit (DLAB). It must be set high (logic 1) to access the Divisor Latches
@@ -931,42 +934,6 @@ syscall_io_putchar_L0:
 
 ; char in ah
 ; al = sucess code
-syscall_io_getche:
-  push b
-  push d
-  sti
-syscall_io_getche_L0:  
-  mov a, [fifo_out]
-  mov b, [fifo_in]
-  cmp a, b
-  je syscall_io_getche_L0
-  mov d, a
-  mov bl, [d]
-  mov a, [fifo_out]
-  inc a
-  cmp a, fifo + FIFO_SIZE      ; check if pointer reached the end of the fifo
-  jne syscall_io_getche_updt
-  mov a, fifo  
-syscall_io_getche_updt:  
-  mov [fifo_out], a             ; update fifo pointer
-  mov al, [sys_echo_on]
-  cmp al, 1
-  jne syscall_io_getche_end
-; here we just echo the char back to the console
-  mov ah, bl
-syscall_io_getche_L1:
-  mov al, [_UART0_LSR]         ; read Line Status Register
-  test al, $20                 ; isolate Transmitter Empty
-  jz syscall_io_getche_L1
-  mov [_UART0_DATA], al        ; write char to Transmitter Holding Register
-syscall_io_getche_end:
-  mov al, 1
-  pop d
-  pop b
-  sysret
-
-; char in ah
-; al = sucess code
 syscall_io_getch:
   push b
   push d
@@ -977,22 +944,25 @@ syscall_io_getch_L0:
   cmp a, b
   je syscall_io_getch_L0
   mov d, a
-  mov bl, [d]
-  mov a, [fifo_out]
   inc a
   mov [fifo_out], a             ; update fifo pointer
   cmp a, fifo + FIFO_SIZE      ; check if pointer reached the end of the fifo
   je syscall_io_getch_xon
 syscall_io_getch_cont:  
-  mov ah, bl
+  mov al, [d]
+  mov ah, al
   mov al, 1                    ; AL = 1 means a char successfully received
   pop d
   pop b
   sysret
 
 syscall_io_getch_xon:    
-  mov d, s_syscall_io_getch_xon
-  call _puts
+  mov ah, $0A
+  call _putchar
+  mov ah, '<'
+  call _putchar
+  mov ah, ' '
+  call _putchar
   mov b, [fifo_out]
   call print_u16x
   mov ah, ' '
@@ -2525,8 +2495,8 @@ sys_echo_on:        .db 1
 sys_uart0_lcr:      .db $03 ; 8 data bits, 1 stop bit, no parity
 sys_uart0_inten:    .db 1
 sys_uart0_fifoen:   .db 0
-sys_uart0_div0:     .db 24  ;
-sys_uart0_div1:     .db 0   ; default baud = 4800
+sys_uart0_div0:     .db 12  ;
+sys_uart0_div1:     .db 0   ; default baud = 9600
 
 nbr_active_procs:   .db 0
 active_proc_index:  .db 1
@@ -2538,7 +2508,7 @@ fifo_in:            .dw fifo
 fifo_out:           .dw fifo
 
 ; file system variables
-current_dirID:      .dw 0        ; keep dirID of current directory
+current_dirID:      .dw 0     ; keep dirID of current directory
 s_init_path:        .db "/sbin/init", 0
 
 s_parent_dir:       .db "..", 0

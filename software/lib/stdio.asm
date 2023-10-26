@@ -96,9 +96,9 @@ _hex_to_int_ret:
 ; GETCHAR
 ; char in ah
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-_getchar:
+getch:
   push al
-_getchar_retry:
+getch_retry:
   mov al, 1
   syscall sys_io      ; receive in AH
   pop al
@@ -126,8 +126,6 @@ _gets:
 _gets_loop:
   mov al, 1
   syscall sys_io      ; receive in AH
-  cmp al, 0        ; check error code (AL)
-  je _gets_loop      ; if no char received, retry
 
   cmp ah, 27
   je _gets_ansi_esc
@@ -151,15 +149,10 @@ _gets_backspace:
 _gets_ansi_esc:
   mov al, 1
   syscall sys_io        ; receive in AH without echo
-  cmp al, 0          ; check error code (AL)
-  je _gets_ansi_esc    ; if no char received, retry
   cmp ah, '['
   jne _gets_loop
-_gets_ansi_esc_2:
   mov al, 1
   syscall sys_io          ; receive in AH without echo
-  cmp al, 0            ; check error code (AL)
-  je _gets_ansi_esc_2  ; if no char received, retry
   cmp ah, 'D'
   je _gets_left_arrow
   cmp ah, 'C'
@@ -174,8 +167,6 @@ _gets_right_arrow:
 _gets_escape:
   mov al, 1
   syscall sys_io      ; receive in AH
-  cmp al, 0        ; check error code (AL)
-  je _gets_escape      ; if no char received, retry
   cmp ah, 'n'
   je _gets_LF
   cmp ah, 'r'
@@ -227,8 +218,6 @@ _gettxt:
 _gettxt_loop:
   mov al, 1
   syscall sys_io      ; receive in AH
-  cmp al, 0        ; check error code (AL)
-  je _gettxt_loop    ; if no char received, retry
   cmp ah, 4      ; EOT
   je _gettxt_end
   cmp ah, $08      ; check for backspace
@@ -242,8 +231,6 @@ _gettxt_loop:
 _gettxt_escape:
   mov al, 1
   syscall sys_io      ; receive in AH
-  cmp al, 0        ; check error code (AL)
-  je _gettxt_escape    ; if no char received, retry
   cmp ah, 'n'
   je _gettxt_LF
   cmp ah, 'r'

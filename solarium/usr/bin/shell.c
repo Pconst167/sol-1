@@ -130,11 +130,8 @@ void shell_gets(){
   asm{
     meta mov d, command
     __gets_loop:
-      sti
-      mov al, 3
+      mov al, 1
       syscall sys_io      ; receive in AH
-      cmp al, 0        ; check error code (AL)
-      je __gets_loop      ; if no char received, retry
 
       cmp ah, 27
       je __gets_ansi_escape
@@ -159,18 +156,14 @@ void shell_gets(){
       jmp __gets_loop
     __gets_ansi_escape:
       sti
-      mov al, 3
+      mov al, 1
       syscall sys_io        ; receive in AH without echo
-      cmp al, 0          ; check error code (AL)
-      je __gets_ansi_escape    ; if no char received, retry
       cmp ah, '['
       jne __gets_loop
     __gets_ansi_escape_2:
       sti
-      mov al, 3
+      mov al, 1
       syscall sys_io          ; receive in AH without echo
-      cmp al, 0            ; check error code (AL)
-      je __gets_ansi_escape_2  ; if no char received, retry
       cmp ah, 'D'
       je __gets_left_arrow
       cmp ah, 'C'
