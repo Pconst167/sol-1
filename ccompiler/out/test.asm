@@ -7,6 +7,15 @@
 main:
   mov bp, $FFE0 ;
   mov sp, $FFE0 ; Make space for argc(2 bytes) and for 10 pointers in argv (local variables)
+;; print("Hello World\n"); 
+  mov b, __s0 ; "Hello World\n"
+  swp b
+  push b
+  call print
+  add sp, 2
+;; return; 
+  leave
+  syscall sys_terminate_proc
 
 ; --- BEGIN INLINE ASM BLOCK
   mov b, 25
@@ -34,13 +43,13 @@ main:
 printf:
   enter 0 ; (push bp; mov bp, sp)
 ;; print("\n"); 
-  mov b, __s0 ; "\n"
+  mov b, __s1 ; "\n"
   swp b
   push b
   call print
   add sp, 2
 ;; print("Format: "); print(format); print("\n"); 
-  mov b, __s1 ; "Format: "
+  mov b, __s2 ; "Format: "
   swp b
   push b
   call print
@@ -52,7 +61,7 @@ printf:
   call print
   add sp, 2
 ;; print("\n"); 
-  mov b, __s0 ; "\n"
+  mov b, __s1 ; "\n"
   swp b
   push b
   call print
@@ -405,8 +414,9 @@ stdio:
 ; --- END TEXT BLOCK
 
 ; --- BEGIN DATA BLOCK
-__s0: .db "\n", 0
-__s1: .db "Format: ", 0
+__s0: .db "Hello World\n", 0
+__s1: .db "\n", 0
+__s2: .db "Format: ", 0
 
 _heap_top: .dw _heap
 _heap: .db 0

@@ -39,7 +39,7 @@ void list_files(__uint16_t dir_id);
 #define FST_FILES_PER_DIR        (512 / FST_ENTRY_SIZE)
 #define FST_SECTORS_PER_DIR      (1 + (FST_ENTRY_SIZE * FST_FILES_PER_DIR / 512))    
 #define FST_TOTAL_SECTORS        (FST_SECTORS_PER_DIR * FST_NBR_DIRECTORIES)
-#define FST_LBA_START            1
+#define FST_LBA_START            32
 #define FST_LBA_END              (FST_LBA_START + FST_TOTAL_SECTORS - 1)
 
 #define FS_SECTORS_PER_FILE      32         // the first sector is always a header with a NULL parameter (first byte)

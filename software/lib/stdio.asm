@@ -109,10 +109,10 @@ getch_retry:
 ; char in ah
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 _putchar:
-  push a
+  push al
   mov al, 0
   syscall sys_io      ; char in AH
-  pop a
+  pop al
   ret
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -383,6 +383,7 @@ _putsn_end:
 print_u16d:
   push a
   push b
+  push g
   mov b, 10000
   div a, b      ; get 10000's coeff.
   call print_number
@@ -400,6 +401,7 @@ print_u16d:
   call print_number
   mov al, bl      ; 1's coeff in bl
   call print_number
+  pop g
   pop b
   pop a
   ret
@@ -498,7 +500,7 @@ print_u8x:
 print_u8d:
   push a
   push b
-
+  push g
   mov ah, 0
   mov b, 100
   div a, b
@@ -528,6 +530,7 @@ skip10:
   mov ah, al
   mov al, 0
   syscall sys_io  ; print coeff
+  pop g
   pop b
   pop a
   ret

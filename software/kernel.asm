@@ -274,6 +274,7 @@ int6_continue:
 ; ------------------------------------------------------------------------------------------------------------------;
 int_7:
   push a
+  push b
   push d
   pushf
   mov a, [fifo_in]
@@ -291,6 +292,7 @@ int_7:
 int_7_continue1:  
   popf
   pop d
+  pop b
   pop a  
   sysret
 
@@ -319,6 +321,7 @@ CTRLC:
 CTRLZ:
   popf
   pop d
+  pop b
   pop a
   jmp syscall_pause_proc    ; pause current process and go back to the shell
 
@@ -947,7 +950,7 @@ syscall_io_getch_cont:
   pop d
   pop b
   sysret
-syscall_io_getch_xon:    
+syscall_io_getch_xon:
   mov ah, $0A
   call _putchar
   mov ah, '<'

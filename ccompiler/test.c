@@ -1,6 +1,7 @@
-
-
 void main(){
+
+  print("Hello World\n");
+  return;
 
 asm{
   mov b, 25
