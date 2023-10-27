@@ -313,14 +313,6 @@ int_7_xoff:
   call _putchar
   jmp int_7_continue1
 
-; condition for 'fifo-full':
-; fifo_in == fifo + FIFO_SIZE
-; condition for fifo recovery:
-; fifo must be full and
-; fifo_out == fifo_in
-
-s_int_7_xoff: .db "\nWarning: FIFO is full. Sending XOFF. Ptrs: ", 0
-
 CTRLC:
   add sp, 5
   jmp syscall_terminate_proc
@@ -955,7 +947,6 @@ syscall_io_getch_cont:
   pop d
   pop b
   sysret
-
 syscall_io_getch_xon:    
   mov ah, $0A
   call _putchar
@@ -1709,7 +1700,6 @@ fs_ls_non_null:
   call print_u8x  
   mov ah, $20
   call _putchar  
-
 fs_ls_print:
   call _puts                   ; print filename  
 ; post-format the file name

@@ -36,7 +36,7 @@ fs_ls:
   inc b                        
   mov c, 0                     
   mov ah, $01                  
-  mov d, transient_area
+  mov d, _transient_area
   call ide_read_sect           
   cla
   mov [index], a               
@@ -4874,28 +4874,6 @@ error:
   push b
   call printf
   add sp, 2
-  leave
-  ret
-
-read_sect:
-  enter 0 ; (push bp; mov bp, sp)
-
-; --- BEGIN INLINE ASM BLOCK
-  lea d, [bp + 6] ; $initial_sect
-  mov d, [d]
-  mov b, d
-  inc b                        
-  mov c, 0                     
-  lea d, [bp + 5] ; $num_sect
-  mov d, [d]
-  mov al, dl
-  mov ah, al                   
-  lea d, [bp + 8] ; $dest
-  mov d, [d]
-  mov d, transient_area
-  call ide_read_sect           
-; --- END INLINE ASM BLOCK
-
   leave
   ret
 ; --- END TEXT BLOCK

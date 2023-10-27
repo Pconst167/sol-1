@@ -6,13 +6,14 @@
 
 // Wifi
 String    ssid = "BT-7NF9Z2";
-String    password = "aJr6V4FaMkna4n";
+String    password = "";
 
 // Serial Port
 uint16_t len;
 uint16_t baud = 9600;
 const char XON = 0x11;  // ASCII code for XON
 const char XOFF = 0x13;  // ASCII code for XOFF
+bool stop_flow = false;
 
 // Telnet
 const int  MAX_CLIENTS = 3;
@@ -40,6 +41,7 @@ void loop() {
     if (serverClients[i] && serverClients[i].connected()) {
       while(serverClients[i].available()) {
         char c = serverClients[i].read();
+        stop_flow
         if(c != 0x0D) Serial.write(c);
         if(len % 256 == 0){
           delay(200);
@@ -71,12 +73,7 @@ void loop() {
   while(Serial.available()){
     char c = Serial.read();
     if (c == XOFF){
-      // Stop sending data until XON is received
-      while (true) {
-        if (Serial.available() > 0)
-          if(Serial.read() == XON)
-            break;
-      }
+      stop_flow = true;
     } 
     else{
       sendCharToAllClients(c);

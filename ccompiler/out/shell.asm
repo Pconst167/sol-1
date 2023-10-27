@@ -5594,13 +5594,11 @@ __gets_backspace:
   syscall sys_io    
   jmp __gets_loop
 __gets_ansi_escape:
-  sti
   mov al, 1
   syscall sys_io        
   cmp ah, '['
   jne __gets_loop
 __gets_ansi_escape_2:
-  sti
   mov al, 1
   syscall sys_io          
   cmp ah, 'D'

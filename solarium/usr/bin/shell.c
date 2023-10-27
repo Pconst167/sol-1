@@ -155,13 +155,11 @@ void shell_gets(){
       syscall sys_io    ; echo char back
       jmp __gets_loop
     __gets_ansi_escape:
-      sti
       mov al, 1
       syscall sys_io        ; receive in AH without echo
       cmp ah, '['
       jne __gets_loop
     __gets_ansi_escape_2:
-      sti
       mov al, 1
       syscall sys_io          ; receive in AH without echo
       cmp ah, 'D'
