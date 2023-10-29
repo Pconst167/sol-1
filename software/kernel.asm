@@ -275,69 +275,33 @@ int6_continue:
 s_int_7_oe: .db "\noverrun error.\n", 0
 int_7:
   push a
-  push b
   push d
   pushf
-; check for overrun error
-  mov a, [_UART0_LSR]
-  and al, $02
-  jnz int_7_oe
-int_7_write_char:
   mov a, [fifo_in]
   mov d, a
-  mov bl, [_UART0_DATA]  ; get character
-  cmp bl, $03        ; CTRL-C
+  mov al, [_UART0_DATA]  ; get character
+  cmp al, $03        ; CTRL-C
   je CTRLC
-  cmp bl, $1A        ; CTRL-Z
+  cmp al, $1A        ; CTRL-Z
   je CTRLZ
-  mov [d], bl        ; add to fifo
+  mov [d], al        ; add to fifo
+  mov a, [fifo_in]
   inc a
-  mov [fifo_in], a
-  cmp a, fifo + FIFO_SIZE - 64
-  je int_7_xoff
-int_7_continue1:  
+  cmp a, fifo + FIFO_SIZE         ; check if pointer reached the end of the fifo
+  jne int_7_continue
+  mov a, fifo  
+int_7_continue:  
+  mov [fifo_in], a      ; update fifo pointer
   popf
   pop d
-  pop b
   pop a  
   sysret
-int_7_xoff:    
-int_7_xoff_L0:
-; send XOFF
-  mov al, [_UART0_LSR]         ; read Line Status Register
-  test al, $20                 ; isolate Transmitter Empty
-  jz int_7_xoff_L0    
-  mov byte [_UART0_DATA], XOFF        ; write char to Transmitter Holding Register
-; commented out to save cpu time
-; print fifo information
-;  mov ah, 'I'
-;  call _putchar
-;  mov ah, ' '
-;  call _putchar
-;  mov b, [fifo_out]
-;  call print_u16x
-;  mov ah, ' '
-;  call _putchar
-;  mov b, [fifo_in]
-;  call print_u16x
-;  mov ah, $0A
-;  call _putchar
-  popf
-  pop d
-  pop b
-  pop a  
-  sysret
-int_7_oe:
-  mov d, s_int_7_oe
-  call _puts
-  jmp int_7_write_char
 CTRLC:
   add sp, 5
   jmp syscall_terminate_proc
 CTRLZ:
   popf
   pop d
-  pop b
   pop a
   jmp syscall_pause_proc    ; pause current process and go back to the shell
 
@@ -955,51 +919,67 @@ syscall_io_putchar_L0:
 syscall_io_getch:
   push b
   push d
-  sti
 syscall_io_getch_L0:  
   mov a, [fifo_out]
   mov b, [fifo_in]
   cmp a, b
-  je syscall_io_getch_L0
+  je syscall_io_getch_fail
   mov d, a
-  inc a
-  mov [fifo_out], a             ; update fifo pointer
-  cmp a, fifo + FIFO_SIZE      ; check if pointer reached the end of the fifo
-  je syscall_io_getch_xon
   mov al, [d]
-  mov ah, al
+  push al
+  mov a, [fifo_out]
+  inc a
+  cmp a, fifo + FIFO_SIZE      ; check if pointer reached the end of the fifo
+  jne syscall_io_getch_cont
+  mov a, fifo  
+syscall_io_getch_cont:  
+  mov [fifo_out], a             ; update fifo pointer
+  pop ah
+; here we just echo the char back to the console
+syscall_io_getch_echo_L0:
+  mov al, [_UART0_LSR]         ; read Line Status Register
+  test al, $20                 ; isolate Transmitter Empty
+  jz syscall_io_getch_echo_L0
+  mov al, ah
+  mov [_UART0_DATA], al        ; write char to Transmitter Holding Register
   mov al, 1                    ; AL = 1 means a char successfully received
   pop d
   pop b
   sysret
-syscall_io_getch_xon:
-; print fifo information
-  mov ah, $0A
-  call _putchar
-  mov ah, 'O'
-  call _putchar
-  mov ah, ' '
-  call _putchar
-  mov b, [fifo_out]
-  call print_u16x
-  mov ah, ' '
-  call _putchar
+syscall_io_getch_fail:
+  pop d
+  pop b
+  mov al, 0                    ; AL = 0 means no char received
+  sysret
+; char in ah
+; al = sucess code
+syscall_io_getch_noech:
+  push b
+  push d
+syscall_io_getch_noech_L0:  
+  mov a, [fifo_out]
   mov b, [fifo_in]
-  call print_u16x
-  mov ah, $0A
-  call _putchar
-; retrieve last char
-  mov a, fifo
-  mov [fifo_in], a
-  mov [fifo_out], a   ; reset fifo pointers
+  cmp a, b
+  je syscall_io_getch_noech_fail
+  mov d, a
   mov al, [d]
   push al
-  mov ah, XON
-  call _putchar
+  mov a, [fifo_out]
+  inc a
+  cmp a, fifo + FIFO_SIZE      ; check if pointer reached the end of the fifo
+  jne syscall_io_getch_noech_cont
+  mov a, fifo  
+syscall_io_getch_noech_cont:  
+  mov [fifo_out], a             ; update fifo pointer
   pop ah
   mov al, 1                    ; AL = 1 means a char successfully received
   pop d
   pop b
+  sysret
+syscall_io_getch_noech_fail:
+  pop d
+  pop b
+  mov al, 0                    ; AL = 0 means no char received
   sysret
 
 ;------------------------------------------------------------------------------------------------------;
