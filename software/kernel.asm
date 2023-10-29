@@ -68,7 +68,7 @@ _TIMER_C_2        .equ $FFE2            ; TIMER COUNTER 2
 _TIMER_CTRL       .equ $FFE3            ; TIMER CONTROL REGISTER
 
 STACK_BEGIN       .equ $F7FF            ; beginning of stack
-FIFO_SIZE         .equ 1024
+FIFO_SIZE         .equ 1024 * 2
 
 TEXT_ORG          .equ $400
 ; ------------------------------------------------------------------------------------------------------------------;
@@ -272,11 +272,17 @@ int6_continue:
 ; ------------------------------------------------------------------------------------------------------------------;
 ; UART0 Interrupt
 ; ------------------------------------------------------------------------------------------------------------------;
+s_int_7_oe: .db "\noverrun error.\n", 0
 int_7:
   push a
   push b
   push d
   pushf
+; check for overrun error
+  mov a, [_UART0_LSR]
+  and al, $02
+  jnz int_7_oe
+int_7_write_char:
   mov a, [fifo_in]
   mov d, a
   mov bl, [_UART0_DATA]  ; get character
@@ -287,7 +293,7 @@ int_7:
   mov [d], bl        ; add to fifo
   inc a
   mov [fifo_in], a
-  cmp a, fifo + FIFO_SIZE
+  cmp a, fifo + FIFO_SIZE - 64
   je int_7_xoff
 int_7_continue1:  
   popf
@@ -295,26 +301,36 @@ int_7_continue1:
   pop b
   pop a  
   sysret
-
 int_7_xoff:    
-  mov ah, XOFF  
-  call _putchar
-  mov ah, $0A
-  call _putchar
-  mov ah, '>'
-  call _putchar
-  mov ah, ' '
-  call _putchar
-  mov b, [fifo_out]
-  call print_u16x
-  mov ah, ' '
-  call _putchar
-  mov b, [fifo_in]
-  call print_u16x
-  mov ah, $0A
-  call _putchar
-  jmp int_7_continue1
-
+int_7_xoff_L0:
+; send XOFF
+  mov al, [_UART0_LSR]         ; read Line Status Register
+  test al, $20                 ; isolate Transmitter Empty
+  jz int_7_xoff_L0    
+  mov byte [_UART0_DATA], XOFF        ; write char to Transmitter Holding Register
+; commented out to save cpu time
+; print fifo information
+;  mov ah, 'I'
+;  call _putchar
+;  mov ah, ' '
+;  call _putchar
+;  mov b, [fifo_out]
+;  call print_u16x
+;  mov ah, ' '
+;  call _putchar
+;  mov b, [fifo_in]
+;  call print_u16x
+;  mov ah, $0A
+;  call _putchar
+  popf
+  pop d
+  pop b
+  pop a  
+  sysret
+int_7_oe:
+  mov d, s_int_7_oe
+  call _puts
+  jmp int_7_write_char
 CTRLC:
   add sp, 5
   jmp syscall_terminate_proc
@@ -333,8 +349,15 @@ system_jmptbl:
   .dw system_whoami
   .dw system_setparam
   .dw system_bootloader_install
+  .dw system_getparam
 syscall_system:
   jmp [system_jmptbl + al]
+
+; param register address in register d
+; param value in register bl
+system_getparam:
+  mov bl, [d]
+  sysret
 
 ; kernel LBA address in 'b'
 system_bootloader_install:
@@ -902,7 +925,7 @@ syscall_io:
 syscall_io_uart_setup:
   mov al, [sys_uart0_lcr]
   or al, $80                ; set DLAB access bit
-  mov [_UART0_LCR], al      ; 8 data, 1 stop, no parity by default
+  mov [_UART0_LCR], al      ; 8 data, 2 stop, no parity by default
   mov al, [sys_uart0_div0]
   mov [_UART0_DLAB_0], al   ; divisor latch byte 0
   mov al, [sys_uart0_div1]
@@ -910,11 +933,11 @@ syscall_io_uart_setup:
 
   mov al, [sys_uart0_lcr]
   and al, $7F               ; clear DLAB access bit 
-  mov byte[_UART0_LCR], 3      
+  mov [_UART0_LCR], al
   mov al, [sys_uart0_inten]
-  mov [_UART0_IER], al      ; enable interrupts
+  mov [_UART0_IER], al      ; interrupts
   mov al, [sys_uart0_fifoen]
-  mov [_UART0_FCR], al      ; disable FIFO
+  mov [_UART0_FCR], al      ; FIFO control
   sysret
 
 ; char in ah
@@ -943,7 +966,6 @@ syscall_io_getch_L0:
   mov [fifo_out], a             ; update fifo pointer
   cmp a, fifo + FIFO_SIZE      ; check if pointer reached the end of the fifo
   je syscall_io_getch_xon
-syscall_io_getch_cont:  
   mov al, [d]
   mov ah, al
   mov al, 1                    ; AL = 1 means a char successfully received
@@ -951,9 +973,10 @@ syscall_io_getch_cont:
   pop b
   sysret
 syscall_io_getch_xon:
+; print fifo information
   mov ah, $0A
   call _putchar
-  mov ah, '<'
+  mov ah, 'O'
   call _putchar
   mov ah, ' '
   call _putchar
@@ -965,14 +988,20 @@ syscall_io_getch_xon:
   call print_u16x
   mov ah, $0A
   call _putchar
+; retrieve last char
   mov a, fifo
   mov [fifo_in], a
   mov [fifo_out], a   ; reset fifo pointers
+  mov al, [d]
+  push al
   mov ah, XON
   call _putchar
-  jmp syscall_io_getch_cont
+  pop ah
+  mov al, 1                    ; AL = 1 means a char successfully received
+  pop d
+  pop b
+  sysret
 
-s_syscall_io_getch_xon: .db "\nWarning: FIFO reset. Sending XON. Ptrs: ", 0
 ;------------------------------------------------------------------------------------------------------;
 ; FILE SYSTEM DATA
 ;------------------------------------------------------------------------------------------------------;
@@ -2432,10 +2461,9 @@ _load_hex:
   push d
   push si
   push di
-  sub sp, $8000      ; string data block
+  ;sub sp, $8000      ; string data block
   mov c, 0
-  mov a, sp
-  inc a
+  mov a, di
   mov d, a          ; start of string data block
   call _gets        ; get program string
   mov si, a
@@ -2451,7 +2479,7 @@ __load_hex_loop:
   inc c
   jmp __load_hex_loop
 __load_hex_ret:
-  add sp, $8000
+  ;add sp, $8000
   pop di
   pop si
   pop d
@@ -2485,11 +2513,11 @@ f_find:
 ; Kernel parameters
 sys_debug_mode:     .db 0   ; debug modes: 0=normal mode, 1=debug mode
 sys_echo_on:        .db 1
-sys_uart0_lcr:      .db $03 ; 8 data bits, 1 stop bit, no parity
+sys_uart0_lcr:      .db $07 ; 8 data bits, 2 stop bit, no parity
 sys_uart0_inten:    .db 1
 sys_uart0_fifoen:   .db 0
-sys_uart0_div0:     .db 12  ;
-sys_uart0_div1:     .db 0   ; default baud = 9600
+sys_uart0_div0:     .db 24  ;
+sys_uart0_div1:     .db 0   ; default baud = 4800
 
 nbr_active_procs:   .db 0
 active_proc_index:  .db 1

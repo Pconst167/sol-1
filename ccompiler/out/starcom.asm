@@ -159,7 +159,7 @@ _load_binary:
   push c
 _load_binary_loop:
   push b
-  call getch
+  call _getchar
   pop b
   mov al, ah
   mov [d], al

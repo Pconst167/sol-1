@@ -1,4 +1,4 @@
-; --- FILENAME: ../solarium/src/asm/asm
+; --- FILENAME: ../solarium/asm/asm
 .include "lib/kernel.exp"
 .include "lib/bios.exp"
 .org TEXT_ORG

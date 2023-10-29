@@ -149,6 +149,15 @@ void shell_gets(){
       mov al, 0
       syscall sys_io    ; echo char back
       jmp __gets_loop
+    __gets_end:
+      mov a, $0A00
+      syscall sys_io    
+      mov a, $0D00
+      syscall sys_io    ; echo CRLF
+      mov al, 0
+      mov [d], al        ; terminate string
+      leave
+      ret
     __gets_backspace:
       dec d
       mov al, 0
@@ -206,19 +215,6 @@ void shell_gets(){
         jmp __gets_up_arrow_L0
     __gets_down_arrow:
       jmp __gets_loop
-
-
-    __gets_end:
-      mov al, 0
-      mov ah, $A
-      syscall sys_io    
-      mov al, 0
-      mov ah, $D
-      syscall sys_io    ; echo CRLF
-      mov al, 0
-      mov [d], al        ; terminate string
-      leave
-      ret
   }
 }
 

@@ -126,7 +126,6 @@ _gets:
 _gets_loop:
   mov al, 1
   syscall sys_io      ; receive in AH
-
   cmp ah, 27
   je _gets_ansi_esc
   cmp ah, $0A        ; LF
@@ -135,10 +134,8 @@ _gets_loop:
   je _gets_end
   cmp ah, $5C        ; '\\'
   je _gets_escape
-  
   cmp ah, $08      ; check for backspace
   je _gets_backspace
-
   mov al, ah
   mov [d], al
   inc d

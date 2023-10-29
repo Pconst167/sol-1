@@ -1,6 +1,6 @@
 #include <stdio.h>
 
-const char *shell_path = "/usr/bin/shell";
+const char *shell_path = "/usr/bin0/shell";
 
 void main(){
   printf("init process started.\n\r");

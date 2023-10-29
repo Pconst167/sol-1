@@ -9,11 +9,9 @@ void main(){
   get();
   address = atoi(token);
 
-  asm{
-    mov al, 2     ; setparam
-    mov d, _address
-    mov d, [d]
-    mov bl, [_data]
-    syscall sys_system
-  }
+  data = getparam(address);
+
+  print("\nParam Value: ");
+  printx8(data);
+  print("\n");
 }

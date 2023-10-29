@@ -1,4 +1,4 @@
-; --- FILENAME: ../solarium/src/usr/bin/setparam
+; --- FILENAME: ../solarium/usr/bin/setparam
 .include "lib/kernel.exp"
 .include "lib/bios.exp"
 .org TEXT_ORG

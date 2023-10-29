@@ -357,6 +357,19 @@ void load_hex(char *destination){
   }
 }
 
+unsigned char getparam(char *address){
+  char data;
+
+  asm{
+    mov al, 4
+    meta mov d, address
+    mov d, [d]
+    syscall sys_system
+    meta mov d, data
+    mov [d], bl
+  }
+  return data;
+}
 
 void include_stdio_asm(){
   asm{

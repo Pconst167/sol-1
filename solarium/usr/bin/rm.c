@@ -14,7 +14,7 @@ void main(){
     *p = '\0';
     if(*prog == ' ') prog++;
     asm{
-      @filename
+      meta mov d, filename
       mov al, 10
       syscall sys_filesystem
     }

@@ -18,7 +18,7 @@ shell_main:
 
 s_prompt_init:	.db "init started\n", 0
 s_prompt_shell:	.db "Launching a shell session...\n", 0
-s_shell_path:	  .db "/usr/bin/shell", 0
+s_shell_path:	  .db "/usr/bin0/shell", 0
 
 .include "lib/stdio.asm"
 

@@ -1,4 +1,4 @@
-; --- FILENAME: ../solarium/src/usr/bin/setbaud
+; --- FILENAME: ../solarium/usr/bin/setbaud
 .include "lib/kernel.exp"
 .include "lib/bios.exp"
 .org TEXT_ORG
