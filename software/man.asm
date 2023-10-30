@@ -1,6 +1,6 @@
 .include "lib/kernel.exp"
 
-.org TEXT_ORG			; origin at 1024
+.org text_org			; origin at 1024
 
 cmd_man:
   mov d, s_telnet_clear

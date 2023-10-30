@@ -1,6 +1,6 @@
 .include "lib/kernel.exp"
 
-.org TEXT_ORG
+.org text_org
 
 primes:
 	mov sp, $FFFF

@@ -1,5 +1,5 @@
 .include "lib/kernel.exp"
-.org TEXT_ORG
+.org text_org
 
 ; --- BEGIN TEXT BLOCK
 main:

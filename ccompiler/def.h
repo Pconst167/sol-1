@@ -432,7 +432,7 @@ int prog_tos;
 int errors_in_a_row;
 
 char include_kernel_exp = 1;
-char org[64] = "TEXT_ORG";
+char org[64] = "text_org";
 int include_files_total_lines;
 char included_functions_table[512][ID_LEN];
 

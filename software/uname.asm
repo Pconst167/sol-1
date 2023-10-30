@@ -4,7 +4,7 @@
 ;; uname
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-.org TEXT_ORG			; origin at 1024
+.org text_org			; origin at 1024
 
 cmd_ls:
 	mov al, 0

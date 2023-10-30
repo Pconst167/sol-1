@@ -1,6 +1,6 @@
 .include "lib/kernel.exp"
 
-.org TEXT_ORG			; origin at 1024
+.org text_org			; origin at 1024
 
 ; content is loaded into a buffer here. buffer size will be 16KB
 ; content is loaded as a pure binary string with given size

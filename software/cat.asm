@@ -5,7 +5,7 @@
 ;; cat > test.txt
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-.org TEXT_ORG			; origin at 1024
+.org text_org			; origin at 1024
 
 cmd_cat:
 	mov a, 0

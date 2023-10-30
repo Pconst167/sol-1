@@ -1,6 +1,6 @@
 .include "lib/kernel.exp"
 
-.org TEXT_ORG			; origin at 1024
+.org text_org			; origin at 1024
 
 TRUE:	.equ 1
 FALSE:	.equ 0

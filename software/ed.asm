@@ -12,7 +12,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 .include "lib/kernel.exp"
 
-.org TEXT_ORG			; origin at 1024
+.org text_org			; origin at 1024
 
 ed_main:
 	mov sp, $FFFF

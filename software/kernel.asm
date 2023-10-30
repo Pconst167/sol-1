@@ -68,9 +68,9 @@ _TIMER_C_2        .equ $FFE2            ; TIMER COUNTER 2
 _TIMER_CTRL       .equ $FFE3            ; TIMER CONTROL REGISTER
 
 STACK_BEGIN       .equ $F7FF            ; beginning of stack
-FIFO_SIZE         .equ 1024 * 8
+FIFO_SIZE         .equ 1024
 
-TEXT_ORG          .equ $400
+text_org          .equ $400
 ; ------------------------------------------------------------------------------------------------------------------;
 
 
@@ -187,7 +187,7 @@ sys_system           .equ 12
 ; ------------------------------------------------------------------------------------------------------------------;
 ; Alias Exports
 ; ------------------------------------------------------------------------------------------------------------------;
-.export TEXT_ORG
+.export text_org
 .export sys_break
 .export sys_ide
 .export sys_io
@@ -925,16 +925,17 @@ syscall_io_getch_L0:
   cmp a, b
   je syscall_io_getch_L0
   mov d, a
-  mov al, [d]
-  push al
-  mov a, [fifo_out]
   inc a
   cmp a, fifo + FIFO_SIZE      ; check if pointer reached the end of the fifo
   jne syscall_io_getch_cont
   mov a, fifo  
 syscall_io_getch_cont:  
   mov [fifo_out], a             ; update fifo pointer
-  pop ah
+  mov al, [d]                   ; get char
+  mov ah, al
+  mov al, [sys_echo_on]
+  cmp al, 1
+  jne syscall_io_getch_noecho 
 ; here we just echo the char back to the console
 syscall_io_getch_echo_L0:
   mov al, [_UART0_LSR]         ; read Line Status Register
@@ -942,6 +943,7 @@ syscall_io_getch_echo_L0:
   jz syscall_io_getch_echo_L0
   mov al, ah
   mov [_UART0_DATA], al        ; write char to Transmitter Holding Register
+syscall_io_getch_noecho:
   mov al, 1                    ; AL = 1 means a char successfully received
   pop d
   pop b
@@ -1601,8 +1603,6 @@ fs_cd:
 ; dirID in B
 ;------------------------------------------------------------------------------------------------------;
 ls_count:       .db 0
-ls_file_type:   .db 0
-ls_file_attrib: .db 0
 fs_ls:
   inc b                        ; metadata sector
   mov c, 0                     ; reset LBA to 0
@@ -1622,7 +1622,6 @@ fs_ls_non_null:
   mov al, [d + 24]
   and al, %00111000
   shr al, 3
-  mov [ls_file_type], al       ; save file type for formatting purposes
   mov ah, 0                    ; file type
   mov a, [a + file_type]      
   mov ah, al
@@ -1642,7 +1641,6 @@ fs_ls_non_null:
   mov al, [d + 24]
   and al, %00000100
   mov ah, 0
-  mov [ls_file_attrib], al
   mov a, [a + file_attrib]     ; execute
   mov ah, al
   call _putchar
@@ -1677,16 +1675,8 @@ fs_ls_non_null:
   call print_u8x  
   mov ah, $20
   call _putchar  
-fs_ls_print:
   call _puts                   ; print filename  
-; post-format the file name
-  mov al, [ls_file_type]
-  cmp al, 1
   je fs_ls_format_dir
-fs_ls_formatexe_test:
-  mov al, [ls_file_attrib]
-  cmp al, 4         ; 4 if bit 3 is set in the attributes, indicating "executable"
-  je fs_ls_format_exe
 fs_ls_newline:
   call printnl
 fs_ls_next:
@@ -1704,22 +1694,6 @@ fs_ls_end:
   call print_u8d
   call printnl
   sysret
-fs_ls_format_dir:
-  ; if file is . or .. then do not print the /
-  mov si, d
-  mov di, s_parent_dir
-  call _strcmp
-  je fs_ls_newline
-  mov di, s_current_dir
-  call _strcmp
-  je fs_ls_newline
-  mov ah, '/'
-  call _putchar
-  jmp fs_ls_formatexe_test
-fs_ls_format_exe:
-  mov ah, '*'
-  call _putchar
-  jmp fs_ls_newline
 
 
 ; file structure:
@@ -1900,7 +1874,6 @@ fs_mkbin_add_to_dir_null:
   sub d, 2
   pop b                         ; get file LBA
   mov [d], b                    ; save LBA
-  
   ; set file creation date  
   add d, 4
   mov al, 4
@@ -2357,7 +2330,7 @@ syscall_spawn_proc:
   store
 ; now copy process binary data into process's memory
   mov si, transient_area
-  mov di, TEXT_ORG              ; code origin address for all user processes
+  mov di, text_org              ; code origin address for all user processes
   mov c, FS_FILE_SIZE                ; size of memory space to copy, which is equal to the max file size in disk (for now)
   store                              ; copy process data
     
@@ -2380,7 +2353,7 @@ syscall_spawn_proc:
 ; launch process
   push word $FFFF 
   push byte %00001110                ; dma_ack = 0, interrupts enabled = 1, mode = user, paging = on, halt=0, display_reg_load=0, dir=0
-  push word TEXT_ORG
+  push word text_org
   sysret
 
 proc_table_convert:
@@ -2399,14 +2372,11 @@ proc_table_convert:
 ; return length in bytes in C
 ;----------------------------------------------------------------------------------------------;
 _load_hex:
-  push bp
-  mov bp, sp
   push a
   push b
   push d
   push si
   push di
-  ;sub sp, $8000      ; string data block
   mov c, 0
   mov a, di
   mov d, a          ; start of string data block
@@ -2424,14 +2394,11 @@ __load_hex_loop:
   inc c
   jmp __load_hex_loop
 __load_hex_ret:
-  ;add sp, $8000
   pop di
   pop si
   pop d
   pop b
   pop a
-  mov sp, bp
-  pop bp
   ret
 
 ; synopsis: look insIDE a certain DIRECTORY for files/directories
@@ -2461,8 +2428,8 @@ sys_echo_on:        .db 1
 sys_uart0_lcr:      .db $07 ; 8 data bits, 2 stop bit, no parity
 sys_uart0_inten:    .db 1
 sys_uart0_fifoen:   .db 0
-sys_uart0_div0:     .db 24  ;
-sys_uart0_div1:     .db 0   ; default baud = 4800
+sys_uart0_div0:     .db 12  ;
+sys_uart0_div1:     .db 0   ; default baud = 9600
 
 nbr_active_procs:   .db 0
 active_proc_index:  .db 1

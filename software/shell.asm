@@ -2,7 +2,7 @@
 
 STACK_BEGIN:  .equ $F7FF  ; beginning of stack
 
-.org TEXT_ORG      ; origin at 1024
+.org text_org      ; origin at 1024
 
 shell_main:  
   mov bp, STACK_BEGIN

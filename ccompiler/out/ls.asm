@@ -1,7 +1,7 @@
 ; --- FILENAME: ../solarium/usr/bin/ls
 .include "lib/kernel.exp"
 .include "lib/bios.exp"
-.org TEXT_ORG
+.org text_org
 
 ; --- BEGIN TEXT BLOCK
 main:

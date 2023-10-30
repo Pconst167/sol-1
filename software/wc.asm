@@ -5,7 +5,7 @@
 ;; count words
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-.org TEXT_ORG			; origin at 1024
+.org text_org			; origin at 1024
 
 cmd_wc:
 	mov a, 0

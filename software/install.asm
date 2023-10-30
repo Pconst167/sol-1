@@ -3,7 +3,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-.org TEXT_ORG			; origin at 1024
+.org text_org			; origin at 1024
 
 ; when running the installer, we need to be inside /boot because the mkbin system call
 ; creates all binary files inside whatever is the current directory
