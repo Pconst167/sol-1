@@ -1,4 +1,4 @@
-; --- FILENAME: ../solarium/usr/bin/getparam
+; --- FILENAME: ../solarium/usr/bin/ls
 .include "lib/kernel.exp"
 .include "lib/bios.exp"
 .org TEXT_ORG
@@ -7,51 +7,142 @@
 main:
   mov bp, $FFE0 ;
   mov sp, $FFE0 ; Make space for argc(2 bytes) and for 10 pointers in argv (local variables)
+; $ls_count 
+; $ls_filetype 
+; $ls_file_attrib 
+  sub sp, 3
 ;; prog = 0; 
   mov d, _prog ; $prog         
   mov b, $0        
   mov [d], b
-;; get(); 
-  call get
-;; address = atoi(token); 
-  mov d, _address ; $address
+;; ls_count = 0; 
+  lea d, [bp + 0] ; $ls_count         
+  mov b, $0        
+  mov [d], bl
+;; transient_area = alloc(1536); 
+  mov d, _transient_area ; $transient_area
   push d
-  mov b, _token_data ; $token           
+  mov b, $600
   swp b
   push b
-  call atoi
+  call alloc
   add sp, 2
   pop d
   mov [d], b
-;; data = getparam(address); 
-  mov d, _data ; $data
+
+; --- BEGIN INLINE ASM BLOCK
+  
+fs_ls:
+  inc b                        
+  mov c, 0                     
+  mov ah, $01                  
+  mov d, transient_area
+  call ide_read_sect           
+  cla
+  mov [index], a               
+  mov [ls_count], al           
+fs_ls_L1:
+  cmp byte [d], 0              
+  je fs_ls_next
+fs_ls_non_null:
+  mov al, [ls_count]
+  inc al
+  mov [ls_count], al           
+  mov al, [d + 24]
+  and al, %00111000
+  shr al, 3
+  mov [ls_file_type], al       
+  mov ah, 0                    
+  mov a, [a + file_type]      
+  mov ah, al
+  call _putchar
+  mov al, [d + 24]
+  and al, %00000001
+  mov ah, 0
+  mov a, [a + file_attrib]     
+  mov ah, al
+  call _putchar
+  mov al, [d + 24]
+  and al, %00000010
+  mov ah, 0
+  mov a, [a + file_attrib]     
+  mov ah, al
+  call _putchar
+  mov al, [d + 24]
+  and al, %00000100
+  mov ah, 0
+  mov [ls_file_attrib], al
+  mov a, [a + file_attrib]     
+  mov ah, al
+  call _putchar
+  mov ah, $20
+  call _putchar  
+  mov a, [d + 27]
+  call print_u16d              
+  mov ah, $20
+  call _putchar  
+  mov a, [d + 25]
+  call print_u16d              
+  mov ah, $20
+  call _putchar
+  
+  mov bl, [d + 29]             
+  call print_u8x
+  mov ah, $20
+  call _putchar  
+  mov al, [d + 30]             
+  shl al, 2
   push d
-  mov b, [_address] ; $address           
-  swp b
-  push b
-  call getparam
-  add sp, 2
+  mov d, s_months
+  mov ah, 0
+  add d, a
+  call _puts
   pop d
-  mov [d], bl
-;; print("\nParam Value: "); 
-  mov b, __s0 ; "\nParam Value: "
-  swp b
-  push b
-  call print
-  add sp, 2
-;; printx8(data); 
-  mov d, _data ; $data
-  mov bl, [d]
-  mov bh, 0
-  push bl
-  call printx8
-  add sp, 1
-;; print("\n"); 
-  mov b, __s1 ; "\n"
-  swp b
-  push b
-  call print
-  add sp, 2
+  mov ah, $20
+  call _putchar
+  mov bl, $20
+  call print_u8x
+  mov bl, [d + 31]             
+  call print_u8x  
+  mov ah, $20
+  call _putchar  
+fs_ls_print:
+  call _puts                   
+  
+  mov al, [ls_file_type]
+  cmp al, 1
+  je fs_ls_format_dir
+fs_ls_formatexe_test:
+  mov al, [ls_file_attrib]
+  cmp al, 4         
+  je fs_ls_format_exe
+fs_ls_newline:
+  call printnl
+fs_ls_next:
+  mov a, [index]
+  inc a
+  mov [index], a
+  cmp a, FST_FILES_PER_DIR
+  je fs_ls_end
+  add d, 32      
+  jmp fs_ls_L1  
+fs_ls_end:
+  mov d, s_ls_total
+  call _puts
+  mov al, [ls_count]
+  call print_u8d
+  call printnl
+  sysret
+fs_ls_format_dir:
+  mov ah, '/'
+  call _putchar
+  jmp fs_ls_formatexe_test
+fs_ls_format_exe:
+  mov ah, '*'
+  call _putchar
+  jmp fs_ls_newline
+; --- END INLINE ASM BLOCK
+
   syscall sys_terminate_proc
 
 include_ctype_lib:
@@ -863,7 +954,7 @@ _if7_true:
   jmp _if7_exit
 _if7_else:
 ;; print("Unknown type size in va_arg() call. Size needs to be either 1 or 2."); 
-  mov b, __s2 ; "Unknown type size in va_arg() call. Size needs to be either 1 or 2."
+  mov b, __s0 ; "Unknown type size in va_arg() call. Size needs to be either 1 or 2."
   swp b
   push b
   call print
@@ -1095,7 +1186,7 @@ _switch11_case5:
   jmp _switch11_exit ; case break
 _switch11_default:
 ;; print("Error: Unknown argument type.\n"); 
-  mov b, __s3 ; "Error: Unknown argument type.\n"
+  mov b, __s1 ; "Error: Unknown argument type.\n"
   swp b
   push b
   call print
@@ -2742,7 +2833,7 @@ _if38_cond:
   je _if38_exit
 _if38_true:
 ;; error("Double quotes expected"); 
-  mov b, __s4 ; "Double quotes expected"
+  mov b, __s2 ; "Double quotes expected"
   swp b
   push b
   call error
@@ -4786,7 +4877,7 @@ _if75_exit:
 error:
   enter 0 ; (push bp; mov bp, sp)
 ;; printf("\nError: "); 
-  mov b, __s5 ; "\nError: "
+  mov b, __s3 ; "\nError: "
   swp b
   push b
   call printf
@@ -4798,11 +4889,33 @@ error:
   call printf
   add sp, 2
 ;; printf("\n"); 
-  mov b, __s1 ; "\n"
+  mov b, __s4 ; "\n"
   swp b
   push b
   call printf
   add sp, 2
+  leave
+  ret
+
+read_sect:
+  enter 0 ; (push bp; mov bp, sp)
+
+; --- BEGIN INLINE ASM BLOCK
+  lea d, [bp + 6] ; $initial_sect
+  mov d, [d]
+  mov b, d
+  inc b                        
+  mov c, 0                     
+  lea d, [bp + 5] ; $num_sect
+  mov d, [d]
+  mov al, dl
+  mov ah, al                   
+  lea d, [bp + 8] ; $dest
+  mov d, [d]
+  mov d, transient_area
+  call ide_read_sect           
+; --- END INLINE ASM BLOCK
+
   leave
   ret
 ; --- END TEXT BLOCK
@@ -4813,14 +4926,12 @@ _toktype: .fill 2, 0
 _prog: .fill 2, 0
 _token_data: .fill 256, 0
 _string_const_data: .fill 256, 0
-_address: .fill 2, 0
-_data: .fill 1, 0
-__s0: .db "\nParam Value: ", 0
-__s1: .db "\n", 0
-__s2: .db "Unknown type size in va_arg() call. Size needs to be either 1 or 2.", 0
-__s3: .db "Error: Unknown argument type.\n", 0
-__s4: .db "Double quotes expected", 0
-__s5: .db "\nError: ", 0
+_transient_area: .fill 2, 0
+__s0: .db "Unknown type size in va_arg() call. Size needs to be either 1 or 2.", 0
+__s1: .db "Error: Unknown argument type.\n", 0
+__s2: .db "Double quotes expected", 0
+__s3: .db "\nError: ", 0
+__s4: .db "\n", 0
 
 _heap_top: .dw _heap
 _heap: .db 0

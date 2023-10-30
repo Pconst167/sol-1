@@ -2219,6 +2219,26 @@ __load_hex_ret:
   leave
   ret
 
+getparam:
+  enter 0 ; (push bp; mov bp, sp)
+; $data 
+  sub sp, 1
+
+; --- BEGIN INLINE ASM BLOCK
+  mov al, 4
+  lea d, [bp + 5] ; $address
+  mov d, [d]
+  syscall sys_system
+  lea d, [bp + 0] ; $data
+  mov [d], bl
+; --- END INLINE ASM BLOCK
+
+;; return data; 
+  mov bl, [bp + 0] ; $data
+  mov bh, 0             
+  leave
+  ret
+
 include_stdio_asm:
   enter 0 ; (push bp; mov bp, sp)
 

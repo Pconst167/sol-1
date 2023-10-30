@@ -68,7 +68,7 @@ _TIMER_C_2        .equ $FFE2            ; TIMER COUNTER 2
 _TIMER_CTRL       .equ $FFE3            ; TIMER CONTROL REGISTER
 
 STACK_BEGIN       .equ $F7FF            ; beginning of stack
-FIFO_SIZE         .equ 1024 * 2
+FIFO_SIZE         .equ 1024 * 8
 
 TEXT_ORG          .equ $400
 ; ------------------------------------------------------------------------------------------------------------------;
@@ -272,7 +272,6 @@ int6_continue:
 ; ------------------------------------------------------------------------------------------------------------------;
 ; UART0 Interrupt
 ; ------------------------------------------------------------------------------------------------------------------;
-s_int_7_oe: .db "\noverrun error.\n", 0
 int_7:
   push a
   push d
@@ -919,11 +918,12 @@ syscall_io_putchar_L0:
 syscall_io_getch:
   push b
   push d
+  sti
 syscall_io_getch_L0:  
   mov a, [fifo_out]
   mov b, [fifo_in]
   cmp a, b
-  je syscall_io_getch_fail
+  je syscall_io_getch_L0
   mov d, a
   mov al, [d]
   push al
@@ -945,41 +945,6 @@ syscall_io_getch_echo_L0:
   mov al, 1                    ; AL = 1 means a char successfully received
   pop d
   pop b
-  sysret
-syscall_io_getch_fail:
-  pop d
-  pop b
-  mov al, 0                    ; AL = 0 means no char received
-  sysret
-; char in ah
-; al = sucess code
-syscall_io_getch_noech:
-  push b
-  push d
-syscall_io_getch_noech_L0:  
-  mov a, [fifo_out]
-  mov b, [fifo_in]
-  cmp a, b
-  je syscall_io_getch_noech_fail
-  mov d, a
-  mov al, [d]
-  push al
-  mov a, [fifo_out]
-  inc a
-  cmp a, fifo + FIFO_SIZE      ; check if pointer reached the end of the fifo
-  jne syscall_io_getch_noech_cont
-  mov a, fifo  
-syscall_io_getch_noech_cont:  
-  mov [fifo_out], a             ; update fifo pointer
-  pop ah
-  mov al, 1                    ; AL = 1 means a char successfully received
-  pop d
-  pop b
-  sysret
-syscall_io_getch_noech_fail:
-  pop d
-  pop b
-  mov al, 0                    ; AL = 0 means no char received
   sysret
 
 ;------------------------------------------------------------------------------------------------------;
