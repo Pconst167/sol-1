@@ -37,7 +37,7 @@ int main(){
 
   for(;;){
     printf("root@Sol-1:"); print_cwd(); printf(" # ");
-    shell_gets();
+    gets(command);
     if(command[0]) strcpy(last_cmd, command);
     prog = command;
     // Loop through the shell command
@@ -125,99 +125,6 @@ void last_cmd_insert(){
     printf(command);
   }
 }
-
-void shell_gets(){
-  asm{
-    meta mov d, command
-    __gets_loop:
-      mov al, 1
-      syscall sys_io      ; receive in AH
-
-      cmp ah, 27
-      je __gets_ansi_escape
-      cmp ah, $0A        ; LF
-      je __gets_end
-      cmp ah, $0D        ; CR
-      je __gets_end
-      
-      cmp ah, $08      ; check for backspace
-      je __gets_backspace
-
-      mov al, ah
-      mov [d], al
-      inc d
-      mov al, 0
-      syscall sys_io    ; echo char back
-      jmp __gets_loop
-    __gets_end:
-      mov a, $0A00
-      syscall sys_io    
-      mov a, $0D00
-      syscall sys_io    ; echo CRLF
-      mov al, 0
-      mov [d], al        ; terminate string
-      leave
-      ret
-    __gets_backspace:
-      dec d
-      mov al, 0
-      syscall sys_io    ; echo char back
-      jmp __gets_loop
-    __gets_ansi_escape:
-      mov al, 1
-      syscall sys_io        ; receive in AH without echo
-      cmp ah, '['
-      jne __gets_loop
-    __gets_ansi_escape_2:
-      mov al, 1
-      syscall sys_io          ; receive in AH without echo
-      cmp ah, 'D'
-      je __gets_left_arrow
-      cmp ah, 'C'
-      je __gets_right_arrow
-      cmp ah, 'A'
-      je __gets_up_arrow
-      cmp ah, 'B'
-      je __gets_down_arrow
-      jmp __gets_loop
-    __gets_left_arrow:
-      dec d
-      mov al, 0
-      mov ah, 27
-      syscall sys_io    
-      mov al, 0
-      mov ah, '['
-      syscall sys_io    
-      mov al, 0
-      mov ah, 'D'
-      syscall sys_io    
-      jmp __gets_loop
-    __gets_right_arrow:
-      inc d
-      mov al, 0
-      mov ah, 27
-      syscall sys_io    
-      mov al, 0
-      mov ah, '['
-      syscall sys_io    
-      mov al, 0
-      mov ah, 'C'
-      syscall sys_io    
-      jmp __gets_loop
-    __gets_up_arrow:
-      call last_cmd_insert
-      meta mov d, command
-    __gets_up_arrow_L0:
-        mov al, [d]
-        cmp al, 0
-        je __gets_loop
-        inc d
-        jmp __gets_up_arrow_L0
-    __gets_down_arrow:
-      jmp __gets_loop
-  }
-}
-
 
 int set_string_var(char *varname, char *strval){
   int i;

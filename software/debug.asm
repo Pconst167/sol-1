@@ -4,7 +4,7 @@
 main:
 	mov a, 0
 main_L0:
-	syscall sys_bkpt
+	syscall sys_break
 	inc a
 	cmp a, $20
 	je end

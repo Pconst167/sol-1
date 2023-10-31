@@ -1076,7 +1076,6 @@ fs_chmod_found_entry:
 fs_chmod_not_found:
   sysret
 
-
 ;------------------------------------------------------------------------------------------------------;
 ; CREATE NEW DIRECTORY
 ;------------------------------------------------------------------------------------------------------;
@@ -1676,8 +1675,6 @@ fs_ls_non_null:
   mov ah, $20
   call _putchar  
   call _puts                   ; print filename  
-  je fs_ls_format_dir
-fs_ls_newline:
   call printnl
 fs_ls_next:
   mov a, [index]

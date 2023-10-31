@@ -91,8 +91,12 @@ _for1_block:
   push b
   call printf
   add sp, 2
-;; shell_gets(); 
-  call shell_gets
+;; gets(command); 
+  mov b, _command_data ; $command           
+  swp b
+  push b
+  call gets
+  add sp, 2
 ;; if(command[0]) strcpy(last_cmd, command); 
 _if2_cond:
   mov d, _command_data ; $command
@@ -5583,99 +5587,6 @@ _if104_true:
   add sp, 2
   jmp _if104_exit
 _if104_exit:
-  leave
-  ret
-
-shell_gets:
-  enter 0 ; (push bp; mov bp, sp)
-
-; --- BEGIN INLINE ASM BLOCK
-  mov d, _command_data ; $command
-__gets_loop:
-  mov al, 1
-  syscall sys_io      
-  cmp ah, 27
-  je __gets_ansi_escape
-  cmp ah, $0A        
-  je __gets_end
-  cmp ah, $0D        
-  je __gets_end
-  cmp ah, $08      
-  je __gets_backspace
-  mov al, ah
-  mov [d], al
-  inc d
-  mov al, 0
-  syscall sys_io    
-  jmp __gets_loop
-__gets_end:
-  mov a, $0A00
-  syscall sys_io    
-  mov a, $0D00
-  syscall sys_io    
-  mov al, 0
-  mov [d], al        
-  leave
-  ret
-__gets_backspace:
-  dec d
-  mov al, 0
-  syscall sys_io    
-  jmp __gets_loop
-__gets_ansi_escape:
-  mov al, 1
-  syscall sys_io        
-  cmp ah, '['
-  jne __gets_loop
-__gets_ansi_escape_2:
-  mov al, 1
-  syscall sys_io          
-  cmp ah, 'D'
-  je __gets_left_arrow
-  cmp ah, 'C'
-  je __gets_right_arrow
-  cmp ah, 'A'
-  je __gets_up_arrow
-  cmp ah, 'B'
-  je __gets_down_arrow
-  jmp __gets_loop
-__gets_left_arrow:
-  dec d
-  mov al, 0
-  mov ah, 27
-  syscall sys_io    
-  mov al, 0
-  mov ah, '['
-  syscall sys_io    
-  mov al, 0
-  mov ah, 'D'
-  syscall sys_io    
-  jmp __gets_loop
-__gets_right_arrow:
-  inc d
-  mov al, 0
-  mov ah, 27
-  syscall sys_io    
-  mov al, 0
-  mov ah, '['
-  syscall sys_io    
-  mov al, 0
-  mov ah, 'C'
-  syscall sys_io    
-  jmp __gets_loop
-__gets_up_arrow:
-  call last_cmd_insert
-  mov d, _command_data ; $command
-__gets_up_arrow_L0:
-  mov al, [d]
-  cmp al, 0
-  je __gets_loop
-  inc d
-  jmp __gets_up_arrow_L0
-__gets_down_arrow:
-  jmp __gets_loop
-; --- END INLINE ASM BLOCK
-
   leave
   ret
 
