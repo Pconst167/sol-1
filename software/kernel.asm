@@ -1042,8 +1042,8 @@ fs_chmod:
   mov a, [current_dirID]
   inc a                       ; metadata sector
   mov b, a
-  mov c, 0                    ; reset LBA to 0
-  mov ah, $01                 ; disk read
+  mov c, 0                    ; upper LBA = 0
+  mov ah, $01                  ; 1 sector
   mov d, transient_area
   call ide_read_sect          ; read directory
   cla
@@ -1087,9 +1087,9 @@ fs_mkdir:
   load                        ; load data from user-space
   mov b, FST_LBA_START + 2    ; start at 2 because LBA  0 is ROOT (this would also cause issues                 
                               ; when checking for NULL name, since root has a NULL name)
-  mov c, 0                    ; reset LBA to 0
+  mov c, 0                    ; upper LBA = 0
 fs_mkdir_L1:  
-  mov ah, $01                 ; disk read
+  mov ah, $01                  ; 1 sector
   mov d, transient_area
   call ide_read_sect          ; read sector
   cmp byte[d], 0              ; check for NULL
@@ -1121,7 +1121,7 @@ fs_mkdir_found_null:
   mov c, 0
   mov g, b                        ; save LBA
   mov d, transient_area
-  mov ah, $01                     ; disk read
+  mov ah, $01                  ; 1 sector
   call ide_read_sect              ; read metadata sector
 fs_mkdir_L2:
   cmp byte[d], 0
@@ -1178,7 +1178,7 @@ fs_mkdir_found_null2:
   mov c, 0
   mov g, b                      ; save LBA
   mov d, transient_area
-  mov ah, $01                   ; disk read
+  mov ah, $01                  ; 1 sector
   call ide_read_sect            ; read metadata sector
 fs_mkdir_L3:
   cmp byte[d], 0
@@ -1227,7 +1227,7 @@ fs_mkdir_found_null3:
   mov c, 0
   mov g, b                      ; save LBA
   mov d, transient_area
-  mov ah, $01                   ; disk read
+  mov ah, $01                  ; 1 sector
   call ide_read_sect            ; read metadata sector
 fs_mkdir_L4:
   cmp byte[d], 0
@@ -1323,8 +1323,8 @@ get_dirname_from_dirID:
   push b
   push d
   mov b, a
-  mov c, 0                      ; reset LBA to 0
-  mov ah, $01                   ; disk read
+  mov c, 0                      ; upper LBA = 0
+  mov ah, $01                  ; 1 sector
   mov d, transient_area - 512
   call ide_read_sect            ; read directory
   call _strrev                  ; reverse dir name before copying
@@ -1346,8 +1346,8 @@ get_parentID_from_dirID:
   push b
   push d
   mov b, a
-  mov c, 0                      ; reset LBA to 0
-  mov ah, $01                   ; disk read
+  mov c, 0                      ; upper LBA = 0
+  mov ah, $01                  ; 1 sector
   mov d, transient_area - 512
   call ide_read_sect            ; read directory
   mov a, [d + 64]               ; copy parent ID value to A
@@ -1395,8 +1395,8 @@ get_dirID_from_path_E0:
   call _strcpy        
   inc a                         ; metadata sector
   mov b, a
-  mov c, 0                      ; reset LBA to 0
-  mov ah, $01                   ; disk read
+  mov c, 0                      ; upper LBA = 0
+  mov ah, $01                  ; 1 sector
   mov d, transient_area
   call ide_read_sect            ; read directory
   cla
@@ -1465,8 +1465,8 @@ file_exists_by_path_E0:
   call _strcpy        
   inc a                           ; metadata sector
   mov b, a
-  mov c, 0                        ; reset LBA to 0
-  mov ah, $01                     ; disk read
+  mov c, 0                        ; upper LBA = 0
+  mov ah, $01                  ; 1 sector
   mov d, transient_area
   call ide_read_sect              ; read directory
   cla
@@ -1542,8 +1542,8 @@ loadfile_from_path_E0:
   call _strcpy        
   inc a                         ; metadata sector
   mov b, a
-  mov c, 0                      ; reset LBA to 0
-  mov ah, $01                   ; disk read
+  mov c, 0                      ; upper LBA = 0
+  mov ah, $01                  ; 1 sector
   mov d, transient_area
   call ide_read_sect            ; read directory
   cla
@@ -1601,13 +1601,43 @@ fs_cd:
 ; LS
 ; dirID in B
 ;------------------------------------------------------------------------------------------------------;
-ls_count:       .db 0
+ls_count:       .dw 0
 fs_ls:
   inc b                        ; metadata sector
-  mov c, 0                     ; reset LBA to 0
-  mov ah, $01                  ; disk read
+  mov c, 0                     ; upper LBA = 0
+  mov ah, $01                  ; 1 sector
   mov d, transient_area
   call ide_read_sect           ; read directory
+
+  cla
+  mov [ls_count], a
+  mov si, transient_area
+lsloop:
+  lodsb
+  mov bl, al
+  call print_u8x
+  mov ah, ' '
+  call _putchar
+  mov ah, 0
+  call print_u16d
+  mov ah, ' '
+  call _putchar
+  mov a, [ls_count]
+  inc a
+  mov [ls_count], a
+  cmp a, 512
+  je lsloopend
+  and a, $001F  
+  jz addnewline
+  jmp lsloop
+addnewline:
+  mov ah, $0A
+  call _putchar
+  mov ah, $0D
+  call _putchar
+  jmp lsloop
+
+lsloopend:
   cla
   mov [index], a               ; reset entry index
   mov [ls_count], al           ; reset item count
@@ -1782,9 +1812,9 @@ fs_starcom_add_to_dir_null:
 ;------------------------------------------------------------------------------------------------------;
 fs_find_empty_block:
   mov b, FS_LBA_START     ; raw files starting block
-  mov c, 0                ; reset LBA to 0
+  mov c, 0                ; upper LBA = 0
 fs_find_empty_block_L1:  
-  mov ah, $01             ; disk read
+  mov ah, $01                  ; 1 sector
   mov d, transient_area - 512
   call ide_read_sect      ; read sector
   cmp byte [d], 0
@@ -1806,9 +1836,9 @@ fs_mkbin:
   mov c, 512
   load                          ; load data from user-space
   mov b, FS_LBA_START           ; files start when directories end
-  mov c, 0                      ; reset LBA to 0
+  mov c, 0                      ; upper LBA = 0
 fs_mkbin_L1:  
-  mov ah, $01                   ; disk read
+  mov ah, $01                  ; 1 sector
   mov d, transient_area
   call ide_read_sect            ; read sector
   cmp byte[d], 0                ; check for NULL
@@ -1851,7 +1881,7 @@ fs_mkbin_add_to_dir:
   mov c, 0
   mov g, b                      ; save LBA
   mov d, transient_area
-  mov ah, $01                   ; disk read
+  mov ah, $01                  ; 1 sector
   call ide_read_sect            ; read metadata sector
 fs_mkbin_add_to_dir_L2:
   cmp byte[d], 0
@@ -1933,8 +1963,8 @@ fs_cat:
   load                                ; copy filename from user-space
   mov b, [current_dirID]
   inc b                               ; metadata sector
-  mov c, 0                            ; reset LBA to 0
-  mov ah, $01                         ; disk read
+  mov c, 0                            ; upper LBA = 0
+  mov ah, $01                  ; 1 sector
   mov d, transient_area-512
   call ide_read_sect                  ; read directory
   cla
@@ -1983,7 +2013,7 @@ fs_rmdir:
 ; search for directory's entry in the parent's directory then and delete it
   inc a                         ; metadata sector
   mov b, a
-  mov c, 0                      ; reset LBA to 0
+  mov c, 0                      ; upper LBA = 0
   mov ah, $01          ;
   mov d, transient_area
   call ide_read_sect            ; read directory
@@ -2007,7 +2037,7 @@ fs_rmdir_found_entry:
   mov [d + 25], a               ; clear dirID/LBA as well not to generate problems with previously deleted directories
   pop b
   inc b                         ; metadata sector
-  mov c, 0                      ; reset LBA to 0
+  mov c, 0                      ; upper LBA = 0
   mov ah, $01          ; 
   mov d, transient_area
   call ide_write_sect           ; write sector and erase file's entry in the current DIR
@@ -2037,8 +2067,8 @@ fs_rm:
   mov a, [current_dirID]
   inc a                         ; metadata sector
   mov b, a
-  mov c, 0                      ; reset LBA to 0
-  mov ah, $01                   ; disk read
+  mov c, 0                      ; upper LBA = 0
+  mov ah, $01                  ; 1 sector
   mov d, transient_area
   call ide_read_sect            ; read directory
   mov a, 0
@@ -2063,7 +2093,7 @@ fs_rm_found_entry:
   mov a, [current_dirID]
   inc a                         ; metadata sector
   mov b, a
-  mov c, 0                      ; reset LBA to 0
+  mov c, 0                      ; upper LBA = 0
   mov ah, $01                   ; disk write
   mov d, transient_area
   call ide_write_sect           ; write sector and erase file's entry in the current DIR
@@ -2088,8 +2118,8 @@ fs_mv:
   mov a, [current_dirID]
   inc a                         ; metadata sector
   mov b, a  
-  mov c, 0                      ; reset LBA to 0
-  mov ah, $01                   ; disk read
+  mov c, 0                      ; upper LBA = 0
+  mov ah, $01                  ; 1 sector
   mov d, transient_area
   call ide_read_sect            ; read directory
   cla

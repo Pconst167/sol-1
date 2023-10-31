@@ -7,6 +7,10 @@
 .org text_org			; origin at 1024
 
 cmd_ls:
+	mov ah, $0A
+	call _putchar
+	mov ah, $0D
+	call _putchar
 	mov a, 0
 	mov [prog], a			; move tokennizer pointer to the beginning of the arguments area (address 0)
 	call get_token

@@ -374,5 +374,6 @@ uint16_t loadfile(uint8_t *filename, uint8_t *dest){
 
   fclose(fp);
 
+  size--;
   return size;
 }
