@@ -36,8 +36,11 @@ int main(){
   read_config("/etc/shell.cfg", "home", variables[1].as_string);
 
   for(;;){
-    printf("root@Sol-1:"); print_cwd(); printf(" # ");
+    printf("root@Sol-1:"); 
+    print_cwd(); 
+    printf(" # ");
     gets(command);
+    print("\n\r");
     if(command[0]) strcpy(last_cmd, command);
     prog = command;
     // Loop through the shell command

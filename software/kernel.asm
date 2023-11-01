@@ -786,7 +786,7 @@ ide_read_sect:
   mov [_ide_R6], al
 ide_read_sect_wait:
   mov al, [_ide_R7]  
-  test al, $80                     ; BUSY FLAG
+  and al, $80                     ; BUSY FLAG
   jnz ide_read_sect_wait
   mov al, $20
   mov [_ide_R7], al               ; read sector cmd
@@ -806,7 +806,7 @@ ide_write_sect:
   mov [_ide_R6], al
 ide_write_sect_wait:
   mov al, [_ide_R7]  
-  test al, $80                     ; BUSY FLAG
+  and al, $80                     ; BUSY FLAG
   jnz ide_write_sect_wait
   mov al, $30
   mov [_ide_R7], al               ; write sector cmd
@@ -821,10 +821,10 @@ ide_read:
   push d
 ide_read_loop:
   mov al, [_ide_R7]  
-  test al, 80h                     ; BUSY FLAG
+  and al, 80h                     ; BUSY FLAG
   jnz ide_read_loop               ; wait loop
   mov al, [_ide_R7]
-  test al, %00001000               ; DRQ FLAG
+  and al, %00001000               ; DRQ FLAG
   jz ide_read_end
   mov al, [_ide_R0]
   mov [d], al
@@ -842,10 +842,10 @@ ide_write:
   push d
 ide_write_loop:
   mov al, [_ide_R7]  
-  test al, 80h             ; BUSY FLAG
+  and al, 80h             ; BUSY FLAG
   jnz ide_write_loop      ; wait loop
   mov al, [_ide_R7]
-  test al, %00001000       ; DRQ FLAG
+  and al, %00001000       ; DRQ FLAG
   jz ide_write_end
   mov al, [d]
   mov [_ide_R0], al
@@ -860,7 +860,7 @@ ide_write_end:
 ;----------------------------------------------------------------------------------------------------;
 ide_wait:
   mov al, [_ide_R7]  
-  test al, 80h        ; BUSY FLAG
+  and al, 80h        ; BUSY FLAG
   jnz ide_wait
   ret
 
@@ -907,7 +907,7 @@ syscall_io_uart_setup:
 syscall_io_putchar:
 syscall_io_putchar_L0:
   mov al, [_UART0_LSR]         ; read Line Status Register
-  test al, $20                 ; isolate Transmitter Empty
+  and al, $20
   jz syscall_io_putchar_L0    
   mov al, ah
   mov [_UART0_DATA], al        ; write char to Transmitter Holding Register
@@ -939,7 +939,7 @@ syscall_io_getch_cont:
 ; here we just echo the char back to the console
 syscall_io_getch_echo_L0:
   mov al, [_UART0_LSR]         ; read Line Status Register
-  test al, $20                 ; isolate Transmitter Empty
+  and al, $20                 ; isolate Transmitter Empty
   jz syscall_io_getch_echo_L0
   mov al, ah
   mov [_UART0_DATA], al        ; write char to Transmitter Holding Register

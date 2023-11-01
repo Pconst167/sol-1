@@ -19,6 +19,12 @@ main:
   call scann
   pop d
   mov [d], b
+;; printu(top); 
+  mov b, [_top] ; $top           
+  swp b
+  push b
+  call printu
+  add sp, 2
 ;; date(); 
   call date
 ;; primes(); 
@@ -1618,6 +1624,26 @@ __load_hex_ret:
   leave
   ret
 
+getparam:
+  enter 0 ; (push bp; mov bp, sp)
+; $data 
+  sub sp, 1
+
+; --- BEGIN INLINE ASM BLOCK
+  mov al, 4
+  lea d, [bp + 5] ; $address
+  mov d, [d]
+  syscall sys_system
+  lea d, [bp + 0] ; $data
+  mov [d], bl
+; --- END INLINE ASM BLOCK
+
+;; return data; 
+  mov bl, [bp + 0] ; $data
+  mov bh, 0             
+  leave
+  ret
+
 include_stdio_asm:
   enter 0 ; (push bp; mov bp, sp)
 
@@ -1943,14 +1969,6 @@ _if32_true:
   push b
   call print
   add sp, 2
-
-; --- BEGIN INLINE ASM BLOCK
-  mov d, _n ; $n
-  mov bl, [d]
-  mov al, 2
-  syscall sys_system
-; --- END INLINE ASM BLOCK
-
   jmp _if32_exit
 _if32_exit:
 ;; n = n + 1; 

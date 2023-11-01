@@ -40,12 +40,6 @@ void primes(void){
 			count = count+1;	
 			printu(n);
 			print("\n");
-			asm{
-				meta mov d, n
-				mov bl, [d]
-				mov al, 2
-				syscall sys_system
-			}
 		}
 		n = n + 1;
 	}

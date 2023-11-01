@@ -77,13 +77,13 @@ main:
 _for1_init:
 _for1_cond:
 _for1_block:
-;; printf("root@Sol-1:"); print_cwd(); printf(" # "); 
+;; printf("root@Sol-1:");  
   mov b, __s4 ; "root@Sol-1:"
   swp b
   push b
   call printf
   add sp, 2
-;; print_cwd(); printf(" # "); 
+;; print_cwd();  
   call print_cwd
 ;; printf(" # "); 
   mov b, __s5 ; " # "
@@ -96,6 +96,12 @@ _for1_block:
   swp b
   push b
   call gets
+  add sp, 2
+;; print("\n\r"); 
+  mov b, __s6 ; "\n\r"
+  swp b
+  push b
+  call print
   add sp, 2
 ;; if(command[0]) strcpy(last_cmd, command); 
 _if2_cond:
@@ -320,7 +326,7 @@ _if11_cond:
   mov b, _token_data ; $token           
   swp b
   push b
-  mov b, __s6 ; "cd"
+  mov b, __s7 ; "cd"
   swp b
   push b
   call strcmp
@@ -339,7 +345,7 @@ _if12_cond:
   mov b, _token_data ; $token           
   swp b
   push b
-  mov b, __s7 ; "shell"
+  mov b, __s8 ; "shell"
   swp b
   push b
   call strcmp
@@ -511,7 +517,7 @@ _if18_true:
   mov b, _argument_data ; $argument           
   swp b
   push b
-  mov b, __s8 ; "123"
+  mov b, __s9 ; "123"
   swp b
   push b
   call strcat
@@ -738,7 +744,7 @@ _if23_exit:
   mov b, _temp_data ; $temp           
   swp b
   push b
-  mov b, __s9 ; "/"
+  mov b, __s10 ; "/"
   swp b
   push b
   call strcat
@@ -1613,7 +1619,7 @@ _if31_true:
   jmp _if31_exit
 _if31_else:
 ;; print("Unknown type size in va_arg() call. Size needs to be either 1 or 2."); 
-  mov b, __s10 ; "Unknown type size in va_arg() call. Size needs to be either 1 or 2."
+  mov b, __s11 ; "Unknown type size in va_arg() call. Size needs to be either 1 or 2."
   swp b
   push b
   call print
@@ -1845,7 +1851,7 @@ _switch35_case5:
   jmp _switch35_exit ; case break
 _switch35_default:
 ;; print("Error: Unknown argument type.\n"); 
-  mov b, __s11 ; "Error: Unknown argument type.\n"
+  mov b, __s12 ; "Error: Unknown argument type.\n"
   swp b
   push b
   call print
@@ -3492,7 +3498,7 @@ _if62_cond:
   je _if62_exit
 _if62_true:
 ;; error("Double quotes expected"); 
-  mov b, __s12 ; "Double quotes expected"
+  mov b, __s13 ; "Double quotes expected"
   swp b
   push b
   call error
@@ -5536,7 +5542,7 @@ _if99_exit:
 error:
   enter 0 ; (push bp; mov bp, sp)
 ;; printf("\nError: "); 
-  mov b, __s13 ; "\nError: "
+  mov b, __s14 ; "\nError: "
   swp b
   push b
   call printf
@@ -5548,7 +5554,7 @@ error:
   call printf
   add sp, 2
 ;; printf("\n"); 
-  mov b, __s14 ; "\n"
+  mov b, __s15 ; "\n"
   swp b
   push b
   call printf
@@ -6153,7 +6159,7 @@ _for113_update:
   jmp _for113_cond
 _for113_exit:
 ;; error("Undeclared variable."); 
-  mov b, __s15 ; "Undeclared variable."
+  mov b, __s16 ; "Undeclared variable."
   swp b
   push b
   call error
@@ -6501,7 +6507,7 @@ _if126_cond:
   mov b, _token_data ; $token           
   swp b
   push b
-  mov b, __s16 ; ";"
+  mov b, __s17 ; ";"
   swp b
   push b
   call strcmp
@@ -6563,17 +6569,18 @@ __s2: .db "home", 0
 __s3: .db "/etc/shell.cfg", 0
 __s4: .db "root@Sol-1:", 0
 __s5: .db " # ", 0
-__s6: .db "cd", 0
-__s7: .db "shell", 0
-__s8: .db "123", 0
-__s9: .db "/", 0
-__s10: .db "Unknown type size in va_arg() call. Size needs to be either 1 or 2.", 0
-__s11: .db "Error: Unknown argument type.\n", 0
-__s12: .db "Double quotes expected", 0
-__s13: .db "\nError: ", 0
-__s14: .db "\n", 0
-__s15: .db "Undeclared variable.", 0
-__s16: .db ";", 0
+__s6: .db "\n\r", 0
+__s7: .db "cd", 0
+__s8: .db "shell", 0
+__s9: .db "123", 0
+__s10: .db "/", 0
+__s11: .db "Unknown type size in va_arg() call. Size needs to be either 1 or 2.", 0
+__s12: .db "Error: Unknown argument type.\n", 0
+__s13: .db "Double quotes expected", 0
+__s14: .db "\nError: ", 0
+__s15: .db "\n", 0
+__s16: .db "Undeclared variable.", 0
+__s17: .db ";", 0
 
 _heap_top: .dw _heap
 _heap: .db 0
