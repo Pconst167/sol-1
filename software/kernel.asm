@@ -1608,36 +1608,6 @@ fs_ls:
   mov ah, $01                  ; 1 sector
   mov d, transient_area
   call ide_read_sect           ; read directory
-
-  cla
-  mov [ls_count], a
-  mov si, transient_area
-lsloop:
-  lodsb
-  mov bl, al
-  call print_u8x
-  mov ah, ' '
-  call _putchar
-  mov ah, 0
-  call print_u16d
-  mov ah, ' '
-  call _putchar
-  mov a, [ls_count]
-  inc a
-  mov [ls_count], a
-  cmp a, 512
-  je lsloopend
-  and a, $001F  
-  jz addnewline
-  jmp lsloop
-addnewline:
-  mov ah, $0A
-  call _putchar
-  mov ah, $0D
-  call _putchar
-  jmp lsloop
-
-lsloopend:
   cla
   mov [index], a               ; reset entry index
   mov [ls_count], al           ; reset item count
