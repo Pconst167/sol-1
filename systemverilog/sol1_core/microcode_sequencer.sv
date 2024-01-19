@@ -293,7 +293,7 @@ module microcode_sequencer(
 // Load microcode ROM files into microcode memory
   initial begin
     bit [7:0] rom [CYCLES_PER_INSTRUCTION * NBR_INSTRUCTIONS];
-    static string rom_base = "../hardware/microcode/roms/rom";
+    static string rom_base = "../hardware/microcode_assembler/output/rom";
     int file;
     string filename;
 

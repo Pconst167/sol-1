@@ -55,7 +55,7 @@ module sol1_top;
     #100ns;
 		stop_clk_req = 1'b0;
 
-		#100ms $stop;
+		#100ms $finish;
   end
 
 	clock u_clock(

@@ -32,7 +32,7 @@ module ide(
   logic [7:0] status;
 
   initial begin
-    static int fp = $fopen("../disk_backups/image_10Mar2023", "rb");
+    static int fp = $fopen("../disk_backups/10Mar2023", "rb");
     $display("Loading disk image...");
     if(!fp) $fatal("Failed to open disk image");
     if(!$fread(mem, fp)) $fatal("Failed to read disk image");
