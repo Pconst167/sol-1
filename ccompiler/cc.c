@@ -421,7 +421,6 @@ int search_define(char *name){
 
 void pre_scan(void){
   char *tp;
-  int struct_id;
 
   prog = c_in;
   do{
@@ -442,7 +441,20 @@ void pre_scan(void){
       get();
       if(tok == OPENING_BRACE){
         prog = tp;
-        struct_id = declare_struct();
+        declare_struct();
+        continue;
+      }
+      else{
+        prog = tp;
+        get();
+      }
+    }
+    else if(tok == CLASS){
+      get();
+      get();
+      if(tok == OPENING_BRACE){
+        prog = tp;
+        declare_class();
         continue;
       }
       else{
@@ -494,6 +506,149 @@ void pre_scan(void){
     }
     else error("Unexpected token during pre-scan phase: %s", token);
   } while(toktype != END);
+}
+
+int declare_class(){
+  int curr_class_id;
+  int class_id;
+  t_class new_class;
+  char *temp_prog;
+  int class_is_embedded = 0;
+  int braces;
+  t_access_specifier access_specifier;
+
+  if(class_table_tos == MAX_CLASS_DECLARATIONS) error("Max number of class declarations reached");
+  
+  curr_class_id = class_table_tos;
+  get(); // 'class' or '{'
+  if(tok != OPENING_BRACE){
+    get(); // try getting class name, but only if the current token is not a brace, which means we are inside a class declaration already and one of the properties was an implicit class that had no name, but is an elememnt of a previous class
+  }
+  if(toktype == IDENTIFIER){
+    strcpy(new_class.name, token);
+    strcpy(class_table[class_table_tos].name, token);
+    get(); // '{'
+    if(tok != OPENING_BRACE) error("Opening braces expected");
+    // Add the new class to the class table prematurely so that any properties in this class that are pointers of this class type can be recognized by a search
+    class_table_tos++;
+  }
+  else if(tok == OPENING_BRACE){ // implicit class declaration inside a class itself
+    class_is_embedded = 1;
+  // assign a null string to the class name then
+    *new_class.name = '\0'; // okay to do since we dont use class names as the end point of search loops. we use 'class_table_tos'
+    class_table_tos++;
+  }
+
+  braces = 1;
+  for(;;){
+    get();
+    if(tok == PRIVATE){
+      access_specifier = AS_PRIVATE;
+      get(); // get ':'
+    }
+    else if(tok == PUBLIC){
+      access_specifier = AS_PUBLIC;
+      get(); // get ':'
+    }
+    else if(tok == PROTECTED){
+      access_specifier = AS_PROTECTED;
+      get(); // get ':'
+    }
+    else if(tok == OPENING_BRACE)
+      braces++;
+    else if(tok == CLOSING_BRACE)
+      braces--;
+    else
+      error("Unknown class access specifier: %s", token);
+    if(braces == 0){
+      puts("Exited");
+      break;
+    }
+    new_class.properties_tos = 0;
+    for(;;){
+      new_class.properties[new_class.properties_tos].access_specifier = access_specifier;
+      if(new_class.properties_tos == MAX_CLASS_PROPERTIES) error("Max number of class properties reached");
+      get();
+      new_class.properties[new_class.properties_tos].type.signedness = SNESS_SIGNED; // set as signed by default
+      new_class.properties[new_class.properties_tos].type.modifier = MOD_NORMAL; // set as signed by default
+      while(tok == SIGNED || tok == UNSIGNED || tok == LONG || tok == SHORT){
+            if(tok == SIGNED)   new_class.properties[new_class.properties_tos].type.signedness = SNESS_SIGNED;
+        else if(tok == UNSIGNED) new_class.properties[new_class.properties_tos].type.signedness = SNESS_UNSIGNED;
+        else if(tok == SHORT)    new_class.properties[new_class.properties_tos].type.modifier   = MOD_SHORT;
+        else if(tok == LONG)     new_class.properties[new_class.properties_tos].type.modifier   = MOD_LONG;
+        get();
+      }
+      new_class.properties[new_class.properties_tos].type.primitive_type = get_primitive_type_from_tok();
+      new_class.properties[new_class.properties_tos].type.class_id = -1;
+      if(new_class.properties[new_class.properties_tos].type.primitive_type == DT_CLASS){
+        get();
+        if(tok == OPENING_BRACE){ // internal class declaration!
+          back();
+          class_id = declare_class();
+          get(); // get member name
+        }
+        else{
+          if((class_id = search_class(token)) == -1) error("Undeclared class");
+          get();
+        }
+        new_class.properties[new_class.properties_tos].type.class_id = class_id;
+      }
+      else get();
+  // **************** checks whether this is a pointer declaration *******************************
+      new_class.properties[new_class.properties_tos].type.ind_level = 0;
+      while(tok == STAR){
+        new_class.properties[new_class.properties_tos].type.ind_level++;
+        get();
+      }
+  // *********************************************************************************************
+      if(new_class.properties[new_class.properties_tos].type.primitive_type == DT_VOID && new_class.properties[new_class.properties_tos].type.ind_level == 0){
+        error("Invalid type in variable");
+      }
+      strcpy(new_class.properties[new_class.properties_tos].name, token);
+      new_class.properties[new_class.properties_tos].type.dims[0] = 0;
+      get();
+      // checks if this is a array declaration
+      int dim = 0;
+      if(tok == OPENING_BRACKET){
+        while(tok == OPENING_BRACKET){
+          get();
+          if(toktype != INTEGER_CONST) error("Constant expected");
+          new_class.properties[new_class.properties_tos].type.dims[dim] = atoi(token);
+          get();
+          if(tok != CLOSING_BRACKET) error("Closing brackets expected");
+          get();
+          dim++;
+        }
+        new_class.properties[new_class.properties_tos].type.dims[dim] = 0; // sets the last dimention to 0, to mark the end of the list
+      }
+      new_class.properties_tos++;
+      get();
+      if(tok == PRIVATE || tok == PUBLIC || tok == PROTECTED){
+        back();
+        break;
+      }
+      else{
+        back();
+      }
+    } 
+  }
+
+  
+  new_class.properties[new_class.properties_tos].name[0] = '\0'; // end properties list
+  class_table[curr_class_id] = new_class; 
+
+  get();
+
+  if(toktype == IDENTIFIER && class_is_embedded){
+    back();
+  }
+  else if (toktype == IDENTIFIER){ // declare variables if present
+    back();
+    //declare_class_global_vars(curr_class_id);
+  }
+  else if(tok != SEMICOLON) error("Semicolon expected after class declaration.");
+
+  return curr_class_id; // return class_id
 }
 
 /*
@@ -3765,6 +3920,14 @@ int find_array_initialization_size(t_modifier modifier){
   } while(braces);
   expect(CLOSING_BRACE, "Closing braces expected");
   return len;
+}
+
+int search_class(char *name){
+  int i;
+  
+  for(i = 0; i < class_table_tos; i++)
+    if(!strcmp(class_table[i].name, name)) return i;
+  return -1;
 }
 
 int search_struct(char *name){

@@ -7,21 +7,12 @@
 main:
   mov bp, $FFE0 ;
   mov sp, $FFE0 ; Make space for argc(2 bytes) and for 10 pointers in argv (local variables)
-;; printf("String: %s, %c, %x", "Hello World, this Works!", 'A', 0xABCD); 
-  mov b, $abcd
-  swp b
-  push b
-  mov b, $41
-  swp b
-  push b
-  mov b, __s0 ; "Hello World, this Works!"
-  swp b
-  push b
-  mov b, __s1 ; "String: %s, %c, %x"
+;; printf("String hello World!!!"); 
+  mov b, __s0 ; "String hello World!!!"
   swp b
   push b
   call printf
-  add sp, 8
+  add sp, 2
 ;; return; 
   leave
   syscall sys_terminate_proc
@@ -559,7 +550,7 @@ _if11_true:
   jmp _if11_exit
 _if11_else:
 ;; err("Unexpected format in printf."); 
-  mov b, __s2 ; "Unexpected format in printf."
+  mov b, __s1 ; "Unexpected format in printf."
   swp b
   push b
   call err
@@ -720,7 +711,7 @@ _switch8_case7:
   jmp _switch8_exit ; case break
 _switch8_default:
 ;; print("Error: Unknown argument type.\n"); 
-  mov b, __s3 ; "Error: Unknown argument type.\n"
+  mov b, __s2 ; "Error: Unknown argument type.\n"
   swp b
   push b
   call print
@@ -2289,7 +2280,7 @@ getparam:
 clear:
   enter 0 ; (push bp; mov bp, sp)
 ;; print("\033[2J\033[H"); 
-  mov b, __s4 ; "\033[2J\033[H"
+  mov b, __s3 ; "\033[2J\033[H"
   swp b
   push b
   call print
@@ -2311,11 +2302,10 @@ include_stdio_asm:
 ; --- BEGIN DATA BLOCK
 _l_data: .fill 1060, 0
 _p: .fill 2, 0
-__s0: .db "Hello World, this Works!", 0
-__s1: .db "String: %s, %c, %x", 0
-__s2: .db "Unexpected format in printf.", 0
-__s3: .db "Error: Unknown argument type.\n", 0
-__s4: .db "\033[2J\033[H", 0
+__s0: .db "String hello World!!!", 0
+__s1: .db "Unexpected format in printf.", 0
+__s2: .db "Error: Unknown argument type.\n", 0
+__s3: .db "\033[2J\033[H", 0
 
 _heap_top: .dw _heap
 _heap: .db 0

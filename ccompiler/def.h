@@ -16,6 +16,10 @@
 #define STRING_CONST_SIZE          512
 #define STRING_TABLE_SIZE          256
 
+#define MAX_CLASS_DECLARATIONS     64
+#define MAX_CLASS_PROPERTIES       64
+#define MAX_CLASS_METHODS          64
+
 #define true 1
 #define false 0
 
@@ -90,6 +94,11 @@ typedef enum {
   SIZEOF,
   STAR,
   STATIC,
+  CLASS,
+  PRIVATE,
+  PUBLIC,
+  PROTECTED,
+  CONSTRUCTOR,
   STRUCT,
   STRUCT_ARROW,
   STRUCT_DOT,
@@ -189,6 +198,11 @@ struct{
   "sizeof",                  SIZEOF,
   "star",                    STAR,
   "static",                  STATIC,
+  "class",                   CLASS,
+  "private",                 PRIVATE,
+  "public",                  PUBLIC,
+  "protected",               PROTECTED,
+  "constructor",             CONSTRUCTOR,
   "struct",                  STRUCT,
   "struct_arrow",            STRUCT_ARROW,
   "struct_dot",              STRUCT_DOT,
@@ -233,7 +247,7 @@ typedef union {
 
 // basic data types
 typedef enum {
-  DT_VOID = 1, DT_CHAR, DT_INT, DT_FLOAT, DT_DOUBLE, DT_STRUCT
+  DT_VOID = 1, DT_CHAR, DT_INT, DT_FLOAT, DT_DOUBLE, DT_STRUCT, DT_CLASS
 } t_primitive_type;
 
 typedef enum {
@@ -259,9 +273,9 @@ typedef struct {
   char is_constant; // is it a constant?
   int ind_level; // holds the pointer indirection level
   int struct_id; // struct ID if var is a struct
+  int class_id;
   int dims[MAX_MATRIX_DIMS];
 } t_type;
-
 
 typedef struct{
   char name[ID_LEN];
@@ -270,12 +284,12 @@ typedef struct{
 
 typedef struct{
   char name[ID_LEN];
+  int elements_tos; // work this into the code so that the last element in structs is given by this, rather than relying on a null element name.
   struct{
     char name[ID_LEN];
     t_type type;
   } elements[MAX_STRUCT_ELEMENTS];
 } t_struct;
-
 
 typedef struct {
   char name[ID_LEN];
@@ -299,6 +313,24 @@ typedef struct {
   char has_var_args;
   char num_fixed_args;
 } t_function;
+
+typedef enum {AS_PRIVATE, AS_PUBLIC, AS_PROTECTED} t_access_specifier ;
+
+typedef struct{
+  char name[ID_LEN];
+  unsigned int constructor_index;
+  int properties_tos;
+  int methods_tos;
+  struct{
+    char name[ID_LEN];
+    t_type type;
+    t_access_specifier access_specifier;
+  } properties[MAX_CLASS_PROPERTIES];
+  struct{
+    t_function method;
+    t_access_specifier access_specifier;
+  } methods[MAX_CLASS_METHODS];
+} t_class;
 
 char *primitive_type_to_str_table[] = {
   "unused",
@@ -342,6 +374,12 @@ struct _keyword_table{
   "union",    UNION,
   "struct",   STRUCT,
   "sizeof",   SIZEOF,
+  
+  "class",       CLASS,
+  "private",     PRIVATE,
+  "public",      PUBLIC,
+  "protected",   PROTECTED,
+  "constructor", CONSTRUCTOR,
 
   "if",       IF,
   "else",     ELSE,
@@ -416,6 +454,7 @@ t_typedef typedef_table[MAX_TYPEDEFS];
 t_function function_table[MAX_USER_FUNC];
 t_enum enum_table[MAX_ENUM_DECLARATIONS];
 t_struct struct_table[MAX_STRUCT_DECLARATIONS];
+t_class class_table[MAX_CLASS_DECLARATIONS];
 t_var global_var_table[MAX_GLOBAL_VARS];
 char string_table[STRING_TABLE_SIZE][STRING_CONST_SIZE];
 
@@ -428,6 +467,7 @@ int function_table_tos;
 int global_var_tos;
 int enum_table_tos;
 int struct_table_tos;
+int class_table_tos;
 int defines_tos;
 int typedef_table_tos;
 
@@ -510,6 +550,7 @@ void expect(t_token _tok, char *message);
 
 void declare_enum(void);
 void declare_typedef(void);
+int declare_class(void);
 int declare_struct(void);
 void declare_func(void);
 void declare_global(void);
@@ -520,7 +561,11 @@ void parse_struct_initialization_data(int struct_id, int array_size);
 void declare_goto_label(void);
 void declare_define(void);
 
+
+int declare_class();
+
 int search_global_var(char *var_name);
+int search_class(char *name);
 int search_struct(char *name);
 int search_string(char *str);
 int search_define(char *name);
