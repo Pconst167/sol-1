@@ -35,7 +35,7 @@ int main(void){
 	int i, j;
   int n;
 	char *p = 0;
-
+/*
 	for(i = 0; i < HEIGHT; i++){
 		for(j = 0; j < WIDTH; j++){
 			if(*p % 2 == 0) currState[i][j] = '@';
@@ -43,7 +43,7 @@ int main(void){
 			p++;		
 		}
 	}
-
+*/
 	for(i = 0; i < HEIGHT; i++){
 		for(j = 0; j < WIDTH; j++){
 			nextState[i][j] = currState[i][j];
