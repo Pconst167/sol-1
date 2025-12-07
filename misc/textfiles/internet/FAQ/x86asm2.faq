@@ -1,0 +1,910 @@
+From: raymoon@dgsys.com (Raymond Moon)
+Newsgroups: alt.lang.asm,comp.lang.asm.x86,news.answers,alt.answers,comp.answers
+Subject: x86 Assembly Language FAQ - General Part 2/3
+Supersedes: <5h6e12$b4q@reader1.news.act.net>
+Followup-To: alt.lang.asm,comp.lang.asm.x86
+Date: 21 Apr 1997 21:21:42 GMT
+Organization: MoonWare
+Lines: 890
+Approved: news-answers-request@MIT.EDU
+Distribution: world
+Expires: Tue, 20 May 1997 23:59:59 GMT
+Message-ID: <5jglp6$ijs@news.dgsys.com>
+Reply-To: raymoon@moonware.dgsys.com
+Summary: This is the FAQ for the x86 Assembly Language programmers for the
+ alt.lang.asm and comp.lang.asm.x86 newsgroups.  This particular section of
+ the FAQ is part two of three parts that contain x86 assembly language
+ information common to all assemblers.
+Keywords: x86 Assemby Language ASM FAQ General
+
+
+Archive-Name: assembly-language/x86/general/part2
+Posting-Frequency: monthly (21st of every month)
+Last-modified: 1997/03/18
+
+------------------------------
+
+Subject: 15. Accessing 4 Gigs of Memory in Real Mode
+
+Flat real mode is a popular name for a technique used to access up to 4 GB
+of memory, while remaining in real mode.  This technique requires a 80386
+or higher processor.  The address space really is not flat, actually, this
+technique allows you treat one or more segments as large (32-bit) segments,
+thereby accessing memory above 1 MB.
+
+When the CPU accesses memory, the base address of the segment used is not
+described by the value currently in the appropriate register.  The value is
+stored internally in a structure known as the descriptor cache.  Changing
+the value of a segment register results in that segment's entry in the
+descriptor cache being recalculated according to the rules of the current
+mode.  In real mode, the value of the segment register is shifted left four
+bits to find the base address of the segment, and the size of the segment
+is always 64k.  In protected mode, the value in the segment register is
+used as an index into a descriptor table located in memory, and the base
+address and size (which may be as small as 4 KB, or as large as 4 GB) from
+the descriptor table are loaded into the descriptor cache.
+
+When the processor changes modes, the contents of the processor's internal
+descriptor cache are not changed.  The reason is because changing them
+would result in (at the very least) the code segment being recalculated
+according to the new mode's rules, most likely causing your program to
+crash.  Thus the program must load the segment registers with sensible
+values after the mode switch occurs.  Consider an example where real mode
+code is located in segment 1000h.  If switching modes caused an immediate
+recalculation of the descriptor cache, the processor would attempt to read
+entry 1000h of the descriptor table immediately upon switching to protected
+mode.  Even if this were a valid descriptor (unlikely), it would have to
+have a base address identical to real mode segment 1000h (i.e., 10000h),
+and a size limit of 64 KB to prevent a probable crash.  An invalid
+descriptor would cause an immediate processor exception.
+
+Normally, aside from preventing situations like that in the above example,
+there is little to be said about this feature.  After all, as soon as you
+reload new values into the segment register, the descriptor cache entry for
+that segment will be reset according to the rules of the current mode. 
+After switching from protected mode to real mode, however, when you load
+the segment registers with their new values, the segment's base address is
+recalculated according to real mode rules, but the size limit is not
+changed.  After setting the 4 GB limit (which must be done in protected
+mode), it will stay in place until changed by another protected mode
+program, regardless of what values are loaded in the segment register in
+real mode.
+
+So, the steps to using this technique are as follows:
+    1.  Set up a bare bones global descriptor table, with a null entry, and
+a single entry for a 4 GB segment.  The base address of this segment is not
+important.
+    2.  If you don't wish to define an interrupt descriptor table (IDT),
+you must disable interrupts before switching to protected mode.  You do not
+need a full-fledged protected mode environment for this, so it is easiest
+just to disable interrupts and not worry about the IDT.
+    3.  Switch to protected mode. 
+    4.  Load the segment registers you wish to change with the selector for
+the 4 GB segment.  I recommend using FS and/or GS for this purpose, for
+reasons I'll describe below.
+    5.  Return to real mode.
+    6.  Re-enable interrupts.
+
+After these steps, you can then load your segment registers with any value
+you wish.  Keep in mind that the base address will be calculated according
+to real mode rules.  Loading a value of 0 into a segment register will
+result in a 4 GB segment beginning at physical address 0.  You can use any
+of the usual 32-bit registers to generate offsets into this segment.
+
+Some points to keep in mind:
+    1.  Some software depends on 64 KB segment wrap-around.  While rare, it
+is possible that you will encounter software that crashes if the older
+segments (DS or ES) are 4 GB in size.  For that reason, I recommend only
+using FS and/or GS for this purpose, as they are not used as widely as the
+others.
+    2.  You should never change the limit of the code segment.  The
+processor uses IP (not EIP) to generate offsets into the code segment in
+real mode; any code beyond the 64 KB mark would be inaccessible, regardless
+of the segment size.
+    3.  You should never change the limit of the stack segment.  This is
+similar to the above; the processor uses SP in real mode, rather than ESP.
+    4.  Because of the necessity of switching to protected mode, this
+technique will not work in a virtual 8086 mode "DOS box" from Windows,
+OS/2, or any other protected mode environment.  It only works when you
+start from plain, real mode DOS.  Many memory managers also run DOS in V86
+mode, and prevent the switch to protected mode.  It is possible to use VCPI
+to work around this, but if you go to that length you will probably find
+that you have implemented a complete protected mode environment, and would
+not need to return to real mode anyway.
+    5.  This technique will not work in the presence of any protected mode
+software that changes segment size limits.  When that software returns
+control to your real mode program, the limits will be the values to which
+the protected mode code set them.  If these limits are different that what
+your program used, problems can result.  At the very least, your program
+will return incorrect results when accessing data stored in extended
+memory.  At worst, your program will crash and burn.
+
+The benefits of this technique are many.  Most importantly, you can access
+extended memory without resorting to slow BIOS calls or having to implement
+a complete DOS extender.  If your program uses interrupts extensively
+(timer interrupts for animation or sound, for example), real mode is a
+better choice because protected mode handles interrupts slower.  DOS itself
+uses this technique in HIMEM.SYS as a fast, practical method of providing
+access to extended memory.
+
+Code demonstrating this technique is available in the file, realmem.zip. 
+This file is available using anonymous ftp from x2ftp.oulu.fi in the
+directory, pub/msdos/programming/memory.
+
+For further reading on this topic, I suggest "DOS Internals," by Geoff
+Chappell.  It is published by Addison-Wesley as part of the Andrew Schulman
+Programming Series.  The ISBN number is 0-201-60835-9.
+
+Contributor: Sherm Pendley, grinch@access.mountain.net
+Last changed: 15 Jan 95
+
+------------------------------
+
+Subject: 16. What Is Available at developer.intel.com
+
+16.1 PENTIUM & PENTIUM PRO INFORMATION
+
+The gateway for information on the Pentium and Pentium Pro at Intel are:
+
+    http://developer.intel.com/design/pentium
+    http://developer.intel.com/design/pro
+
+Information linked to this page are: Application Notes, Datasheets,
+Manuals, Specification Updates, and much more.  
+
+16.2 INTEL DEVELOPMENT TOOLS
+
+The below page has links to software, hardware, evaluation kits and
+documentation on Intel OEM products.  Areas covered are Intel Software
+Performance Products, Internet Technologies, Multimedia and Intel Products.
+
+    http://developer.intel.com/design/develop.htm
+
+16.3 INTEL TECHNOLOGIES
+
+Intel has overviews, in-depth system architecture tutorials and
+specifications on a variety of PC platform and communicatins technologies. 
+Areas covered are MMX Technology, Intelligent I/O, WinSock 2, and much
+more.
+
+    http://developer.intel.com/design/tech.htm
+
+16.4 GET INTEL'S WEB SITE ON CDROM
+
+Have you been spending a long time on line downloading one of the many
+manual available from Intel's Developer Web Site.  Now you can get the
+entire Technology and Product portions of that web site available on CDROM. 
+You access the CDROMs with your browser.  It now takes longer to launch the
+Acrobat reader than to download a Meg .pdf file.
+
+Call Intel Sales: 1-800-628-8686 (US & Canada), 1-916-356-7599 (Outside US)
+
+The order number is 273000-002.
+
+The current version is Jan 97 but is quite up to date for manuals.  You can
+sign up for updates.
+
+I wish to thank Christian Ludloff for posting the above information.
+
+Contributor: Raymond Moon, raymoon@moonware.dgsys.com
+Last changed: 18 Mar 97
+
+------------------------------
+
+Subject: 17. Interrupts and Exceptions
+
+    "(with interrupts) the processor doesn't waste its time looking for
+    work - when there is something to be done, the work comes looking for
+    the processor."
+                                    - Peter Norton
+
+INTERRUPTS AND EXCEPTIONS
+
+Interrupts and exceptions both alter the program flow. The difference
+between the two is that interrupts are used to handle external events
+(serial ports, keyboard ) and exceptions are used to handle instruction
+faults, (division by zero, undefined opcode).
+
+Interrupts are handled by the processor after finishing the current
+instruction. If it finds a signal on its interrupt pin, it will look up the
+address of the interrupt handler in the interrupt table and pass that
+routine control.  After returning from the interrupt handler routine it
+will resume program execution at the instruction after the interrupted
+instruction.
+
+Exceptions on the other hand are divided into three kinds.  These are
+Faults, Traps and Aborts.  Faults are detected and serviced by the
+processor before the faulting instructions.  Traps are serviced after the
+instruction causing the trap. User defined interrupts go into this
+category and can be said to be traps, this includes the MS-DOS INT 21h
+software interrupt, for example.  Aborts are used only to signal severe
+system problems, when operation is no longer possible.
+
+See the below table for information on interrupt assignments in the Intel
+386, 486 SX/DX processors, and the Pentium processor. Type specifies the
+type of exception.
+
+_____________________________________________________________________
+Vector number   Description
+_____________________________________________________________________
+     0          Divide Error (Division by zero)
+     1          Debug Interrupt (Single step)
+     2          NMI Interrupt
+     3          Breakpoint
+     4          Interrupt on overflow
+     5          BOUND range exceeded
+     6          Invalid Opcode
+     7          Device not available (1)
+     8          Double fault
+     9          Not used in DX models and Pentium (2)
+    10          Invalid TSS
+    11          Segment not present
+    12          Stack exception
+    13          General protection fault
+    14          Page fault
+    15          Reserved
+    16          Floating point exception (3)
+    17          Alignment check (4)
+    18 - 31     Reserved on 3/486, See (5) for Pentium
+    32 - 255    Maskable, user defined interrupts
+_____________________________________________________________________
+(1) Exception 7 is used to signal that a floating point processor is not
+    present in the SX model. Exception 7 is used for programs and OSes that
+    have floating point emulation. Also the DX chips can be set to trap
+    floating point instructions by setting bit 2 of CR0.
+(2) Exception 9 is Reserved in the DX models and the Pentium, and is only
+    used in the 3/486 SX models to signal Coprocessor segment overrun. This
+    will cause an Abort type exception on the SX.
+(3) In the SX models this exception is called 'Coprocessor error'.
+(4) Alignment check is only defined in 486 and Pentiums. Reserved on any
+    other Intel processor.
+(5) For Pentiums Exception 18 is used to signal what is called an 'Machine
+    check exception'.
+
+The other interrupts, (32-255) are user defined. They differ in use from
+one OS to another.
+
+For a list of MS-DOS interrupts, see 'Obtaining HELPPC' (Subject #6) or
+Ralf Browns Interrupt List (Subject #11)
+
+Contributor: Patrik Ohman, patrik@astrakan.hgs.se
+Last changed: 10 Jan 95
+
+------------------------------
+
+Subject: 18. ASM Books Available
+
+The format is Author, Title, Level, and short description
+
+Ray Duncan
+Advanced MSDOS Programming
+Advanced
+Both a tutorial and a reference for MS-DOS capabilities and services,
+including reference sections on DOS function calls, IBM ROM BIOS, mouse
+driver and LAM. expanded memory. Excellent quality example programs
+throughout.
+
+By Peter Norton and John Socha
+Peter Norton's Assembly Language Book For the IBM PC
+Novice
+Good for an introduction to Assembly Language.  Plenty of programming
+examples.  Older versions of this book used to have a sample disk.  As you
+read the book, you slowly add on code to what eventually is Disk Patch -
+the book's version of Norton's commercially available Disk Edit program.  
+Great for complete beginners seeking novice rank.
+
+Maljugin, Izrailevich, Sopin, and Lavin
+The Revolutionary Guide to Assembly Language
+Novice
+This is one of the best introductory texts I've ever seen  There are so
+many authors that the topic is broken down into specific categories:
+video, BIOS, keyboard, etc..  Most intro texts force you to follow a set
+plan of learning assembly, but in this book you can turn to a specific
+topic almost immediately.  It's so-so as a reference book, however - a few
+tables of interrupts in the back. 
+
+Maljugin, Izrailevich, Sopin, and Lavin
+Master Class Assembly Language
+Advanced
+Review: This is the sequel to The Revolutionary Guide To Assembly Language. 
+Equally thick and massive, it covers many of the topics we see today -
+hardware interfaces, sound cards, data compression, even protected mode
+programming.  Brief review of assembly at the beginning, but moves very
+quickly.  Read this if you're intermediate seeking expert status. 
+Definitely not recommended for beginners.  If you are a beginner and you
+think you like the topics covered in this book, buy the one before it too. 
+Also comes with a disk of source code examples from the book (MASM highly
+recommended, not TASM).
+
+Alan Wyatt
+Advanced Assembly Language
+Advanced
+This book's best feature is its comprehensive guide on device drivers. 
+There are good chapters on controlling the mouse, file access, using
+memory, etc.
+
+Ralf Brown and Jim Kyle
+PC Interrupts - 2nd Edition
+Intermediate/Advanced
+The definitive book on interrupt programming for PCs and compatibles. 
+Based on the freeware Interrupt List by Ralf Brown
+
+For an extensive book list without descriptions, point your web browser to
+    http://alaska.net/~rrose/assembly.htm
+Sites with more books but no reviews are:
+        http://www.fys.ruu.nl/~faber/Amain.html
+        http://www.cet.com/~jvahn/80xbook.html (short descriptions)
+
+Contributors:  Antonio Alonso, Solomon Chang, Paul Gilbert, Dave Navarro,
+Mike Schmit and James Vahn.
+Last changed: 19 Dec 95
+
+------------------------------
+
+Subject: 19. ASM Code Available On The Internet
+
+19.1  SIMTEL SITES
+
+The SimTel has a directory devoted to assembly language. 
+
+    ftp://ftp.simtel.net/pub/simtelnet/msdos/asmutl
+or
+    http://www.simtel.net/simtel.net/msdos/asmutl
+
+19.2  80xxx Snippets
+
+Fidonet's echo for 80xxx programming has a collection of code that is
+maintained by Jim Vahn, jvahn@short.circuit.com.  The collection is
+available via mail based archive server or Fidonet file requests to
+1:346/15.
+
+To get a list of files available via e-mail, send an empty message to
+files@circuit.com.  The server will return a list of all files available
+and instruction on how to retrieve them.
+
+The assembly language snippets dated before Mar 93 are available in one zip
+file at the above SimTel sites under the filename 80XXX393.ZIP.
+
+The Snippets are now on the web.  In addition to downloading the snippets
+there is an assembly language related book list.  The URL is:
+
+    http://www.cet.com/~jvahn
+
+19.3  X2FTP.OULU.FI
+
+This ftp site, x2ftp.oulu.fi, has some asm source code not available at the
+SIMTEL sites.  The following describes some directories and the type of
+information that is available in them.
+
+/pub/msdos/programming/pmode - protected mode utilities and some source
+    code.
+/pub/msdos/programming/source - some asm code
+/pub/msdos/programming/prgsrc - some asm code
+
+19.4  FTP.X86.ORG
+
+This ftp site contains much of the code and information available from
+Robert Collins' web site.
+
+    ftp://ftp.x86.org/x86
+
+19.5 OMEN.COM
+
+Omen has assembly language source available from its web site.  The address
+is:
+    http://www.omen.com.au/Files/hdisk/asm.html
+
+Much of the code is archived in the .arj format.  You will need the
+appropriate expansion program.  One is available:
+
+   ftp://ftp.simtel.net/pub/simtelnet/msdos/acers/arj242b.exe
+
+19.6 JUMBO
+
+JUMBO is the Official Web Shareware Site.  It has a directory devoted to
+assembly language source code, libraries and utilities:
+
+    http://www.jumbo.com/prog/dos/asmutil
+
+19.7 THEREEF
+
+I just found another site that carries this asm source code.  This site has
+source code and information that I have not found elsewhere.
+
+   http://www.iag.net/~philb/thereef/ftp_asm.htm
+
+19.8 PC GAMES PROGRAMMER ENCYCLOPEDIA
+
+This encyclopedia is a collection of files related to game programming. 
+Many of these files contain programming examples.  Topics included are ASM
+tutorial, VGA and SVGA programming information, graphic algorithms, graphic
+file formats, soundcard and other PC hardware programming information. 
+This encyclopedia is available online at the PC-GPE web page:
+    
+    http://www.qzx.com/pc-gpe/
+
+19.9 PROGRAMMERS DISTRIBUTION NETWORK ASSEMBLY LANGUAGE FILES
+
+These files appear to be a mirror of the assembly-related files distributed
+on FidoNet by PDN.  There is one there that is a must if you want to write
+asm winNT and win95 applications.  It is walk32_1.zip.  Walk32 is a
+complete app and dll development kit with linker and includes files,
+libraries, tools, and lots of samples.  MASM 6.x required.
+
+    http://www.thepoint.net/~jkracht/pdnasm.htm
+
+19.10  TENIE REMMEL'S ASSEMBLY SNIPPETS CODE COLLECTION
+
+The Assembly Snippets is a large collection of assembly language code
+and other information.   Many files from the original 80XXX snippets,
+the ASM0-Z collection, and the Aquila site are included.  All code is
+99% guaranteed to compile under TASM.   This new release contains the
+following items, among others:
+
+  An object file disassembler     A 5687 byte Tetris game
+  Several Conway LIFE programs    Assembly & Disassembly tables
+  A demonstration of FakeMode     Several powerful editors
+  A complete DOS extender         A ModeX graphics library
+
+You can download these rather large files from SimTel:
+
+ftp://ftp.simtel.net/pub/simtelnet/msdos/asmutl/asnip30a.zip  1.13 Megs
+ftp://ftp.simtel.net/pub/simtelnet/msdos/asmutl/asnip30b.zip  1.20 Megs
+ftp://ftp.simtel.net/pub/simtelnet/msdos/asmutl/asnip30c.zip  0.75 Megs
+
+19.11 PROGRAMMING - ASSEMBLY/BASM/TASM
+
+This site consist of 59 pages of assembly language related files.  Many
+files I have not seen any where else.  The only problem is that there are
+only five to eight files described per page.  The URL to the first page is:
+
+    http://www.aquila.com/menu2/area02/dr1-1.htm
+
+Contributor: Raymond Moon, raymoon@moonware.dgsys.com
+Last changed: 18 Mar 97
+
+------------------------------
+
+Subject: 20. How To Commit A File
+
+The easiest solution is to open or create the file to be committed using
+Int 21h function 6ch, extended open/create.  The BX register contains the
+desired Open Mode.  One option that can be or'ed into this register is what
+Microsoft calls, OPEN_FLAGS_COMMIT, that has the value of 4000h.  Using
+this option caused DOS to commit the file after each write.  This function
+has been available (documented) since DOS 4.0.
+
+If you do not want to commit the file at each write but only when certain
+conditions are met, use Int 21h function 68h, commit file.  The functions
+has been available (documented) since DOS 3.3.
+
+If you need to support versions of DOS before 3.3, the following technique
+will flush the all stored data without closing and opening the file.  It is
+the opening of the file that is time consuming.
+    1.  Use 21h function 45h to create a duplicate file handle to the file
+        to be flushed.
+    2.  Close that duplicate file handle.
+
+This technique will work all the way back to DOS 2.0.
+
+Contributor: Raymond Moon, raymoon@moonware.dgsys.com
+Last changed: 30 Jan 95
+
+------------------------------
+
+Subject: 21. Using Extended Memory Manager
+
+21.1  HOW TO USE XMS
+
+XMS usage - short recipe:
+1.  Verify have at least 286 (pushf; pop AX; test AX,AX; js error).
+2.  Verify vector 2Fh set (DOS 3+ sets it during boot).
+3.  AX=4300h, int 2Fh, verify AL=80h (means XMS installed).
+4.  AX=4310h, int 2Fh, save ES:BX as dword XmsDriverAddr.
+5.  AH=8, call [XmsDriverAddr] - returns ax=largest free XMS memory block
+    size in kB (0 if error).
+6.  AH=9, DX=required size in kB, call [XmsDriverAddr] - allocates memory
+    (returns handle in DX - save it).
+7.  AH=0Bh, DS:SI->structure {
+        dword size (in bytes and must be even),
+        word source_handle,
+        dword source_offset,
+        word destination_handle,
+        dword destination_offset }
+    (if any handle is 0, the "offset" is Real Mode segment:offset)
+8.  AH=0Fh, BX=new size in kB, DX=handle, call [XmsDriverAddr] - changes
+    memory block size (without losing previous data).
+9.  AH=0Ah, DX=handle, call [XmsDriverAddr] - free handle and memory.
+
+Initially, should process #1-#6, then can use #7 to put data in/get
+data from XMS memory, or #8 to change XMS memory block size.  On exit
+use #9 to free allocated memory and handle.
+
+Hint: handle cannot be 0, since zero is used as "no handle allocated"
+value.
+
+Errors for XMS calls (except AH=7 - Query A20) are signaled by AX=0. Error
+code returned in BL, few codes can check for are:
+    80h - not implemented,
+    81h - VDISK detected (and it leaves no memory for XMS),
+    82h - A20 error (e.g. fail to enable address line A20),
+    A0h - all allocated,
+    A1h - all handles used,
+    A2h - invalid handle,
+    A3h/A4h - bad source handle/offset,
+    A5h/A6h - bad destination handle/offset,
+    A7h - bad length,
+    A8h - overlap (of source and destination areas on copy),
+    A9h - parity error (hardware error in memory),
+    ABh - block is locked,
+    00h - OK
+
+For more info read INT 2Fh, AH=43h in Ralf Brown interrupt list.
+
+21.2  WHAT IS THE 'LINEAR BLOCK ADDRESS' RETURNED BY LOCK MEM BLOCK?
+
+When you lock mem block, XMS driver arranges memory governed by it in a way
+the locked block forms one contiguous area in linear address space and
+returns you starting address of the memory.  Linear address is base address
+of segment + offset in segment, in Real Mode it is segment*16+offset, in
+Protected Mode the base address is kept in LDT or GDT; note offset can be
+32-bit on 386+.  If paging isn't enabled, linear address = physical
+address.  You don't need the linear address unless you use 32-bit offsets
+in Real Mode or you use Protected Mode (see previous answer for explanation
+of how you can access XMS memory).
+
+Contributor: Jerzy Tarasiuk, JT@zfja-gate.fuw.edu.pl
+Last Changed: 30 Jan 95
+
+------------------------------
+
+Subject: 22. EXE2BIN Replacement
+
+A utility, EXE2BIN, used to be included in DOS.  This utility was needed to
+convert the output of the linker from .EXE to .COM format because the
+linkers could not do this directly.  As linkers became more capable, the
+need for this utility vanished, so EXE2BIN was dropped from DOS.  If you
+still are using an older assembler and linker, you now have been left out
+in the cold.  Well, not quite, as there are three shareware equivalent
+programs.
+
+22.1  EXECOM14.ZIP
+
+EXECOM was written by Chris Dunford in C.  The .zip file contains the
+executable, documentation and the .c source that Chris Dunford has released
+into the public domain.  The current version is 1.04 with a 2 Mar 88 date.
+
+22.2  BIN.ZIP
+
+This replacement version was written by Bob Tevithick.  It is based upon
+versions 1.00 of Chris Dunford's program.  The .zip file contains only the
+executable and documentation.  No source is included.
+
+22.3  X2B11.ZIP
+
+X2B is written in 100% assembly language by Henry Nettles.  Again it is
+based upon Chris Dunford's program.  The zip file contains the executable
+and .asm source.  The documentation is in the source code.
+
+22.4  AVAILABILITY
+
+All these .zip files are available at any SimTel Mirror site.  They are
+found:
+
+    ftp://ftp.simtel.net/pub/simtelnet/msdos/asmutl
+
+22.5 THE REAL THING, EXE2BIN.EXE
+
+If you need the real thing, EXE2BIN.EXE is available on the DOS
+Supplemental Diskettes.  This disks can be downloaded from Microsoft.
+
+    ftp://ftp.microsoft.com/peropsys/msdos/public/supplmnt
+
+    DOS62SP.EXE     for MS DOS 6.2
+    DOS6SUPP.EXE    for MS DOS 6.0
+    SUP621.EXE      for MS DOS 6.21
+    SUP622.EXE      for MS DOS 6.22
+
+Contributor: Raymond Moon, raymoon@moonware.dgsys.com
+Last changed: 8 Jan 96
+
+------------------------------
+
+Subject: 23. ASM Tutorials Available on the Internet
+
+There are several assembly language tutorials available on the internet.
+
+23.1  FROM SIMTEL MIRRORS
+
+From the SimTel Mirrors, e.g., oak.oakland.edu, there are two tutorials
+available in the simtel/msdos/asmutil directory.
+
+    asmtutor.zip
+
+    The tutorial is by Joshua Averbach.  It is old, as it is dated Jun
+1988.  It is designed for the 8088 processor.
+
+    primer2.zip
+
+    This tutorial is designed specifically for the cheap assembler (CHASM)
+also available in this directory.
+
+23.2  GAVIN ESTEY'S TUTORIAL
+
+    A new tutorial has been written by Gavin Estey.  He has provided his
+tutorial in ascii text and in HTML format.  They are available:
+
+HTML:
+    http://www.strangecreations.com/strange/library/assembly/tutor/asm1.htm
+Text:
+    http://www.strangecreations.com/strange/library/assembly/asmtut.txt
+
+23.3  VLA's ASSEMBLY LANGUAGE TUTORIAL
+
+This tutorial is available directly or as part of the PC Games
+Encyclopedia.  This file is available from:
+    http://www.mds.mdh.se/~dat94avi/asmvla.zip
+or as part of the PC Games Encyclopedia:        
+    ftp://teeri.oulu.fi/pub/msdos/programming/gpe/pcgpe10.zip
+or on-line at:
+    http://www.qzx.com/pc-gpe/asm.tutorials.html
+
+23.4  ASM Tutorial on University of Guadalajara Web Site
+
+The on-line tutorial descibed below also is available as an ascii text.
+    http://udqftp.cencar.mx/ingles/tutor/assem.zip
+
+There now is an ASCII version of this tutorial.  Its URL is:
+    http://udqftp.cencar.udg.mx/ingles/tutor/edition96/download.html
+
+23.5  RANDALL HYDE'S ART OF ASSEMBLY LANGUAGE
+
+    Randall Hyde has published on the Internet his textbook on machine
+organization and assemly language programming developed for his class.  It
+is called, "The Art of Assembly Language," and is available:
+
+   http://webster.ucr.edu/Page_asm/ArtOfAsm.html
+
+23.6  PATRICK STUDDARD'S ASSEMBLY CLASS NOTES
+
+Patrick Studdard has a very extensive library of supplementary class notes
+for assembly language.  These are available for all and not just those who
+are taking the class.  They are available:
+
+http://cage.cas.american.edu/~studdard/classes/fall1995/4028201/notes/index.html
+
+23.7  TORE NILSSON'S ASSEMBLY TUTORIAL PAGE
+
+VLA's Assembly and DMA programming tutorials, Asphyxia's VGA tutorials, and
+some graphics and sound programming information.
+
+    http://www.geocities.com/SiliconValley/2704/tutorial.html
+
+
+23.8  WEB SITES
+
+Assembly Language Tutorials
+    http://udgftp.cencar.udg.mx/ingles/tutor/Assembler.html
+        ASM Tutorial on University of Guadalajara Web Site
+    http://www.cit.ac.nz/smac/csware.htm
+        Version 2.6 of on-line 386 assembly languager course.  Self tests,
+            assignments, course notes, and software are included.
+    http://www.feldspar.com/~mbabcock/Programming/asmtut1.htm
+        Mike Babcock's ASM Tutorial
+    http://www.mds.mdh.se/~dat94avi/demoschool.htm
+        Tutorial emphasises video and gaming techniques and C and assembly
+            interface.
+    http://webster.ucr.edu/Page_asm/ArtOfAsm.html
+        Randall Hyde's Assembly Language Course Material - Art of Assembly
+            Language
+    http://www.qzx.com/pc-gpe/asm.tutorials.html
+        VLA's Assembly Language Tutorials
+    http://www.geocities.com/SiliconValley/2704/tutorial.html
+        VLA's Assembly and DMA programming tutorials, Asphyxia's VGA
+            tutorials, and some graphics and sound programming information.
+    http://www.strangecreations.com/strange/library/assembly/tutor/asm1.htm
+        Gavin's Guide to 80x86 Assembly
+     http://www.xs4all.nl/~smit/docs.htm#asm
+        Ferdi Smit's ASM Tutorial
+
+Contributor: Raymond Moon, raymoon@moonware.dgsys.com
+Last changed: 28 Feb 97
+
+------------------------------
+
+Subject: 24. Shareware Assemblers
+
+24.1  AVAILABILITY
+
+All assemblers, unless otherwise noted, listed here are available from
+SimTel in the SimTel/msdos/asmutil directory.  Specifically:
+
+  ftp://ftp.simtel.net/pub/simtelnet/msdos/asmutl
+
+24.2  A86
+
+This assembler is a very capable assembler for 80286 and earlier
+processors.  Registration will get you a version capable of handling 80386
+processor.  For more details, see the A86 section of this FAQ.
+
+24.3  CHASM, CHASM4.ZIP
+
+This assembler was the first shareware assembler available.  CHASM was
+written Mr. David Whitman.  The current version available is version 4 and
+dated in 1983.  This version supports only 8088 processor, and the output
+only is:
+    .COM file (.EXE is not supported)
+    BLOADable - format for interpreted BASIC to load and execute
+    External procedure for TurboPascal - TurboPascal version not given
+
+The version available on the internet is annoyware and crippleware.  For
+$40 registration fee, you will get the complete version without the
+annoying banner page.  This version supports macros, conditional assembly,
+include files, operand expressions and structures.
+
+I do not recommend this assembler because of it limited capability and it
+is very out of date.
+
+24.4  THE ARROWSOFT ASSEMBLER, VALARROW.ZIP
+
+This assembler is the public domain version of the Professional Arrowsoft
+Assembler by Arrowsoft Systems, Inc.  The version is 1.00d and is dated in
+1986.  This assembler is a MASM 3.0 compatible assembler and supports up to
+80286 processor.  Compared to the Professional version, the public domain
+version has one major limitation.  The file input size is limited to 64K
+bytes.
+
+The file also includes a public domain linker, full screen editor and an
+EXE2BIN clone program.
+
+The above version 1.00d is available from SimTel.  Version 2.00c which has
+only the assembler and documentation is available:
+    http://sunsite.unc.edu/pub/micro/pc-stuff/freedos/microc/arrowasm.zip
+and the linker separately:
+    http://sunsite.unc.edu/pub/micro/pc-stuff/freedos/microc/vallink.zip
+These are used in the freeDOS project.
+
+24.5  WOLFWARE ASSEMBLER, WASM223.ZIP
+
+This assembler was written by Mr. Eric Tauck.  The latest version is 2.23
+and dates from 1991.  This assembler supports up to the 8028 processor.  It 
+will assemble directly into a .COM file or .obj file.  It supports a
+simplified syntax and program structure so programs written for this
+assembler may not be compatible with other assemblers.  Several source
+files for programs are included with the .zip file.
+
+It is available from the author at:
+
+    http://ourworld.compuserve.com/homepages/warp/
+
+24.6 MAGIC ASSEMBLER, ASM110.ZIP
+
+This assembler is very new.  The version is 1.10 and dates from March
+1995.  This assembler was written by Mr. Bert Greevenbosch.  The output is
+either a .COM file or a boot sector program.  The assembly commands are
+standard except for the jump and call commands.  Again, the source code
+will not be compatible with other assemblers.  Beware of version 1.04. 
+That version had a bug that when executed without the print command, the
+assembler terminated with a runtime error.  This is corrected in subsequent
+versions.
+
+Changes made in version 1.10 are:
+    CALLF [] added, CALL [] corrected   Boot Indicator (55aa) added
+    [BX][SI] now recognized as [BX+SI]  Calculations (*, /, -, +) added
+    XCHG added                          Assembling Report added
+    EQU bug corrected                   IN/OUT command improved
+
+24.7 GEMA, GEMA.ZIP
+
+This assembler revision is 2.6a with a date, 7 Jan 96.  It is different
+from all other x86 assemblers I have seen.  This assembler is based upon
+Motorola's 68k mnemonics and logical structure.  All instuctions, Pentium
+Pro and known undocumented are supported.  GEMA was designed especially for
+32-bit porcessing.  The assembler will take only one source code file and
+will output an .COM or .EXE file.  No linker is required.  DESA.EXE, a beta
+GEMA disassembler is available in the GEMA package. ASM2GEMA.EXE, a TASM to
+GEMA translator is no longer availabLe as part of the GEMA package.  An
+interactive real and protected-mode debugger is in progress.
+
+This assembler is available from:
+    ftp://ftp.nether.net/pub/gema/gema.zip  (symbolic link to latest
+                                             version)
+
+24.8 NASM 0.90, NASM.ZIP
+
+The birth of this assembler started out of a thread that started on
+comp.lang.asm.x86.  When you download this assembler, you get the source
+code in ANSI C.  The web page devoted to this assembler is:
+
+    http://www.dcs.warwick.ac.uk/~jules/nasm1.html
+    http://www.dcs.warwick.ac.uk/~jules/nasm.zip
+
+NASM is an 80x86 assembler designed for portability and modularity.  It
+supports a range of object file formats including Linux a.out and ELF,
+COFF, Microsoft 16-bit .obj and Win32. It will also output plain binary
+files. Its syntax is designed to be simple and easy to understand, similar
+to Intel's but less complex. It supports Pentium and P6 opcodes. It
+includes a disassembler as well.
+
+The assembler also is available from:
+
+    ftp://ftp.simtel.net/pub/simtelnet/msdos/asmutl/nasmb090.zip
+    ftp://ftp.simtel.net/pub/simtelnet/msdos/asmutl/nasms090.zip
+
+(the latter version includes sources; the former is binaries-only).
+
+It has been reported that nasm090.zip or nasm090s.zip from Simtel
+mirrors contain a disabling bug.
+
+24.9 GAS, GNU Assembler
+
+This assembler with many object-file utilities will run on 386 systems
+running the following operating systems: AIX 386BSD, NetBSD, BSDI/386,
+Linux, SCO, Unixware, DOS/DJGPP.  The below file is a gzipped tar file. 
+You will need gzip and tar programs to uncompress and extract the files. 
+The assembler and utilities are part of the GNU binutils file.  This file,
+a 3.86 Mbyte file, is available from:
+
+    ftp://prep.ai.mit.edu/pub/gnu/binutils-2.6.tar.gz
+
+24.10 REAL TOOLS 1.0 (BETA), RTOOLS.ZIP
+
+This assembler is dated in Dec 93 and is a beta test.  The nice thing about
+this assembler is that it comes with its own DOS-windowing IDE.  This
+assembler was written by International Systems development.  The
+instruction set supported is 486 including protected mode instructions, but
+some holes do exist.  This assembler has a unique way of supporting macros. 
+32-bit supported.  On line help and debugger are available with registered
+product.
+
+24.11 GENERAL ASSEMBLER, GASM01G.ZIP
+
+This is a new assembler written by Jim Gage.  This version outputs .COM
+files and can be used to write device drivers.  Another version supporting
+up to the 486 instruction set and .obj output is in the works.  This
+assembler is available:
+
+    http://www.engr.uark.edu/~jrg/gasm/gasm01f.zip  
+
+Contributor:  Raymond Moon, raymoon@moonware.dgsys.com
+Last changed: 19 Oct 96
+
+------------------------------
+
+Subject: 25. Undocumented OpCodes
+
+25.1  WHAT AND WHERE
+
+Robert Collins has make available an excellent article on Intel
+Undocumented OpCodes.  Just set your web browser to:
+
+    http://www.x86.org/secrets/OpCodes.html
+
+25.2  EXTENDED FORMS OF AAM AND AAD INSTRUCTIONS
+
+Mr. Collins describes extended forms these two instructions.  AAM is ASCII
+Adjust after Multiplication, and ADD is ASCII Adjust before Division. 
+These instructions are known as quick ways to divide and multiply by ten,
+as these instructions normally assemble with 10 as the default operand. 
+Using macros provided, any value from 0h to 0ffh can be substituted. 
+These instructions are available on all x86 Intel processors.
+
+25.3  SALC - SET AL ON CARRY
+
+Mr. Collins describes this instruction a C programmers dream instruction
+for interfacing to assembly language procedures.  This instruction will
+set the AL register to 00h or 0ffh depending on whether the carry flag is
+clear or set, respectively.  This instruction is available on all x86
+Intel processors.
+
+25.4  ICE RELATED OPCODES
+
+Mr. Collins describes several instructions that appear whose existence
+makes debugging run-time code easier on the ICE debugger.  There are:
+    ICEBP   - ICE Break Point
+    UMOV    - User Move Data
+    LOADALL - Loads the Entire CPU State
+    
+Contributor:  Raymond Moon, raymoon@moonware.dgsys.com
+Last changed: 4 Nov 95
+

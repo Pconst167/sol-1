@@ -1,0 +1,220 @@
+
+
+                  Infection of Portable Executables
+                                by
+                      Qark and Quantum [VLAD]
+
+
+  The portable executable format is used by Win32, Windows NT and Win95,
+  which makes it very popular and likely to become the dominant form of
+  executable sometime in the future.  The NE header used by Windows 3.11
+  is completely different to the PE header and the two should not be
+  confused.
+
+  None of the techniques in this document have been tested on Windows NT
+  because no virus writer (we know) has access to it.
+   
+  At the bottom of this document is a copy of the PE format, which is not
+  easy to follow but is the only reference publicly available.  Turbo
+  Debugger 32 (TD32) is the debugger used during the research of this
+  text, but SoftIce'95 also does the job.
+
+  Calling Windows 95 API
+  ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+
+  A legitimate application calls win95 api by the use of an import
+  table.  The name of every API that the application wants to call is
+  put in the import table.  When the application is loaded, the data
+  needed to call the API is filled into the import table.  As was
+  explained in the win95 introduction (go read it), we cannot modify
+  this table due to Microsoft's foresight.
+
+  The simple solution to this problem is to call the kernel directly.
+  We must completely bypass the Win95 calling stucture and go straight
+  for the dll entrypoint.
+
+  To get the handle of a dll/exe (called a module) we can use the API
+  call GetModuleHandle and there are other functions to get the
+  entrypoint of a module - including a function to get the address of an
+  API, GetProcAddress.
+
+  But this raises a chicken and egg question.  How do I call an API so I
+  can call API's, if I can't call API's ?  The solution is to call api
+  that we know are in memory - API that are in KERNEL32.DLL - by calling
+  the address that they are always located at.
+
+  Some Code
+  ÄÄÄÄÄÄÄÄÄ
+
+  A call to an API in a legitimate application looks like:
+
+        call APIFUNCTIONNAME
+eg.     call CreateFileA
+
+  This call gets assembled to:
+
+        db 9ah          ; call
+        dd ????         ; offset into jump table
+
+  The code at the jump table looks like:
+
+        jmp far [offset into import table]
+
+  The offset into the import table is filled with the address of the
+  function dispatcher for that API function.  This address is obtainable
+  with the GetProcAddress API.  The function dispatcher looks like:
+
+        push function value
+        call Module Entrypoint
+
+  There are API functions to get the entrypoint for any named module but
+  there is no system available to get the value of the function.  If we
+  are calling KERNEL32.DLL functions (of which are all the functions
+  needed to infect executables) then we need look no further than this
+  call.  We simply push the function value and call the module
+  entrypoint.
+
+  Snags
+  ÄÄÄÄÄ
+
+  In the final stages of Bizatch we beta tested it on many systems.
+  After a long run of testing we found that the KERNEL32 module was
+  static in memory - exactly as we had predicted - but it was at a
+  different location from the "June Test Release" to the "Full August
+  Release" so we needed to test for this.  What's more, one function
+  (the function used to get the current date/time) had a different
+  function number on the June release than it did on the August release.
+  To compensate I added code that checks to see if the kernel is at one
+  of the 2 possible locations, if the kernel isn't found then the virus
+  doesn't execute and control is returned to the host.
+
+  Addresses and Function Numbers
+  ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+
+  For the June Test Release the kernel is found at 0BFF93B95h
+  and for the August Release the kernel is found at 0BFF93C1Dh
+
+  Function              June            August
+  ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+  GetCurrentDir       BFF77744         BFF77744
+  SetCurrentDir       BFF7771D         BFF7771D
+  GetTime             BFF9D0B6         BFF9D14E
+  MessageBox          BFF638D9         BFF638D9
+  FindFile            BFF77893         BFF77893
+  FindNext            BFF778CB         BFF778CB
+  CreateFile          BFF77817         BFF77817
+  SetFilePointer      BFF76FA0         BFF76FA0
+  ReadFile            BFF75806         BFF75806
+  WriteFile           BFF7580D         BFF7580D
+  CloseFile           BFF7BC72         BFF7BC72
+
+
+  Using a debugger like Turbo Debugger 32bit found in Tasm 4.0, other
+  function values can be found.
+
+  Calling Conventions
+  ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+
+  Windows 95 was written in C++ and Assembler, mainly C++.  And although
+  C calling conventions are just as easy to implement, Microsoft didn't
+  use them.  All API under Win95 are called using the Pascal Calling
+  Convention.  For example, an API as listed in Visual C++ help files:
+
+        FARPROC GetProcAddress(
+                HMODULE  hModule,   // handle to DLL module
+                        LPCSTR  lpszProc        // name of function
+        );
+
+  At first it would be thought that all you would need to do is push the
+  handle followed by a pointer to the name of the function and call the
+  API - but no.  Due to Pascal Calling Convention, the parameters need
+  to be pushed in reverse order:
+
+          push offset lpszProc
+          push dword ptr [hModule]
+          call GetProcAddress
+
+  Using a debugger like Turbo Debugger 32bit we can trace the call (one
+  step) and follow it to the kernel call as stated above.  This will
+  allow us to get the function number and we can do away with the need
+  for an entry in the import table.
+
+
+  Infection of the PE Format
+  ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+
+  Finding the beginning of the actual PE header is the same as for NE
+  files, by checking the DOS relocations for 40h or more, and seeking to
+  the dword pointed to by 3ch.  If the header begins with a 'NE' it is a
+  Windows 3.11 executable and a 'PE' indicates a Win32/WinNT/Win95 exe.
+
+  Within the PE header is 'the object table', which is the most important
+  feature of the format with regards to virus programming.  To append code
+  to the host and redirect initial execution to the virus it is necessary to
+  add another entry to the 'object table'.  Luckily, Microsoft is obsessed
+  with rounding everything off to a 32bit boundary, so there will be room
+  for an extra entry in the empty space most of the time, which means it
+  isn't necessary to shift any of the tables around.
+
+  
+  A basic overview of the PE infection:
+
+        Locate the offset into the file of the PE header
+        Read a sufficient amount of the PE header to calculate the full size
+        Read in the whole PE header and object table
+        Add a new object to the object table
+        Point the "Entry Point RVA" to the new object
+        Append virus to the executable at the calculated physical offset
+        Write the PE header back to the file
+
+
+  To find the object table:
+   The 'Header Size' variable (not to be confused with the 'NT headersize')
+   is the size of the DOS header, PE header and object table, combined.
+   To read in the object table, read in from the start of the file for
+   headersize bytes.
+
+   The object table immediately follows the NT Header. The 'NTheadersize'
+   value, indicates how many bytes follow the 'flags' field.  So to work
+   out the object table offset, get the NTheaderSize and add the offset
+   of the flags field (24).
+
+  Adding an object:
+   Get the 'number of objects' and multiply it by 5*8 (the size of an object
+   table entry).  This will produce the offset of the space within which
+   the new virus object table entry can be placed.
+   The data for the virus' object table entry needs to be calculated using
+   information in the previous (host) entry.
+
+   RVA             = ((prev RVA + prev Virtual Size)/OBJ Alignment+1)
+                                                               *OBJ Alignment
+   Virtual Size    = ((size of virus+buffer any space)/OBJ Alignment+1)
+                                                               *OBJ Alignment
+   Physical Size   = (size of virus/File Alignment+1)*File Alignment
+   Physical Offset = prev Physical Offset + prev Physical Size
+   Object Flags    = db 40h,0,0,c0h
+   Entrypoint RVA  = RVA
+   
+   Increase the 'number of objects' field by one.
+
+   Write the virus code to the 'physical offset' that was calculated, for
+   'physical size' bytes.
+
+
+  Notes
+  ÄÄÄÄÄ
+
+  Microsoft no longer includes the PE header information in their developers
+  CDROMs.  It is thought that this might be to make the creation of
+  viruses for Win95 less likely.  The information contained in the next
+  article was obtained from a Beta of the Win32 SDK CDROM.
+
+
+  Tools
+  ÄÄÄÄÄ
+
+  There are many good books available that supply low level Windows 95
+  information.  "Unauthorized Windows 95", although not a particularly
+  useful book (it speaks more of DOS/Windows interaction), supplies
+  utilities on disk and on their WWW site that are far superior to the
+  ones that we wrote to research Win95 infection.

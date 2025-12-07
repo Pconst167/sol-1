@@ -1,0 +1,522 @@
+		      WGT Graphics Tutorial #2
+		   Topic: Gouraud Shaded Polygons
+			  By Chris Egerter
+			  October 13, 1994
+             Contact me at: chris.egerter@homebase.com
+
+Introduction
+------------
+   This series of tutorials describes a method of drawing filled polygons
+using 3 rendering techniques: Solid, Gouraud shading, and texture mapping.
+
+The code in this tutorial was written in Turbo C++ but can be ported to
+other graphics libraries and operating systems.  I did not use the
+WGT functions in this one, so the wgtgfx.c file contains a few routines
+which are needed for the demos.  I have decided to explain the method
+used for these routines since I had to discover them on my own, and
+think you can learn from the code.
+
+
+1.0 - Shading Along a Line
+--------------------------
+The idea behind shading is we want different shades of color along a surface.
+The simplest application of shading is along a horizontal line.  Imagine
+the line is black at the left end, and white at the right end.  A pixel in
+the middle will be a shade of grey.   As the line is drawn from left to
+right, the color value starts at black and increases by a constant amount
+towards white.  This constant value is determined by the number of colors
+between the endpoints and the length of the line.  Specifically, the
+constant is equal to the number of colors divided by the number of pixels
+along the line.  If the number of colors equals the number of pixels,
+the constant is 1, which makes perfect sense.  Since we cannot deal with
+fractions of a color in computer graphics, we will only deal with the integer
+portion of the color value.
+
+2.0 - Pseudo-code
+-----------------
+Our basic shaded line routine looks like this:
+  Calculate the step value
+  Make a color variable equal to the left endpoint color.
+  For x = x1 to x2
+    Put pixel on screen
+    Add step value to the color
+  End for
+
+3.0 - Assembly Language Benefits
+--------------------------------
+When dealing with 256 colors, you can fit the color value in one byte.
+We will use fixed point math to store the step value, that is, 1 byte to
+store the whole number, and 1 byte to store the fractional portion.
+By using 1 byte for the fraction, we can store the whole and fractional
+parts in one integer.  This makes it easy in assembly language since we
+can put these values in a register, say AX, and access each portion
+individually with AH and AL.  In C language you would need to shift the
+value right 8 times in order to get the whole value.  This works out
+perfectly since we can add a step value to AX, and AH will always contain
+the color we want to put on the screen.  You don't have to worry about
+the fractional portion carrying over 256 since it will already be added
+to the whole portion.
+
+4.0 - Calculating the step value in 8.8 fixed point
+---------------------------------------------------
+8.8 means we are using 8 bits for the number before the decimal, and
+8 bits for the fraction.   You have to think of the fraction in hexadecimal
+since it will carry at 256 instead of the usual decimal system most people
+relate to (base 10).
+
+To make a step value with the whole portion in the upper byte, first we
+need to shift the colors to the left by 8 bits.  This will put the
+color value in the high byte and leave the fraction as 0.  Now to calculate
+the step value, divide it by the length.
+
+eg:  step = (numcolors << 8) / length;
+
+
+5.0 - Code segment 1
+--------------------
+We can write a more specific routine now:
+
+void shadedline (int x1, int firstcolor, int x2, int lastcolor, int y)
+{
+int length;
+int numcolors;
+int colorvalue;
+int step;
+int x;
+
+ length = x2 - x1 + 1;
+ if (length > 0)
+ {
+  numcolors = lastcolor - firstcolor + 1;
+
+  colorvalue = firstcolor << 8;
+  step = ((long)numcolors << 8) / (long)length;
+  for (x = x1; x <= x2; x++)
+    {
+     drawpixel (x, y, colorvalue >> 8);
+     colorvalue += step;
+    }
+ }
+}
+
+
+x1 is the left coordinate of the line, with firstcolor being the color
+of this point.
+
+x2 is the right coordinate of the line, with lastcolor being the color
+of this point.
+
+y is the y coordinate of the horizontal line (you only need one).
+
+drawpixel is a simple function which sets a single pixel to a color.
+It is defined as:
+
+void drawpixel (int x, int y, unsigned char col)
+{
+ abuf [y * 320 + x] = col;
+}
+
+The above code is demonstrated in gshade1.c.
+
+
+
+6.0 - Optimization Number 1
+---------------------------
+Calling drawpixel for each pixel is not very efficient.  We know the
+pixels are one after the other, so it is useless to multiply the y
+coordinate by 320 every time when we can just move over one pixel.
+
+The following code shows how the drawpixel code has been simplified and
+put directly into the shadedline routine.
+
+void shadedline (int x1, int firstcolor, int x2, int lastcolor, int y)
+{
+int length;
+int numcolors;
+int colorvalue;
+int step;
+int x;
+unsigned char far * dest;   /* Ptr to the screen */
+
+ length = x2 - x1 + 1;
+ if (length > 0)
+ {
+  numcolors = lastcolor - firstcolor + 1;
+
+  colorvalue = firstcolor << 8;
+  step = ((long)numcolors << 8) / (long)length;
+
+  dest = abuf + y * 320 + x1;
+  /* Make a pointer to the first pixel */
+
+  for (x = x1; x <= x2; x++)
+    {
+     *dest++ = colorvalue >> 8;
+     /* Draw the pixel and move to the next location in memory */
+
+     colorvalue += step;
+    }
+ }
+}
+
+The above code is demonstrated in gshade2.c.
+
+
+7.0 - Optimization Number 2 (ASM)
+---------------------------------
+The other bottleneck in the routine is the colorvalue being shifted
+right by 8 for every pixel.  By using the assembly language registers
+mentioned earlier, we can take the high byte of colorvalue without
+shifting.
+
+The code below shows how inline assembly is used to speed up the
+routine:
+
+void shadedline (int x1, int firstcolor, int x2, int lastcolor, int y)
+{
+int length;
+int numcolors;
+int colorvalue;
+int step;
+int x;
+unsigned char far * dest;   /* Ptr to the screen */
+
+ length = x2 - x1 + 1;
+ if (length > 0)
+ {
+  numcolors = lastcolor - firstcolor + 1;
+
+  colorvalue = firstcolor << 8;
+  step = ((long)numcolors << 8) / (long)length;
+
+  dest = abuf + y * 320 + x1;
+  /* Make a pointer to the first pixel */
+
+  /* Begin assembly optimization */
+  if (length > 0)
+   {
+    asm {
+	mov cx, word ptr length		/* Set length */
+	les di, dest			/* Set destination ptr */
+	mov ax, word ptr colorvalue	/* Set color */
+       }
+    shadedlineloop:
+    ;
+    asm {
+	mov es:di, ah			/* Move color to screen */
+	add ax, word ptr step  		/* Add to color */
+	inc di				/* Move to next pixel */
+	dec cx				/* Decrease length */
+	jnz shadedlineloop		/* Repeat for all pixels */
+	}
+   }
+ }
+}
+
+The above code is demonstrated in gshade3.c.
+
+
+
+8.0 - Combining The Shaded Line and Polygon Routines
+----------------------------------------------------
+The next question you may be asking is, "How do I know what colors to
+use at the endpoints when drawing a polygon?".  In order to do this, we
+have to modify our polygon scan conversion routines I developed in
+tutorial #1.
+
+The point structure is defined as:
+
+typedef struct
+    {
+     int x,y;
+    } point;
+
+Since each vertex now has a color associated with it, we will add another
+variable to this structure, called col.  The point structure becomes the
+gpoint structure, which looks like this:
+
+typedef struct
+    {
+     int x,y;
+     unsigned char col;
+    } gpoint;
+
+When we converted the polygon into a list of x coordinates, we stored them
+into two arrays, startx and endx.  Now we also need to store the color
+at both of these coordinates.
+
+Let's make two new arrays:
+
+int startcol[200];
+int endcol[200];
+
+When the list is created, we will have 2 x coordinates and a color value
+associated with each of them.  This is all the information we need to call
+the shadedline routine.
+
+The polyline routine becomes the gpolyline routine, which also calculates
+the colors at the ends of each horizontal line.  To do this, we use fixed
+point math, similar to the way we calculated the colors along the length
+of the line.  This time we are adding the step value to the color
+for every pixel we move down, instead of across.
+
+
+void gpolyline (int x1, int y1, int col1, int x2, int y2, int col2)
+/* Calculates the coordinates of a line given two
+   vertices (x1,y1) with color col1, and (x2,y2) with color col2.
+
+   We will use fixed point math to speed things up.
+   The x coordinate is multiplied by 256 and for each row,
+   a constant m is added to x.  This is a simplified version
+   of a line algorithm because we only have to store 1 x coordinate
+   for every y coordinate.
+
+   The color value is increase by a step value based on the
+   number of colors between the vertices and the distance between the
+   y coordinates.
+
+*/
+{
+ int tmp,y;
+ long x,m;
+ long col, colstep; /* First color, and the step value */
+
+ if (y2 != y1)      /* This isn't a horizontal line */
+ {
+   if (y2 < y1)     /* Make sure y2 is greater than y1 */
+   {
+    tmp = y1;       /* Swap the y coordinate */
+    y1 = y2;
+    y2 = tmp;
+
+    tmp = x1;       /* Swap the corresponding x coordinates */
+    x1 = x2;
+    x2 = tmp;
+
+    tmp = col1;     /* Swap the corresponding color values */
+    col1 = col2;
+    col2 = tmp;
+   }
+
+ x = (long)x1<<8;   /* Multiply be 256 */
+
+ m = ((long)(x2 - x1)<<8) / ((long)(y2 - y1));
+ /* m is the fractional amount to add to the x coordinate every row.
+    m is equal to (delta x) / (delta y).  In other words, the x coordinate
+    has to change by (x2 - x1) columns in (y2 - y1) rows. */
+
+ col = (long)col1 << 8;	 /* Initial color in 8.8 fixed point format */
+ colstep = ((long)(col2 - col1) << 8) / ((long)(y2 - y1));
+ /* Calculate the color step value similar to the method in the
+    shadedline routine, only we're dividing by the delta y value. */
+
+
+ x += m; /* We ALWAYS skip the first point in every line. This is done */
+ y1++; /* because we do not want to store the point where two lines
+	  meet, twice.  This would result in a single point being drawn. */
+
+ for (y = y1; y <= y2; y++) /* Go through each row */
+  {
+   if ((y >= 0) & (y < 200)) /* If the coordinate is on the screen */
+    if (startx[y] == -16000) /* Store the first coordinate */
+      {
+       startx[y] = x>>8;
+       startcol[y] = col >> 8;	/* store the color */
+      }
+    else
+      {
+       endx[y] = x>>8;        /* Store the last coordinate */
+       endcol[y] = col >> 8;
+      }
+   x += m;		     /* Add our constant to x */
+   col += colstep;
+   }
+ }
+}
+
+
+
+The fillpoly routine becomes the shadedpoly routine, which calls gpolyline
+with the correct coordinates and color of each vertex, and finally the
+shadedline routine.
+
+
+void shadedpoly (gpoint *vertexlist, int numvertex)
+/* Draws a shaded polygon given an array of vertices. */
+{
+int i;
+gpoint *curpt,*nextpt;
+  /* Two pointers to a vertex. These are used to connect to vertices
+     together in when calling the gpolyline routine. */
+
+ curpt = vertexlist;      /* Set to the first vertex in the array */
+ nextpt = vertexlist + 1; /* and to the second vertex */
+
+ for (i = 0; i < 200; i++)
+  {
+   startx[i] = -16000;     /* Set up our impossible values */
+   endx[i] = -16000;
+  }
+
+ for (i = 1; i < numvertex; i++)
+  {
+   gpolyline (curpt->x,  curpt->y,  curpt->col,
+	      nextpt->x, nextpt->y, nextpt->col);
+   /* Calculate the edge of this line. */
+
+   curpt += 1;  /* Go to the next line */
+   nextpt += 1;
+  }
+
+  nextpt = vertexlist;  /* Now close the polygon by doing a line between
+			   the first and last vertex. */
+  gpolyline (curpt->x,  curpt->y,  curpt->col,
+	     nextpt->x, nextpt->y, nextpt->col);
+
+  for (i = 0; i < 200; i++)   /* Now draw the horizontal line list */
+    if (startx[i] != -16000)  /* Indicates there is a line on this row */
+    {
+     if (endx[i] == -16000)
+	 endx[i] = startx[i]; /* In case there was only one
+				 point found on this row */
+       shadedline (startx[i], startcol[i], endx[i], endcol[i], i);
+       /* Draw a shaded line between the two x coordinates, on the row i. */
+    }
+}
+
+
+9.0 - What About Clipping?
+--------------------------
+So far we assumed the x coordinates of the shaded line would fall between
+0 and 319 inclusively.  What happens if one of the x coordinates does not?
+The line will wrap around to the other side of the screen.  You can
+try this with any of the first 4 example programs.  It will probably cause
+the system to crash since you are able to write to memory outside the
+video display memory.
+
+We have already clipped the y coordinate in the shadedpoly routine, so we
+do not have to worry about that.
+
+There are two possible cases that need clipping:
+ 1. The left edge is less than 0
+ 2. The right edge is greater than 319
+
+The second case is easy to solve, since you can just decrease the length
+of the line.  In other words, chop off the pixels past 319.   Note that
+you should clip the line AFTER you calculate the step value since
+changing the length will change the step value as well.
+
+The code for clipping the right side would look something like this:
+ if (x2 > 319)    /* Set right coordinate to right clipping coordinate */
+   x2 = 319;
+
+No other math is required.
+
+
+The first case is a tricky one.  We cannot simply set x1 to 0, since the
+first color would be wrong.  We have to increase the colorvalue to skip
+over the pixels past the left edge.  We know that for each pixel the
+colorvalue is increased by the step value, so we can multiply the
+step value by the number of pixels past the left edge and add the
+result to the colorvalue.  This will advance the color to the correct
+value.
+
+The code for clipping the right edge would look like this:
+
+ if (x1 < 0)			/* Clip the left edge */
+  {
+   dist = 0 - x1;		/* Find number of pixels to be clipped */
+   colorvalue += dist * step;
+    /* Add dist color steps onto the starting value */
+   x1 = 0;
+    /* Set left coordinate to the left clippin coordinate*/
+  }
+
+
+After the clipping is performed, the length of the line should be
+recalculated.  The shadedline routine now looks like this:
+
+void shadedline (int x1, int firstcolor, int x2, int lastcolor, int y)
+{
+int length;
+int numcolors;
+int colorvalue;
+int step;
+int x;
+unsigned char far * dest;   /* Ptr to the screen */
+int dist;
+
+ length = x2 - x1 + 1;
+ if (length > 0)
+ {
+  numcolors = lastcolor - firstcolor + 1;
+
+  colorvalue = firstcolor << 8;
+  step = ((long)numcolors << 8) / (long)length;
+
+  if (x2 > 319)    /* Set right coordinate to right clipping coordinate */
+    x2 = 319;
+
+  if (x1 < 0)			/* Clip the left edge */
+   {
+    dist = 0 - x1;		/* Find number of pixels to be clipped */
+    colorvalue += dist * step;
+     /* Add dist color steps onto the starting value */
+    x1 = 0;
+     /* Set left coordinate to the left clippin coordinate*/
+   }
+
+  dest = abuf + y * 320 + x1;
+  /* Make a pointer to the first pixel */
+
+  length = x2 - x1 + 1;
+
+  /* Begin assembly optimization */
+  if (length > 0)
+   {
+    asm {
+	mov cx, word ptr length		/* Set length */
+	les di, dest			/* Set destination ptr */
+	mov ax, word ptr colorvalue	/* Set color */
+       }
+    shadedlineloop:
+    ;
+    asm {
+	mov es:di, ah			/* Move color to screen */
+	add ax, word ptr step  		/* Add to color */
+	inc di				/* Move to next pixel */
+	dec cx				/* Decrease length */
+	jnz shadedlineloop		/* Repeat for all pixels */
+	}
+   }
+ }
+}
+
+
+
+10.0 - Other Issues
+-------------------
+The example programs included use the default palette.  This does not
+produce a very nicely shaded polygon.  You should define your palette with
+shades of colors. For example, colors 0 to 63 may contain shades of red,
+while colors 64 to 127 contain shades of blue.  The more shades of colors
+you use, the more realistic the shading will look, and less banding will
+occur.  Banding occurs when you see distinct edges along each color in the
+polygon.  This is caused by the colors being too different.
+
+Gouraud shading also involves calculating the normal of the polygon and
+comparing it with the direction of the lightsource in order to find
+realistic values of colors at each vertex.  Since this deals with 3D
+graphics, it is out of the scope of this tutorial.  You don't always need
+to take this into account however.  You can base the color on the z value
+of the vertex, or leave this out completely if you are strictly dealing
+with 2D graphics.  As well, you may want to set the colors of the vertices
+once and leave them the same throughout the rest of the program.
+
+I hope you enjoyed this tutorial.  The next topic is texture mapping, which
+is only a small change on the code presented here (believe it or not!).
+
+
+
+
+

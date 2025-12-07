@@ -1,0 +1,702 @@
+BIDIRECTIONAL ASSOCIATIVE MEMORY SYSTEMS IN C++
+by Adam Blum
+
+
+[LISTING ONE]
+
+////////////////////////////////////////////////////////////
+// BAM.HPP  Provide vector, matrix, vector pair, matrix, BAM matrix, and 
+// BAM system classes and methods to implement BAM system concept.
+// Extended note:
+// This is an implementation of the concept of Bidirectional
+// Associative Memories as developed by Bart Kosko and others. 
+// It includes the extended concept introduced by Patrick Simpson
+// of the "BAM System". Where reasonable Simpson's notation has been
+// been maintained. The presentation benefits greatly from C++ and OOP, in that
+// (I believe) it is both easier to understand than a "pseudocode" version, 
+// yet more precise (in that it works!)
+// Developed with Zortech C++ Version 2.0 -- Copyright (c) Adam Blum, 1989,90
+
+#include<stdlib.h>
+#include<io.h>
+#include<stdio.h>
+#include<string.h>
+#include<limits.h>
+#include<ctype.h>
+#include<stream.hpp>
+#include "debug.h" // debugging devices
+// where are Zortech's min,max?
+#define max(a,b)	(((a) > (b)) ? (a) : (b))
+#define min(a,b)	(((a) < (b)) ? (a) : (b))
+
+// will be changed to much higher than these values
+const ROWS=16;	// number of rows (length of first pattern)
+const COLS=8;	// number of columns (length of second pattern)
+const MAXMATS=10; // maximum number of matrices in BAM system
+const MAXVEC=16; // default size of vectors
+
+class matrix;
+class bam_matrix;
+class vec {
+	friend class matrix;
+	friend class bam_matrix;
+	friend class bam_system;
+		int n;
+		int *v;
+	public:
+		// see BAM.CPP for implementations of these
+		vec(int size=MAXVEC,int val=0); // constructor
+		~vec();	// destructor
+		vec(vec &v1); // copy-initializer
+		int length();
+		vec& operator=(const vec& v1); // vector assignment
+		vec& operator+(const vec& v1); // vector addition
+		vec& operator+=(const vec& v1); // vector additive-assignment
+		vec& operator*=(int i); // vector multiply by constant
+		// supplied for completeness, but we don't use this now
+		int operator*(const vec& v1); // dot product
+		vec operator*(int c); // multiply by constant
+		// vector transpose multiply needs access to v array
+		int operator==(const vec& v1);
+		int& operator[](int x);
+		friend istream& operator>>(istream& s,vec& v);
+		friend ostream& operator<<(ostream& s, vec& v);
+}; //vector class
+
+class vecpair;
+
+class matrix {
+	protected: 
+	// bam_matrix (a derived class) will need to use these members
+	// preferred to "friend class", since there may be many derived
+	// classes which need to use this 
+		int **m; // the matrix representation
+		int r,c; // number of rows and columns
+	public: 
+		// constructors 
+		matrix(int n=ROWS,int p=COLS); 
+		matrix(const vec& v1,const vec& v2);
+		matrix(const vecpair& vp);
+		matrix(matrix& m1); // copy-initializer
+		~matrix();
+		int depth();
+		int width();
+		matrix& operator=(const matrix& m1);
+		matrix& operator+(const matrix& m1);
+		matrix& operator+=(const matrix& m1);
+		vec colslice(int col); 
+		vec rowslice(int row); 
+		friend ostream& operator<<(ostream& s,matrix& m1);
+}; // matrix class
+
+class vecpair {
+	friend class matrix;
+	friend class bam_matrix;
+	friend class bam_system;
+		int flag; // flag signalling whether encoding succeeded
+		vec a;
+		vec b;
+	public: 
+		vecpair(int n=ROWS,int p=COLS); // constructor
+		vecpair(const vec& A,const vec& B);
+		vecpair(const vecpair& AB); // copy initializer
+		~vecpair();    
+		vecpair& operator=(const vecpair& v1);
+		int operator==(const vecpair& v1);
+		friend istream& operator>>(istream& s,vecpair& v);
+		friend ostream& operator<<(ostream& s,vecpair& v);
+		friend matrix::matrix(const vecpair& vp);
+};
+
+class bam_matrix: public matrix {
+	private: 
+		int K; // number of patterns stored in matrix
+		vecpair *C; // actual pattern pairs stored
+		int feedthru(const vec&A,vec& B);
+		int sigmoid(int n); // sigmoid threshold function
+	public: 
+		bam_matrix(int n=ROWS,int p=COLS);
+		~bam_matrix();
+		// but we supply it with the actual matrix A|B (W is implied)
+		void encode(const vecpair& AB); // self-ref version
+		// uncode only necessary for BAM-system
+		void uncode(const vecpair& AB); // self-ref version
+		vecpair recall(const vec& A);
+		int check(); 
+		int check(const vecpair& AB);
+		// Lyapunov energy function: E=-AWBtranspose
+		int energy(const matrix& m1); // Lyapunov energy function
+}; // BAM matrix
+
+class bam_system {
+		bam_matrix *W[MAXMATS];
+		int M; // number of matrices
+	public:
+		bam_system(int M=1);
+		~bam_system();
+		void encode(const vecpair& AB);
+		vecpair& recall(const vec& A);
+		// train equiv. to Simpson's encode of all pairs
+		void train(char *patternfile); 
+		friend ostream& operator<<(ostream& s,bam_system& b);
+}; // BAM system class
+
+
+[LISTING TWO]
+
+///////////////////////////////////////
+// BAM.CPP Provide vector, matrix, vector pair, matrix, BAM matrix, and BAM 
+// system classes to implement BAM systems
+// Extended note:
+// This is an implementation of the concept of Bidirectional
+// Associative Memories as developed by Bart Kosko and others. 
+// It includes the extended concept introduced by Patrick Simpson
+// of the "BAM System". Where reasonable Simpson's notation has been
+// been maintained. The presentation benefits greatly from C++ and OOP, in that
+// (I believe) it is both easier to understand than a "pseudocode" version, 
+// yet more precise (in that it works!)
+// Developed with Zortech C++ Version 2.0 -- Copyright (c) 1989,90 Adam Blum
+
+#include"bam.hpp"
+
+///////////////////////////////////
+// vector class member functions
+
+vec::vec(int size,int val) { 
+	v = new int[size]; 
+	n=size;
+	for(int i=0;i<n;i++)
+		v[i]=0;
+} // constructor
+vec::~vec() { delete v;} // destructor
+vec::vec(vec& v1) // copy-initializer
+{
+	v=new int[n=v1.n];
+	for(int i=0;i<n;i++)
+		v[i]=v1.v[i];
+}
+vec& vec::operator=(const vec& v1)
+{
+	delete v;
+	v=new int[n=v1.n];
+	for(int i=0;i<n;i++)
+		v[i]=v1.v[i];
+	return *this;
+}
+vec& vec::operator+(const vec& v1)
+{
+	vec sum(v1.n);
+	sum.n=v1.n;
+	for(int i=0;i<v1.n;i++)
+		sum.v[i]=v1.v[i]+v[i];
+	return sum;
+}
+vec& vec::operator+=(const vec& v1)
+{
+	for(int i=0;i<v1.n;i++)
+		v[i]+=v1.v[i];
+	return *this;
+}
+vec vec::operator*(int c)
+{
+	vec prod(length());
+	for(int i=0;i<prod.n;i++)
+		prod.v[i]=v[i]*c;
+	return prod;	
+}
+int vec::operator*(const vec& v1) // dot-product
+{
+	int sum=0;
+	for(int i=0;i<min(n,v1.n);i++)
+		sum+=(v1.v[i]*v[i]);
+	//D(cout << "dot product " << *this << v1 << sum << "\n";)
+	return sum;
+}
+int vec::operator==(const vec& v1) 
+{
+	if(v1.n!=n)return 0;
+	for(int i=0;i<min(n,v1.n);i++){
+		if(v1.v[i]!=v[i]){
+			return 0;
+		}
+	}
+	return 1;
+}
+int& vec::operator[](int x)
+{
+	if(x<length() && x>=0)
+		return v[x];
+	else
+		cout << "vec index out of range";
+}
+int vec::length(){return n;} // length method
+
+istream& operator>>(istream& s,vec &v)
+// format: list of ints followed by ','
+{
+	char c;
+	v.n=0;
+	v.v=new int[MAXVEC];
+	for(;;){
+		s>>c;
+		if(s.eof())return s;		
+		if(c==',')return s;
+		if(isspace(c))continue;
+		v.v[v.n++]=((c!='0')?1:-1);
+	}
+}
+ostream& operator<<(ostream& s, vec& v)
+// format: list of ints followed by ','
+{
+	for(int i=0;i<v.n;i++)
+		s << (v.v[i]<0?0:1);
+	s << ",";
+	return s;
+}
+
+///////////////////////////////
+// matrix  member functions
+matrix::matrix(int n,int p) 
+{ 
+	//D(cout << "Constructing " << n << " x " << p << " matrix.\n";)
+	m=new int *[n];
+	for(int i=0;i<n;i++){
+		m[i]=new int[p];
+		for(int j=0;j<p;j++)
+			m[i][j]=0;
+	}
+	r=n; 
+	c=p;
+} // constructor
+matrix::matrix(const vecpair& vp) 
+{
+	//D(cout << "Constructing matrix from: " << vp;)
+	r=vp.a.length();
+	c=vp.b.length();
+	m=new int *[r];
+	for(int i=0;i<r;i++){
+		m[i]=new int[c];
+		for(int j=0;j<c;j++)
+			m[i][j]=vp.a.v[i]*vp.b.v[j];
+	}
+}// constructor 
+matrix::matrix(const vec& v1,const vec& v2) 
+{
+	//D(cout << "Constructing matrix from " << v1 << v2 << "\n";)
+	r=v1.length();
+	c=v2.length();
+	m=new int *[r];
+	for(int i=0;i<r;i++){
+		m[i]=new int[c];
+		for(int j=0;j<c;j++)
+			m[i][j]=v1.v[i]*v2.v[j];
+	}
+}// constructor 
+matrix::matrix(matrix& m1) // copy-initializer
+{
+	//D(cout << "matrix copy-initializer\n"; )
+	r=m1.r;
+	c=m1.c;
+	m=new int *[r];
+	for(int i=0;i<r;i++){
+		m[i]=new int[c];
+		for(int j=0;j<c;j++)
+			m[i][j]=m1.m[i][j];
+	}
+}
+matrix::~matrix() 
+{ 
+	for(int i=0;i<r;i++)
+		delete m[i];
+	delete m;
+} // destructor
+matrix& matrix::operator=(const matrix& m1)
+{
+	for(int i=0;i<r;i++)
+		delete m[i];
+	r=m1.r;
+	c=m1.c;
+	m=new int*[r];
+	for(i=0;i<r;i++){
+		m[i]=new int[c];
+		for(int j=0;j<r;j++)
+			m[i][j]=m1.m[i][j];
+	}
+	return *this;	    
+}
+matrix& matrix::operator+(const matrix& m1)
+{
+	matrix sum(r,c);
+	for(int i=0;i<r;i++)
+		for(int j=0;j<r;j++)
+			sum.m[i][j]=m1.m[i][j]+m[i][j];
+	return sum;
+}
+matrix& matrix::operator+=(const matrix& m1)
+{
+	//D(cout << "matrix additive assignment\n";)
+	for(int i=0;i<r&&i<m1.r;i++)
+		for(int j=0;j<c&&j<m1.c;j++)
+			m[i][j]+=(m1.m[i][j]);
+	return *this;
+}
+vec matrix::colslice(int col) 
+{
+	vec temp(r); 
+	for(int i=0;i<r;i++)
+		temp.v[i]=m[i][col];
+	return temp;
+}
+vec matrix::rowslice(int row) 
+{
+	vec temp(c); 
+	for(int i=0;i<c;i++)
+		temp.v[i]=m[row][i];
+	return temp;
+}
+int matrix::depth(){return r;}
+int matrix::width(){return c;}
+
+ostream& operator<<(ostream& s,matrix& m1)
+// print a matrix
+{
+	for(int i=0;i<m1.r;i++){
+		for(int j=0;j<m1.c;j++)
+			s << m1.m[i][j] << " ";
+		s << "\n";
+	}
+}
+//////////////////////////////////////////
+// vecpair  member functions 
+// constructor
+vecpair::vecpair(int n,int p) { }
+vecpair::vecpair(const vec& A,const vec& B) {a=A;b=B;}
+vecpair::vecpair(const vecpair& AB) {*this=vecpair(AB.a,AB.b);}
+vecpair::~vecpair() {} // destructor
+vecpair& vecpair::operator=(const vecpair& v1)
+{
+	a=v1.a;
+	b=v1.b;
+	return *this;
+}
+int vecpair::operator==(const vecpair& v1)
+{
+	return 	(a == v1.a) && (b == v1.b);
+}
+istream& operator>>(istream& s,vecpair& v1)
+// input a vector pair
+{
+	s>>v1.a>>v1.b;
+	return s;
+}
+ostream& operator<<(ostream& s,vecpair& v1)
+// print a vector pair
+{
+	return s<<v1.a<<v1.b<<"\n";
+}
+/////////////////////////////////
+//bam_matrix  member functions
+bam_matrix::bam_matrix(int n,int p):(n,p)
+{
+	// the maximum number of pattern pairs storable
+	// is around min(n,p) where n and p are 
+	// the dimensionality of the matrix
+	C=new vecpair[min(n,p)*2];
+	K=0;
+}
+bam_matrix::~bam_matrix()
+{
+} // destructor
+void bam_matrix::encode(const vecpair& AB)
+// encode a pattern pair
+{
+	//D(cout << "BAM Matrix encoding: " << AB;)
+	matrix T(AB);
+	(*this)+=T; // add the matrix transpose to the current matrix
+	C[K]=AB;
+	K++;
+}
+void bam_matrix::uncode(const vecpair& AB)
+// get rid of a stored pattern (by encoding A-B complement)
+{
+	//D(cout << "uncode\n";)
+	vec v=AB.b*-1;
+	matrix T(AB.a,v); // T is A transpose B complement
+	*this+=T;// add the matrix transpose to the current matrix
+	K--;
+}
+vecpair bam_matrix::recall(const vec& A)
+// BAM Matrix recall algorithm (used by BAM SYSTEM recall)
+{
+	int givenrow=(A.length()==width());
+	D(cout<<"BAM matrix recall of" << A << givenrow?"(row)\n":"(col)\n";)
+	vec B(givenrow?depth():width(),1);
+	for(;;){ // feed vectors through matrix until "resonant" pattern-pair
+		feedthru(A,B);
+		if(feedthru(B,A))break; // stop when returned A = input A
+	}	
+	D(cout<< "resonant pair " << A << "\n and " << B << "\n";)
+	if(givenrow)
+		return vecpair(B,A);
+	else
+		return vecpair(A,B);
+}
+int bam_matrix::feedthru(const vec&A,vec& B)
+{
+	//D(cout << "Feeding " << A << "\n"; )
+	vec temp=B;int n;
+	for(int i=0;i<B.length();i++){
+		if(A.length()==width())
+			n=sigmoid(A*rowslice(i));
+		else
+			n=sigmoid(A*colslice(i));
+		if(n)
+			B.v[i]=n;
+	}
+	return B==temp;
+}
+int bam_matrix::sigmoid(int n)
+// VERY simple (but classic one for BAM) threshold function
+//		
+//	      1	--------------
+//              |
+//  - -----------	   +
+//	     -1	
+{
+	if(n<0)return -1;
+	if(n>0)return 1;
+	return 0;
+}
+int bam_matrix::check()
+// check to see if we have successfully encoded pattern-pair into this matrix
+{
+	D(cout << "Check BAM matrix for " << K << " pattern pairs\n";)
+	vecpair AB;
+	for(int i=0;i<K;i++){
+		AB=recall(C[i].a);
+		if(!(AB==C[i])){
+			D(cout <<"failed check\n ";)
+			return 0;
+		}
+	}
+	D(cout << "passed check\n ";)
+	return 1;    
+}
+int bam_matrix::check(const vecpair& AB)
+{
+	// different check routine for orthogonal construction BAM
+	//check to see energy of present pattern pair to matrix
+	// is equal to orthogonal BAM energy
+	matrix T(AB);
+	return energy(T)== -depth()*width();
+}
+int bam_matrix::energy(const matrix& m1)
+{
+	int sum=0;
+	for(int i=0;i<depth();i++)
+		for(int j=0;j<width();j++)
+			sum+=(m1.m[i][j]*this->m[i][j]);
+	D(cout << "Energy of matrix " << -sum << "\n";)
+	return -sum;
+}
+
+///////////////////////////////////////////
+// bam system  functions
+// top level of system (for now)
+
+// constructor
+bam_system::bam_system(int n)
+{
+	M=n;
+	for(int i=0;i<M;i++)
+		W[i]=new bam_matrix;
+}
+bam_system::~bam_system() // destructor
+{
+	for(int i=0;i<M;i++)
+		delete W[i];
+}
+void bam_system::encode(const vecpair& AB)
+// encode the pattern pair AB into the BAOM system
+{
+	D(cout << "BAM System encode\n";)
+	for(int h=0;h<M;h++){
+		W[h]->encode(AB);
+		if(!W[h]->check())
+			W[h]->uncode(AB);
+		else 				
+			break;			
+	}
+	if(h==M){ // all matrices full, add another
+		if(h<MAXMATS){
+			W[M]=new bam_matrix();
+			W[M]->encode(AB);
+			M++;
+		}
+		else{
+			cout << "BAM System full\n";
+			exit(1);
+		}
+	}
+}
+vecpair& bam_system::recall(const vec& A)
+// presented with pattern A, recall will return pattern-PAIR 
+{
+	vecpair XY[MAXMATS];matrix *M1,*M2;
+	int E,minimum=0,emin=INT_MAX;
+	D(cout << "BAM System recall\n";)
+	for(int h=0;h<M;h++){
+		XY[h]=W[h]->recall(A);
+		D(cout << h <<"-th matrix, returned vecpair "<< XY[h];)
+		M1=new matrix(XY[h]);
+		E=W[h]->energy(*M1);
+		if(A.length()==W[h]->width())
+			M2=new matrix(XY[h].a,A);
+		else
+			M2=new matrix(A,XY[h].b);
+		if (  ( E-(W[h]->depth()*W[h]->width()) < emin )
+	           && (E==W[h]->energy(*M2))
+		)
+		{
+			emin=E-(W[h]->depth()*W[h]->width());
+			minimum=h;						
+		}
+		delete M1;
+		delete M2;
+	}			
+	return XY[minimum];
+}
+void bam_system::train(char *patternfile)
+// A "multiple-pair" encode - which Simpson calls "encode"
+// this could be used for initial BAM Sys training. However an up 
+// and running BAM Sys should only need to use "encode".
+{
+	FILE *f=fopen(patternfile,"r");int n=0;
+	filebuf sfile(f);
+	istream s(&sfile,0);
+	vecpair AB;
+	for(;;){
+		s >> AB;
+		if(s.eof())break;
+		D(cout << "Encoding " << n++ << "-th pattern pair:\n" << AB;)
+		encode(AB);
+	}
+	D(cout << "Completed training from " << patternfile;)
+}
+ostream& operator<<(ostream& s,bam_system& b)
+// operator to print out contents of entire BAM system
+{
+	for(int i=0;i<b.M;i++)
+		s<< "BAM Matrix " << i << ": \n" << *(b.W[i]) << "\n";
+}
+
+
+[LISTING THREE]
+
+////////////////////////
+// TESTBAM.HPP
+// Interactive BAM System Demonstration Program. Used to verify BAM system 
+// algorithms and demonstrate them on an abstract (i.e. just 0s and 1s) case.
+// Developed with Zortech C++ 2.0 -- Copyright (c) 1989,90 Adam Blum
+
+#include"bam.hpp"
+
+vec v;
+vecpair AB;
+bam_system B;
+char *p;
+char patternfile[16]="TEST.FIL"; // file where test data is stored
+int trace=0; // SET TRACE=<whatever> at DOS prompt to turn trace on
+main()
+{
+     cout << "Interactive BAM System Demonstration\n";
+     trace=(p=getenv("TRACE"))?1:0;
+     cout << "Training from " << patternfile << "\n";
+     B.train(patternfile);
+     D(cout << "Resulting BAM System\n" << B;)
+     cout <<"Enter patterns as 0's and 1's terminated by comma.\n"
+     <<"Patterns must be length of " << ROWS << " or " << COLS <<".\n"
+     << "Null vector (just "","") to end.\n\n" ;
+     for(;;){
+          cout << "Enter pattern: ";
+          cin >> v;
+          if(!v.length())break;
+          if(v.length()!=ROWS && v.length()!=COLS){
+               cout << "Wrong length.\n";
+               continue;
+          }
+          AB=B.recall(v);
+          cout << "Recalled pattern pair\n" << AB;
+     }
+}
+
+
+[LISTING FOUR]
+
+
+1100101011010011,11101010,
+0110110111110110,11010101,
+1101111001010101,11110010,
+1010101000010111,11001101,
+0011001101011011,11110100,
+1100101011010011,11101010,
+0110100111110110,11010101,
+1101110101010101,11110010,
+1011101010010111,11001101,
+0001011101011011,11110100,
+1100101001010011,11101010,
+0110110110110110,11010101,
+1100111011010101,11110011,
+1010000100010111,11001101,
+0001101101011011,11110110,
+1100100011010011,11100110,
+0110110011110110,11010101,
+1101111001010101,11110011,
+1010100000011111,11001101,
+0001100101111011,11111000,
+1100101011010011,11011010,
+0010100111110110,11010101,
+1101111101010101,11110010,
+1010111000010111,11101101,
+0001000001011011,11110100,
+1100101011010011,11101010,
+0110110111110110,11010101,
+1101111000010101,11110110,
+1010100111010111,11001101,
+0001000101011011,11110100,
+0110110101110110,11010111,
+1101111001010101,11110110,
+1010111100110111,11001101,
+0001000101011011,11110100,
+1100101010010011,11101010,
+0110110111110110,11010101,
+1101111001010101,11110010,
+1010110000010111,11001101,
+0011000101011011,11110100,
+0011010101111011,10010111,
+
+
+[LISTING FIVE]
+
+# TESTBAM.MK
+# Make file for BAM System implementation tester
+# Uses Microsoft Make 
+# Compiler: Zortech C++ 2.0
+# To make with diagnostics enabled:
+# make CFLAGS="-DDEBUG=1" testbam.mk
+#
+
+CFLAGS=
+.cpp.obj: 
+     ztc -c $(CFLAGS) $*.cpp
+bam.obj: bam.cpp bam.hpp
+testbam.obj: testbam.cpp bam.hpp
+testbam.exe: testbam.obj bam.obj
+     blink testbam bam;
+
+
+
+
+
+
+

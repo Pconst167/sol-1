@@ -1,0 +1,546 @@
+Following is an article and companion program source code that 
+describes two quirks of DOS:
+
+1.  The DOS INT21 function has an alternate entry point which could
+        be used by a virus to cause damage.  This alternate entry 
+        point is explained and the program source code removes it
+        from service.
+
+2.  Function 13h of INT21 (delete FCB) has a *SEVERE* quirk (it would
+        be a bug, except it seems to be deliberate) that allows it
+        to totally destroy a disk's directory structure, almost beyond
+        repair.  The program source code also shows how to safeguard 
+        against it.
+
+I'm a little bit unsure about posting this because of the potential for
+        misuse, but if I can't put something like this in BIX, then 
+        we're all in trouble, I think.  If PC Tech Journal were still
+        alive, I might send it to them, but there isn't really anywhere
+        else it seems appropriate.
+
+One warning...  PLEASE do not try the examples given on a hard disk drive.
+        Use them only on a floppy.  I managed to wipe out a goodly portion
+        of my hard disk playing around while writing this article, including
+        my only copy of the article!  You've been warned.
+
+And, of course, any comments, elaborations, questions, etc. would be 
+        welcome in ibm.dos/secrets.2 or bixmail me.  
+
+Good luck - John Switzer (jswitzer)
+
+
+
+
+
+                     Closing DOS's Backdoor
+by John Switzer.  (c) 1989, all rights reserved.
+
+With each new story of a virus or worm infection, the issue of PC  
+security becomes more important.  Although totally protecting any 
+IBM  PC from infection is impossible, MS-DOS complicates  matters 
+by  having two "back doors" that  allow access to INT  21h  func-
+tions.  These back doors are poorly documented, but still present 
+a  huge gap in a PC's security.  To have a secure system,  it  is 
+essential to lock and close these back doors.
+
+These  backdoors  allow access to the DOS function  handler  (INT 
+21h)  through two far pointers easily accessible by any  program.  
+The  first  of these pointers is in low memory,  at  the  address 
+reserved  for interrupts 30h and 31h (0:00C0 thru 0:00C7).   Nor-
+mally,  an entry in the interrupt vector table contains  a  dword 
+pointer to the interrupt's handler; however, INT30 and INT31  are 
+in the form of a JMP FAR instruction that points to the  alterna-
+tive DOS function dispatcher (in my version of DOS 3.30: JMP  FAR 
+0274:1446).  This allows direct access to DOS, without having  to 
+go through INT21.
+
+This  alternative DOS handler, however, has different  entry  re-
+quirements  than  a  normal INT21 call.  Its  use  requires  some 
+special  handling and an understanding of the functions  that  it 
+allows.  In example 1 is the alternative entry point as it exists 
+in MS-DOS 3.30, with some changes for clarity:
+
+ALT_DOS_ENTRY:
+                         POP AX          ; get rid of flags
+                         POP AX          ; save caller's segment
+                         POP CS:TEMP     ; save caller's offset
+                         PUSHF           ; save flags
+                         CLI             ; kill interrupts
+                         PUSH AX         ; save caller's segment
+                         PUSH CS:TEMP    ; save caller's offset
+                         CMP CL,24h      ; is CL < max #?
+                         JA REFUSE_RQST  ; no, so invalid 
+                         MOV AH,CL       ; yes, AH=function #
+                         JMP CONT_INT21  ; and continue INT21
+
+(end example 1)
+
+The first thing to notice is that the handler expects the  return 
+address to be on the stack in an unusual order.  Normally when an  
+interrupt occurs, the CPU pushes the flags onto the stack  first, 
+followed  by  the segment and offset of the caller's  return  ad-
+dress.  However, this entry point expects the flags to be  pushed 
+last,  after the offset and segment of the return address.  Since 
+this  routine  eventually transfers control to the  normal  INT21 
+handler,  the handler's first job is to translate the stack  into 
+an acceptable form for the eventual IRET.  
+
+The  second thing of importance is that this handler allows  only 
+functions  0  through  24h to be executed.  Also,  since  the  AX 
+register is destroyed immediately upon entry, the function number 
+is passed through CL and not AH.  Therefore, function 0Ch  (CLEAR 
+KEYBOARD BUFFER AND GET STDIN) is also unavailable as it uses  AL 
+for  a subfunction value.  These limitations may be  familiar  to 
+former  CP/M programmers as they are  result of the original  MS-
+DOS designers' desire for CP/M compatibility.  
+
+To  use this call, therefore, the caller must manually setup  the 
+stack  with the flags and a proper far return address.  With  the 
+function  number in CL, a far jump to 0:00C0 executes  the  call.  
+After  completion,  the INT 21 dispatcher will then IRET  to  the 
+return address on the stack as normal.
+
+Example 2 demonstrates this technique:
+
+        MOV AX,offset RETURN      ; get return address' offset
+        PUSH AX                   ; push flags and return address 
+        PUSH CS                   ; onto stack in reverse order 
+        PUSHF                     ;
+        MOV CL,9                  ; display DOS string
+        MOV DX,offset MSG         ; this is the message
+        PUSH CS
+        POP DS                    ; verify that DS = local code
+        JMP dword ptr ALT_DOS_PTR ; and execute the function
+
+RETURN:
+        MOV AH,4Ch                ; terminate a process 
+        INT 21h                   ; via DOS 
+
+ALT_DOS_PTR  DW 00C0h,0000        ; entry point for alternative
+                                  ; DOS handler (0:00C0h)
+
+MSG       DB  0Dh,0Ah,"Example  of  backdoor   MS-DOS   "
+          DB "function call.",0Dh,0Ah,7,"$"
+
+(end example 2) 
+
+Note that CP/M programmers, however, used a near jump to  execute 
+their  DOS  function  calls.  The second back  door  into  MS-DOS 
+exists precisely to emulate this procedure.  At offset 5 in every 
+program's PSP (program segment prefix), is a far call that  theo-
+retically  allows  access  to DOS by doing a JMP  0005,  as  CP/M 
+allowed.  However, looking at offset usually shows an instruction 
+similar to the following:
+
+                CALL FAR F5C2:A496
+
+This seems to reference a location in what seems to be either the 
+BIOS or an impossibly high RAM memory area, and the code at  this 
+address  is usually garbage.  So though this pointer in  the  PSP 
+has been documented since the beginnings of MS-DOS, most program-
+mers have ignored it.
+
+The problem is that the address shown in the PSP is not  accurate 
+and needs to be rounded up to the nearest paragraph before  being 
+used.  Using the above example, this results in:
+                CALL FAR F5C2:A4A0
+
+Looking at the code at this address reveals the same  instruction 
+seen at the INT30 vector (JMP FAR 0274:1446).  By setting up  the 
+stack  and  registers as described for the first back  door,  the 
+dword pointer above can be inserted into the program's data  area.
+A  JMP  FAR instruction can then be used to execute a  basic  DOS 
+function.   Ironically,  the simpler JMP 0005 approach  that  was 
+used  in CP/M cannot be used here as that would then execute  the 
+CALL  FAR  instruction. This would cause  another  (and  invalid) 
+return address to be pushed onto the stack, crashing the  program 
+when the function returned.  
+
+Now that the alternative DOS handler is understood, its use  must 
+be  prevented.   Most security programs do an  admirable  job  of 
+closing  the  door to normal DOS calls using INT  21h,  but  many 
+ignore these alternative entry points into DOS.  A secure  system 
+must  close these back doors.  For the back door at 0:00C0,  this 
+is  trivial.   Simply replace the JMP FAR instruction  at  0:00C0 
+with a JMP FAR into a new handler that can refuse or execute  the 
+function, as appropriate. 
+
+The second back door, however, seems to be more difficult.  Since 
+any number of PSPs can exist in memory at one time, patching each 
+one with a new vector could be very difficult.  Fortunately, this 
+is  not necessary.  Doing some calculations on the  modified  ad-
+dress given in the PSP (F5C2:A4A0) shows that it translates  into 
+0:00C0, because of the quirks of "wrap-around" memory  addressing 
+found in the real-mode of the Intel IBM processors:
+
+            offset A4A0 translates into segment 0A4A
+so          segment F5C2 plus segment  A4A = segment 1000C
+            segment 1000C wraps around to segment 000C 
+which       translates into address 0:00C0.
+
+Thus,  changing the PSP pointers is unnecessary, since both  back 
+doors are different pointers to the same memory location.  Chang-
+ing the vector at 0:00C0 will adequately protect against both.
+
+Both  of  these back doors have existed in PC-DOS  since  version 
+1.0, and in most versions of MS-DOS.  Given that they have exist-
+ed  for over eight years without causing any  apparent  problems, 
+and that the alternative DOS handler is limited in its scope, how 
+serious  a danger do these backdoors present?  Only the  standard 
+input/output and FCB functions are allowed, and although FCBs can 
+delete  and rewrite files, they can be used only on files in  the 
+current  directory.   Although a trojan horse program  could  use 
+these  back door approaches to do some damage, it would not  seem 
+to pose a major problem.
+
+This   would  be  true,  except  that  one  FCB  call,   function 
+13h--delete  an  FCB, has a special case that could  destroy  all  
+files on a hard disk.  The special case requires that the FCB use 
+a filename of "???????????" and an attribute of 1Fh.  Seeing this 
+specific  combination, function 13h will delete all files in  the 
+current directory, including files marked with the read-only  and 
+subdirectory  attributes.  To make matters worse,  this  function 
+replaces  the first character of the deleted filenames with a  0, 
+not the usual 0E5h. This prevents most "undelete" utilities  from 
+being able to undo this call's severe damage.
+
+Consider  the potential damage of this call.  If executed at  the 
+root  directory,  it would effectively delete all  files  on  the 
+disk.  Since subdirectories are simply special files that contain 
+directory  information, these also would be deleted.  This  would 
+prevent  any access to the files that were in those  directories, 
+including any deeper subdirectories.  Note that the files in  the 
+subdirectories  are not deleted; only the  directory  information 
+about  them has been erased.  CHKDSK will therefore report  these 
+orphaned files as being unallocated clusters.
+
+This  behavior  of MS-DOS is truly bizarre.  Normally,  only  MS-
+DOS's  internal  routines can update or delete the  files  marked 
+with the subdirectory attribute.  That an FCB function is allowed 
+to delete these files is an unbelievable quirk of MS-DOS.  
+
+Example 3 shows the use of this special case, using the first DOS 
+back door:
+
+        MOV AX,offset RETURN      ; get return address' offset
+        PUSH AX                   ; push flags and return address 
+        PUSH CS                   ; onto stack in reverse order 
+        PUSHF                     ;
+        MOV CL,13h                ; DELETE FCB function
+        MOV DX,offset FCB         ; this is the special FCB
+        PUSH CS
+        POP DS                    ; verify that DS = local code
+        JMP dword ptr ALT_DOS_PTR ; and execute the function
+
+RETURN:
+        MOV AH,4Ch                ; terminate the process 
+        INT 21h                   ; via DOS 
+ALT_DOS_PTR  DW 00C0h,0000        ; entry point for alternative 
+                                  ; DOS handler (0:00C0h)
+
+FCB      DB 0FFh                  ; extended FCB
+         DB 5 dup(0)              ; reserved bytes
+         DB 1Fh                   ; all attribute bits set
+         DB 0                     ; default drive ID
+         DB "???????????"         ; match all files
+         DB 19h dup(0)            ; rest of FCB
+
+(end example 3)
+
+WARNING! If you experiment with this call, please do so only on a 
+floppy  and not a hard disk.  Calling this function while at  the 
+root  directory will obliterate all files on the disk,  requiring 
+very tedious work with a disk editor to restore them.
+
+This dangerous call, therefore, provides the answer to the  ques-
+tion asked above:  MS-DOS's back doors present a severe threat to 
+an unsecure system.  Even though an anti-viral program may filter 
+INT 21h calls, if it doesn't change the vector at 0:00C0 destroy-
+ing all files on the hard disk would be trivial.
+
+Example  4 shows one approach with a device driver  called  BACK-
+DOOR.SYS.   Install the device driver in the first line  of  your 
+CONFIG.SYS file as "DEVICE=BACKDOOR.SYS" and you will insure that 
+it is installed before any other programs can run.   BACKDOOR.SYS 
+simply  replaces  the vector at 0:00C0h with a pointer to  a  new 
+handler and then installs itself as a character device.  The  new 
+handler refuses any requests for DOS services through the  alter-
+native DOS function dispatcher.  This effectively closes both  of 
+MS-DOS's  back  doors.  It also filters INT 21h  to  specifically 
+look for this function 13h call, and rejects the function request 
+if it occurs.
+
+(see BACKDOOR.ASM for example 4)
+
+No  IBM PC or compatible running in real mode can  be  completely 
+safe  from  destructive  programs, whether  intentional  or  not.  
+However, it makes no sense to allow known dangers to continue  to 
+exist.   Closing  MS-DOS's  back doors removes one  of  the  more 
+obscure dangers to your computer and its data.
+
+end of article.  John Switzer 10/15/89
+
+BACKDOOR.ASM source code follows:
+
+
+             TITLE - BACKDOOR.SYS - closes DOS's back doors
+             PAGE 60,132
+             .RADIX 16
+
+; BACKDOOR.SYS closes two "back doors" into the MS-DOS INT 21h function
+; dispatcher that could be used by a virus or trojan horse to cause damage.
+; It also filters INT 21h directly to reject a special case of function 13h
+; which could destroy all data on a disk.
+
+
+; Written October, 1989 by John Switzer (jswitzer).  
+; Assembled using MASM 5.1
+
+
+        ASSUME CS:CSEG, DS:CSEG
+CSEG    SEGMENT PARA PUBLIC 'CODE'
+             ORG 0000h                 ; device driver starts at 0
+
+
+             DW 0FFFFh,0FFFFh          ; far pointer to next device
+             DW 8000h                  ; character device driver
+             DW offset DEV_STRAT_RTN   ; pointer to the strategy routine
+             DW offset DEV_INT_RTN     ; pointer to the interrupt routine
+             DB "B"+80h,"ACKDOOR"      ; device name with high bit set will
+                                       ; avoid any filename conflicts
+INSTALL_MSG  DB 0Dh,0Ah
+             DB "BACKDOOR is installed at $"
+
+DEV_HDR_BX   DW 0000                   ; pointer for ES:BX for device
+DEV_HDR_ES   DW 0000                   ; request header
+
+ORIG_INT21_OFF DW 0000                 ; 
+ORIG_INT21_SEG DW 0000                 ; 
+
+TEMP         DW 0000                   ; used for temporary storage
+
+REFUSE_RQST  PROC FAR                  ;
+             POP AX                    ; get rid of flags on stack 
+             POP AX                    ; get the return segment
+             POP CS:TEMP               ; and save offset 
+             PUSH AX                   ; save the return address in proper
+             PUSH CS:TEMP              ; order
+             STC                       ; return STC for error 
+             MOV AX,0FFFFh             ; return AX=-1
+             RET                       ; and do FAR RET back to caller
+REFUSE_RQST  ENDP
+
+
+NEW_INT21    PROC NEAR
+             PUSH AX                   ; save original registers first thing
+             PUSH BX
+             CMP AH,13h                ; is this the DELETE FCB function?
+             JNZ CONT_ORIG_INT21       ; no, so continue on 
+             MOV BX,DX                 ; point BX to the FCB
+             CMP byte ptr DS:[BX],0FFh ; got an extended FCB?
+             JNZ CONT_ORIG_INT21       ; no, so continue on 
+             CMP byte ptr DS:[BX+6],1Fh; yes, so got the special attribute?
+             JNZ CONT_ORIG_INT21       ; no, so continue on
+             CMP word ptr DS:[BX+8],"??"; yes, so filename starts with "??" ?
+             JNZ CONT_ORIG_INT21       ; no, so continue on 
+             CMP word ptr DS:[BX+0Ah],"??"; yes, so filename = "??" ?
+             JNZ CONT_ORIG_INT21       ; no, so continue on 
+             CMP word ptr DS:[BX+0Ch],"??"; yes, so filename = "??" ?
+             JNZ CONT_ORIG_INT21       ; no, so continue on 
+             CMP word ptr DS:[BX+0Eh],"??"; yes, so filename = "??" ?
+             JNZ CONT_ORIG_INT21       ; no, so continue on 
+             CMP word ptr DS:[BX+10h],"??"; yes, so filename = "??" ?
+             JNZ CONT_ORIG_INT21       ; no, so continue on 
+             CMP byte ptr DS:[BX+12h],"?"; yes, so filename ends with "??" ?
+             JNZ CONT_ORIG_INT21       ; no, so continue on 
+             POP BX                    ; yes, so reject it altogether
+             POP AX                    ; 
+             MOV AL,0FFh               ; return match not found
+             STC                       ; STC just for the heck of it 
+             RETF 0002                 ; and IRET with new flags
+
+CONT_ORIG_INT21:
+             POP BX                    ; restore original registers
+             POP AX                    ; 
+             JMP dword ptr CS:ORIG_INT21_OFF; continue with original handler
+NEW_INT21    ENDP
+
+
+DEV_STRAT_RTN PROC FAR                 ; 
+             MOV CS:DEV_HDR_BX,BX      ; save the ES:BX pointer to the 
+             MOV CS:DEV_HDR_ES,ES      ; device request header 
+             RET                       ; 
+DEV_STRAT_RTN ENDP
+
+
+
+DEV_INT_RTN  PROC FAR                  ; 
+             PUSH AX                   ; save all registers 
+             PUSH BX                   ; 
+             PUSH CX                   ; 
+             PUSH DX                   ; 
+             PUSH DS                   ; 
+             PUSH ES                   ; 
+             PUSH DI                   ; 
+             PUSH SI                   ; 
+             PUSH BP                   ; 
+             PUSH CS                   ; 
+             POP DS                    ; point DS to local code
+             LES DI,dword ptr DEV_HDR_BX; ES:DI=device request header
+             MOV BL,ES:[DI+02]         ; get the command code
+             XOR BH,BH                 ; clear out high byte 
+             CMP BX,00h                ; doing an INSTALL?
+             JNZ DEV_IGNORE            ; no, so just ignore the call then 
+             CALL INSTALL_BACKDOOR     ; yes, so install code in memory
+
+DEV_IGNORE:                            ; 
+             MOV AX,0100h              ; return STATUS of DONE  
+             LDS BX,dword ptr CS:DEV_HDR_BX; DS:BX=device request header
+             MOV [BX+03],AX            ; return STATUS in the header
+             POP BP                    ; restore original registers 
+             POP SI                    ; 
+             POP DI                    ; 
+             POP ES                    ; 
+             POP DS                    ; 
+             POP DX                    ; 
+             POP CX                    ; 
+             POP BX                    ; 
+             POP AX                    ; 
+             RET                       ; and RETF to DOS 
+DEV_INT_RTN  ENDP
+
+
+INSTALL_BACKDOOR PROC NEAR             ; 
+             CALL CLOSE_BACK_DOOR      ; install new handler to close back 
+                                       ; door 
+             CALL HOOK_INT21           ; and hook INT21 filter 
+             MOV AH,09h                ; DOS display string 
+             MOV DX,offset INSTALL_MSG ; show installation message
+             INT 21h                   ; via DOS 
+             MOV AX,CS                 ; display current code segment 
+             CALL OUTPUT_AX_AS_HEX     ; output AX as two HEX digits 
+             MOV AL,3Ah                ; now output a colon
+             CALL DISPLAY_TTY          ; to the screen 
+             MOV AX,offset REFUSE_RQST ; show new handler's offset 
+             CALL OUTPUT_AX_AS_HEX     ; output AX as two HEX digits 
+             CALL DISPLAY_NEWLINE      ; output a newline to finish display
+             LES DI,dword ptr DEV_HDR_BX; ES:DI=device request header
+             MOV Word Ptr ES:[DI+0Eh],offset INSTALL_BACKDOOR; this is the 
+             MOV ES:[DI+10h],CS        ; end of resident code 
+             RET                       ; 
+INSTALL_BACKDOOR ENDP
+
+
+CLOSE_BACK_DOOR PROC NEAR              ;
+             PUSH ES                   ; save original registers 
+             PUSH AX                   ; 
+             PUSH BX                   ; 
+             XOR AX,AX                 ; point ES to the interrupt vector 
+             MOV ES,AX                 ; table 
+             MOV BX,00C1h              ; install new handler at INT30 + 1
+             MOV AX,offset REFUSE_RQST ; get new offset for the handler 
+             MOV ES:[BX],AX            ; save it in interrupt vector table
+             MOV AX,CS                 ; get the segment for the handler
+             MOV ES:[BX+02],AX         ; and save it, too
+             POP BX                    ; restore original registers
+             POP AX                    ; 
+             POP ES                    ; 
+             RET                       ; and RET to caller
+CLOSE_BACK_DOOR ENDP
+
+
+HOOK_INT21   PROC NEAR
+             PUSH AX
+             PUSH BX
+             PUSH ES
+             MOV AX,3521h              ; get current INT21 vector
+             INT 21h                   ; via DOS
+             MOV CS:ORIG_INT21_OFF,BX  ; save the offset
+             MOV BX,ES                 ; 
+             MOV CS:ORIG_INT21_SEG,BX  ; and the segment
+             PUSH CS
+             POP DS                    ; make sure DS=local code
+             MOV DX,offset NEW_INT21   ; point to new handler
+             MOV AX,2521h              ; install new handler
+             INT 21h                   ; via DOS 
+             POP ES                    ; and restore original registers
+             POP BX                    
+             POP AX
+             RET                       ; and RET to caller
+HOOK_INT21   ENDP
+
+OUTPUT_AX_AS_HEX PROC NEAR             ; 
+             PUSH AX                   ; save original registers 
+             PUSH BX                   ; 
+             PUSH CX                   ; 
+             PUSH AX                   ; save number for output 
+             MOV AL,AH                 ; output high byte first
+             CALL OUTPUT_AL_AS_HEX     ; output AL as two HEX digits 
+             POP AX                    ; output low byte next 
+             CALL OUTPUT_AL_AS_HEX     ; output AL as two HEX digits 
+             POP CX                    ; restore original registers 
+             POP BX                    ; 
+             POP AX                    ; 
+             RET                       ; and RET to caller
+OUTPUT_AX_AS_HEX ENDP
+
+
+
+OUTPUT_AL_AS_HEX PROC NEAR             ; 
+             PUSH AX                   ; save original registers 
+             PUSH BX                   ; 
+             PUSH CX                   ; 
+
+             PUSH AX                   ; save the number for output (in AL)
+             MOV CL,04h                ; first output high nibble 
+             SHR AL,CL                 ; get digit into low nibble 
+             ADD AL,30h                ; convert to ASCII
+             CMP AL,39h                ; got a decimal digit?
+             JBE OUTPUT_FIRST_DIGIT    ; yes, so continue 
+             ADD AL,07h                ; no, so convert to HEX ASCII
+
+OUTPUT_FIRST_DIGIT:                    ; 
+             CALL DISPLAY_TTY          ; output it via BIOS
+             POP AX                    ; get number back
+             AND AL,0Fh                ; keep only low digit now
+             ADD AL,30h                ; convert to ASCII
+             CMP AL,39h                ; got a decimal digit?
+             JBE OUTPUT_SECOND_DIGIT   ; yes, so continue 
+             ADD AL,07h                ; no, so convert to HEX ASCII 
+
+OUTPUT_SECOND_DIGIT:
+             CALL DISPLAY_TTY          ; output it via BIOS
+             POP CX                    ; restore original registers
+             POP BX                    ; 
+             POP AX                    ; 
+             RET                       ; and RET to caller
+OUTPUT_AL_AS_HEX ENDP
+
+
+DISPLAY_NEWLINE PROC NEAR              ; 
+             PUSH AX                   ; save original AX
+             MOV AL,0Dh                ; first do CR
+             CALL DISPLAY_TTY          ; output it via the BIOS
+             MOV AL,0Ah                ; do LF next
+             CALL DISPLAY_TTY          ; output it via the BIOS
+             POP AX                    ; restore original AX
+             RET                       ; and RET to caller
+DISPLAY_NEWLINE ENDP
+
+DISPLAY_TTY  PROC NEAR                 ; 
+             PUSH AX                   ; 
+             PUSH BX                   ; 
+             MOV AH,0Eh                ; display TTY 
+             MOV BX,0007h              ; on page 0, normal attribute
+             INT 10h                   ; via BIOS
+             POP BX                    ; 
+             POP AX                    ; 
+             RET                       ; 
+DISPLAY_TTY  ENDP
+
+
+
+CSEG    ENDS
+        END
+
+    

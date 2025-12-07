@@ -1,0 +1,816 @@
+Note that some of this information is incomplete.  Check the Grasp
+manual for clarification on e.g. the script-file commands.  If 
+anybody would like to merge all relevant documents together, that
+would be nice.
+
+These documents were passed to me by Martin Fong, fong@erg.sri.com
+
+Eli Brandt   eli@smectos.gang.umass.edu  32@4351 WWIV
+========================================================================
+
+The formats of GRASP animation files.
+By George Phillips <phillips@cs.ubc.ca>
+Distribute this freely, but give credit where credit is due, eh?
+Version: Jan. 19,1991
+
+GRASP is an animation system particular to the IBM PC world.  It consists
+of a program to create animations and a run-time environment for
+displaying them.  The most common form these animations take is ".GL"
+archives which may be displayed on an IBM-PC with a program called
+GRASPRT.EXE.  This document describes what I have been able to
+decipher about the format of ".GL" archives and the files contained
+within.  It should be useful to those attempting to write ".GL"
+animation players on other platforms.
+
+A ".GL" file is simply an archive file which contains images, fonts
+and a command file which tells GRASPRT what to do.  These various
+files have standard extensions to denote their contents:
+
+.txt - A command file; usually there is only one of these per archive.
+.pic - An image.
+.clp - An image but without a colour map.
+.set or .fnt - A font containing character glyphs.
+
+It should be noted that the GL archive is of no particular importance;
+all the archived files could exist as ordinary files and the animation
+should still work.  Any GL player should be able to operate both from
+an archive or from ordinary files.
+
+
+File Formats
+
+Most of the data in GL files can be adequately described as a stream
+of bytes which is practically universally understood.  Some fields
+contain 2-byte and 4-byte integers.  I'll refer to these as "words"
+and "long words" and they are all stored in little-endian format.
+So if we have 4 consecutive bytes, b1, b2, b3 and b4, the word
+at b1 is (b1 + b2 * 256) and the long word at b1 is
+(b1 + b2 * 256 + b3 * 256 * 256 + b4 * 256 * 256 * 256).
+
+Since this information was gathered by example, the purpose of some
+header fields and commands may not be known.  I've marked unknown
+fields with question marks and have tried to put question marks and
+other warnings about descriptions which are guesses.
+
+
+GL Archives (.gl)
+
+A GL archive begins with a directory listing the files in the archive
+which is followed by the data for each file.
+
++-- Directory Header
+| dir length	(word)		number of bytes in the directory header
+| +-- File Entry (17 bytes per, (dir length) / 17 of them)
+| | offset	(long word)	Position of file data as an offset from
+| |				the beginning of the archive
+| | name	(13 bytes)	File name, null padded.
+| +--
++--- File data area
+| +-- File Data
+| | length	(long word)	Size of the file
+| | data	(bytes)		the file's data (surprise!)
+| +--
++---
+
+Font Files (.fnt or .set)
+
+These are very simple; first a short header describing the size of the
+characters in the font and what byte values correspond to each glyph
+followed by the glyph data.
+
++-- Font Header
+| length	(word)		length of the entire font file
+| size		(byte)		number of glyphs in the font file
+| first		(byte)		byte value represented by the first glyph
+| width		(byte)		width of each glyph in pixels
+| height	(byte)		height of each glyph in pixels
+| glyphsize	(byte)		number of bytes to encode each glyph
++-- Glyph Data
+| glyph first
+| glyph first + 1
+| ...
+| glyph first + size - 2
+| glyph first + size - 1
++--
+
+Each glyph is stored almost exactly as you would expect a raw PBM file to
+contain it except that a '0' bit means black and a '1' bit means white.
+In other words, row major order, each line padded to end on a byte
+boundary, most significant bit is leftmost.
+
+
+Image Formats (.pic and .clp)
+
+These consist of a header containing the usual image information followed
+by blocked, run-length encoded image data.
+
++-- Image Header (17 or 19 bytes)
+| magic?	(byte)		magic number?  Always is 0x34 or 0x12
+| width		(word)		width of image in pixels
+| height	(word)		heigh of image in pixels
+| ????		(4 bytes)	unknown
+| bpp		(byte)		bits per pixel (only seen 1 or 8)
+| type		(byte)		image type, either 'L' or 'C'
+| flags		(byte)		if (flags & 4) then image has colourmap
+| ?		(byte)		unknown
+| extend	(byte)		extended header byte (if != 0, header
+|				has 2 more bytes) 1/2?
+| ?		(byte)		unknown
+| ??		(2 bytes)	header extension if extend != 0
++-- Colour Map ((1 << bpp) * 3 bytes, only if flags & 4 == 4)
+| +-- Colour Map entries (as many as indicated by bpp)
+| | R		(byte)		red intensity, 0 - 63   \
+| | G		(byte)		green intensity, 0 - 63  + entry 0
+| | B		(byte)		blue intensity, 0 - 63  /
+| +--
+| ...
++-- Image Data
+| blocks	(word)		number of blocks of data
+| +-- Data Block (blocks of them)
+| | length	(word)		length of data block, including header
+| | bufsize	(word)		buffer size needed to hold all the
+| |				uncompressed data in this block
+| | esc		(byte)		the escape code in this block
+| | data	(length - 5 byte)	run-length encoded data
+| +--
++--
+
+The run-length encoding is byte oriented and follows these rules:
+
+- characters other than "esc" (see data block header) are literal
+- esc n c means repeat c n times (1 <= n <= 255)
+- esc 0 len(word) c means repeat c len times
+
+If bpp=1, then the resulting data stream is interpreted as it is
+with font glyphs (i.e., msb is left, pad to bytes, row first, etc).
+If bpp=8, then each byte in the data stream is an index into the
+colour map.  If no colour map is available, the map to use can
+only be discovered by running through the command file.
+
+I've only seen images with bpp=1 and bpp=8 and they it always works
+out that either bpp=1 and type=C or bpp=8 and type=L.  The type=C
+corresponds to CGA graphics which are mostly monochrome and 640 x 200
+(so the aspect ratio is funny).  Type=L is colour graphics, prob. VGA
+and usually 320 x 200.  Notice that the colour maps have only 6
+bits, the same as VGA's digital to analog converters.  ".pic" files
+always have colour maps, ".clp" files never do.  It seems that
+you can be lazy with your run-length decoding code; I've never seen
+a full sequence appear across a data-block boundary (encoders should
+probably not let that happen).  The amount of uncompressed data
+in a block never seems to exceed 8192 bytes.
+
+Much of the header information is mysterious.  Note that the header
+extension field is a guess and that there are other consistent
+possibilities (e.g., the extension field is a length byte or even
+part of a length word).  Only type=C images seem to have the
+extension.  Maybe the extra information is supposed to be used
+in video mode operating system calls on the PC?
+
+What made this part easier was the existence of a PC-based program which
+converts ".pic" files into GIF files.  Its called "cvt2gif" and can
+be found on wuarchive.wustl.edu:/mirrors/msdos/gif/cvt2gif.zip.  Those
+wishing to enhance the format descriptions would do well to get a
+copy.  I did notice that bpp=1 images are not necessarily black and white
+but could be black and some other colour as selected from the CGA
+pallette.  I doubt the distinction will make much difference to the
+animation, but if you really want to do it right...
+
+
+Command File (.txt)
+
+The command file looks like a typical script file with the lines delimited
+by carriage returns, line feeds or both.  Any text following ';' on a line
+is a comment.  Text followed by a colon is used to indicate a label
+(much like most assemblers).  Commands consist of a keyword followed by a
+list of comma separated arguments.  The input is case-insensitive except
+for arguments containing text to display (which are in double quotes).
+
+The basis of the command language seems to be what I call picture and
+clip registers, of which there are 16 of each.  A few commands will
+load a picture (or clip) from a file into a register.  Other commands
+then reference the register numbers to display the pictures or get
+colour maps from them.  It seems that the colour map from a picture
+(.pic) is installed into the hardware and this is where the
+colour maps for the clips (.clp) come from.  I assume that I am missing
+a lot of commands, but most notably I believe there should be
+more primitive drawing commands.
+
+Many of the commands seem to have a delay argument associated with
+them.  This seems reasonable as control over time in an animation
+is important.  I may have been over-zealous in looking for delays.
+The actual time units of the delays is unknown.  They are typically
+numbers < 100, so milliseconds are a likely candidate.  Hundredths
+of a second are possible as well.
+
+Here is a list of commands.  Optional arguments are enclosed in [].
+Ranges are possible in arguments (I've only seem them in fly) and
+take the form "n,-,m", (e.g., fly 0,0,10,10,1,1,1,-,16).
+
+* box x1,y1,x2,y2,colour?
+Draw a box with corners (x1, y1) and (x2, y2) in the colour given by
+the colourmap entry number.
+
+* cfade x,y,delay,img,[,?,?]
+Display a clip image img at (x, y) and wait for delay time units before
+proceeding.
+
+* cfree n
+Free up any memory associated with clip register n.
+
+* clearscr
+Clear the display (to the currently selected colour or black?).
+
+* cload name,num[,?]
+Load a clip image "name" into clip register num.  If name does not
+have a .clp extension, it will be automatically appended.
+
+* color n
+Set the current colour to n.  This at least seems to affect the
+text displaying commands.
+
+* exit
+Terminate the command file.
+
+* fload name
+Load the named font which becomes the font to be used when displaying
+text.  ".fnt" is appended to name if necessary.
+
+* float x1,y1,x2,y2,step?,delay?,num
+Move the clip image (num) by displaying it at (x1,y1) and erasing it
+and displaying it every step pixels until (x2,y2).  Delay delay time
+units in between steps.  Or maybe something completely different,
+but the x1,y1,x2,y2 and num arguments are probably coordinates and
+a clip number.
+
+* fly x1,y1,x2,y2,step?,delay?,clip list
+Successively display the clip images from (x1,y1) to (x2,y2) with delay
+time units in-between.  The clip list is just a bunch of clip numbers
+separated by commas (i.e., fly is varags).  A range is likely to
+appear in the clip list.  Often (x1,y1) == (x2,y2).
+
+* fstyle ?[,?]
+Presumably set up some parameters on how a font is displayed.
+
+* goto label
+Force flow of control to the given label.
+
+* loop
+Denotes the end of a mark loop.  Continues the loop at the most recent
+mark if the loop hasn't finished.  
+
+* mark n
+This pairs with the loop command and begins a for loop from 1 to n.
+One assumes that the interaction of mark, loop and goto is the same
+as for, next and goto in BASIC.  That is, loops are dynamically
+scoped and you can jump in and out of them.  Mark simply pushes
+a loop start onto the stack and loop examines whatever is on
+the top of the loop stack.
+
+* mode ?
+Modify the current video mode in some way.  I haven't seen this often.
+
+* note freq,delay?,duration
+
+Play a musical note of the given frequency and duration and delay for
+delay time units afterward.
+
+* pallette n
+Make the colour map from picture register n be the one to use.  This probably
+installs it into the hardware so that when a clip is loaded there is
+no colour map to change.
+
+* pfade effect,pict[,delay?[,?,?]]
+Display the picture numbered pict on the screen.  The effect number
+indicates what sort of special effect is used to display it.  What
+the numbers mean I have no idea, but I know some of the effects.
+Each pixel loaded randomly, every even line then every odd line
+and so on.  The delay parameter seems to make sense, but not always.
+The extra parameters could be those needed for some effects.  Often
+they are large numbers.
+
+* pfree n
+Free up any memory associated with picture register n.
+
+* pload name,n
+Load picture "name" into picture register n.  ".pic" is appended to
+name if necessary.
+
+* putup x,y,n
+Display clip register n at (x,y).
+
+* set retrace [on|off]
+Set is probably a general internal control variable changing command.
+What retrace is I have no idea, but it was set off then on around
+a fly statement.
+
+* spread ?,?
+Who knows, but the numbers used are probably picture register numbers.
+Maybe some kind of colourmap changing?
+
+* text x,y,"text",[delay?]
+Display the given text (enclosed in double quotes) at (x,y).  The
+extra parameter is probably a display, but it could be the display
+colour or the background colour.  Probably the display colour is
+that given by the color statement.
+
+* tran [on 0|off]
+No idea.  Was used around some cload and float statements.
+
+* video mode
+Set the display mode to 'C' or 'L' (remember the image format types?).
+Usually the first statement in a command file.  C almost certainly
+refers to CGA which is 640 x 200 monochrome and L almost certainly
+to VGA which (in their case) is 320 x 200 x 256.
+
+* waitkey [[delay[,label]]
+Wait up to delay units for the user to press a key (or forever if no
+delay time is given).  If the user presses a key and the label
+argument is present, transfer control to that label.
+
+* window x1,y1,x2,y2,?
+Some kind of display control.  Probably a clipping window with appropriate
+coordinate translation (i.e., (0,0) becomes (x1,y1)).
+
+
+
+This document was created by looking hard at a number of GL files,
+using cvt2gif to help decipher the image file format and looking
+at 1 or 2 animations on an RS-6000 running a PC emulator and using
+grasprt.  cvt2gif was very useful; grasprt under the PC emulator
+was painfully slow at times and didn't help my understanding
+much.  I've never even gotten close to a copy of the program for
+creating and editing GL files.
+
+If you find out more about GL files, send me the changes so I can
+extend this document.  Feel free to include this as supplementary 
+documentation if you write a GL player.  Finally, here are some
+projects which could help find out more about GL files:
+
+- Get cvt2gif and feed it small variations on .pic files to decipher
+the meaning of the missing header fields.  I may do this.
+
+- Alter control files on some animations and see what effects they
+have.  Something easy would be to change the effect number on
+pfade statements (if that's what it is).  I don't have the hardware
+to do this.
+
+- Look at the GRASP animation package and intuit what the commands
+mean by what control you have over generating animations.  This is
+probably the easiest way to get information.  I don't have GRASP,
+I don't know where to get it and I don't has a PC good enough to
+run it on.
+
+========================================================================
+
+GRASP/Pictor Font format description                                  09/06/87
+------------------------------------                                  --------
+
+For convenience, we have chosen to adopt the IBM ROM font format for data, but
+to keep things manageable, we have added a 7 byte header which describes the
+font.
+
+The seven byte header is defined as follows:
+
+WORD	number of bytes in character data, plus this 7 byte header.
+BYTE	number of characters in set. 1-255 or 0 if 256.
+BYTE	ascii value of first character.
+BYTE	x size of character in pixels.
+BYTE	y size of character in pixels.
+BYTE	number of bytes in a single character.
+
+As you can see from this header data, these limits apply:
+
+1) Maximum number of characters in set is 256.
+2) Maximum character size is limited as: xsize/8 * ysize <256.
+3) All character data plus 7 byte header must be <64K in size
+
+
+We use the following structure when writing programs that use fonts. Note the
+additional words at the end of the structure which allow you to keep the actual
+character data in a far segment.
+
+struct chs {		/* character set structure */
+	unsigned int numchbyts;
+	unsigned char numchars;
+	unsigned char ascoff;
+	unsigned char chxsize;
+	unsigned char chysize;
+	unsigned char chbytes;
+	unsigned int chsseg;	/* segment of character data */
+	unsigned int chsofs;	/* offset in segment of character data */
+};
+
+
+So....A 256 character 8x16 font's header would look like:
+
+numchbyts   = 4103         256 chars X 16 bytes/char + 7 bytes for header
+numchars    =    0         0 to represent 256
+ascoff      =    0         start with 0 character
+chxsize     =    8         8 dots wide
+chysize     =   16         16 dots high
+chbytes     =   16         1 byte wide x 16 dots high
+
+
+and a 96 character 11 X 18 font whose first character is SPACE's header would
+look like:
+
+numchbyts   = 3456         96 chars X 36 bytes/char + 7 bytes for header
+numchars    =    0         0 to represent 256
+ascoff      =   32         start with 'SPACE' character
+chxsize     =   11         8 dots wide (this takes 2 bytes!)
+chysize     =   18         16 dots high
+chbytes     =   36         2 byte wide x 18 dots high
+
+========================================================================
+
+
+
+                   PCPAINT/Pictor Page Format Description
+
+                          Format by John Bridges.
+
+                   Document by Microtex Industries, Inc.
+
+
+
+
+
+Revision Date: 2/9/88
+
+
+
+Global Notes:
+------------
+
+PCPAINT 1.0 - Revision 1.0 was developed for Mosue Systems in 1984 supported
+only BSAVE files in CGA 4 color mode. In the space between the scan buffers
+was a string that read PCPAINT 1.0 followed by 2 bytes which were the pallete
+and border information for that picture.
+
+PCPAINT 1.5 - Revision 1.5 was the same as 1.0 except that it contained larger
+than screen images and also had a primative packing format. This was sold for
+so short a time that it won't be covered here.
+
+PCPAINT 2.0 thru Pictor 3.1 - This document describes these formats. The file
+description is identical for all revisions in this range. However, in
+PCPAINT 2.0, the bit-planes were packed together so that the pictures
+resembled a PCjr picture, or 4 bits per pixel, 1 bit plane. Starting with
+Pictor 3.0, the files were saved with the bitplanes separated. This takes a
+little more memory in some cases, but the speed in loading and saving was a
+desireable consideration.
+
+NOTE TO PROGRAMMERS: A good PCPAINT/Pictor file decoder will use the variables
+                     in the header to decode the image and thus be compatible
+                     with all formats since the October, 1985 release of
+                     PCPAINT 2.0.
+
+Also please note that PCPAINT/Pictor are stored from the bottom up. This is
+opposite that of most of the screen adapters it supports. This really causes
+no problem, but be aware that you should use a Y table to look up scan lines.
+In all PCPAINT/Pictor pictures, the scan lines are continuous. If a picture 
+is to be displayed on a particular adapter, the programmer is responsible for
+using a y-table to properly interleave the lines if necessary.
+
+Also note that Pictor was designed for speed, so no inter-mode loading is
+possible. If you are writing applications that create Pictor images that you
+want to load into Pictor, you must remain mode dependent. 
+
+Header - A full description of the file header information.
+
+offset	type	name	description
+-------	-------	-------	----------------------------------------------------- 
+  0	word	marker	marker that is always 01234h
+
+  2	word	xsize	x size of page in pixels 
+
+  4	word	ysize	y size of page in pixels
+
+  6	word	xoff	x offset into page where lower left hand corner of
+			viewport is located (default of 0 is ok)
+
+  8	word	yoff	y offset into page where lower left hand corner of
+			viewport is located (default of 0 is ok)
+
+ 10	byte	bitsinf	bits 0-3 is the number of bits per pixel per bit
+			plane and bits 4-7 is the number of bit planes (so
+			4 color cga mode would be 02h and 16 color ega would
+			be 31h and plantronics 16 color would be 12h)
+
+ 11	byte	emark	marker that is always a 0ffh
+
+ 12	byte	evideo	single uppercase letter indicating which video mode
+			this picture was created in, can default to 0.
+
+			0 - 40 col text
+			1 - 80 col text
+			2 - mono text
+			3 - 43 line text
+
+			A=320x200x4 cga
+			B=320x200x16 pcjr, stbplus, tandy 1000
+			C=640x200x2 cga
+			D=640x200x16 ega
+			E=640x350x2 ega
+			F=640x350x4 ega
+			G=640x350x16 ega
+			H=720x348x2 hercules
+			I=320x200x16 plantronics
+			J=320x200x16 ega
+			K=640x400x2 AT&T or Toshiba 3100
+			L=320x200x256 vga
+			M=640x480x16 ega plus(video 7, tseng, paradise), vga
+			N=720x348x16 Hercules InColor
+			O=640x480x2 vga
+
+ 13	word	edesc	extra information descriptor defines what is in
+			the extra information that follows this header,
+			0=nothing
+			1=pallet (single byte) border (single byte)[CGA]
+			2=pcjr or non ECD 16 color registers (0-15), 1 byte each
+			3=EGA with ECD 16 color registers (0-63) 1 byte each
+			4=VGA 256 color info - 256 colors, 1 byte each rgb gun.  
+
+ 15	word	esize	size of extra information in bytes
+
+ 17	byte	edata[]	the actual extra data the size which is defined
+			by esize (at offset 15).
+ 17+
+ esize	word	numblks	the number of packed blocks in this file. if this is
+			a zero, then data is unpacked. 
+
+
+Structures - These C structures describe the header information.
+
+struct head {
+	unsigned int mark=0x1234;	/* marks begining of a page file */
+	unsigned int xsize;		/* x size of page */
+	unsigned int ysize;		/* y size of page */
+	unsigned int xoff;		/* current x offset into picture of viewport */
+	unsigned int yoff;		/* current y offset into picture of viewport */
+	unsigned char bitsinf;
+}
+
+struct extra {
+	unsigned char emark=0xff;
+	unsigned char evideo;
+	unsigned int edesc;
+	unsigned int esize;
+}
+
+int edata[esize];
+unsigned int numblks;
+
+If the file is packed then what follows is a multi block packed file,
+otherwise (if the file is not packed, numblks=0) the actual data follows.
+
+Bit planes follow each other in the file and when packed each bit plane
+must start in a new packed block.
+
+
+Packed Block Description
+
+
+Packed block header
+
+PBSIZE	dw		;Packed block size. The size of this block
+BSIZE	dw		;Unpacked block size
+MBYTE	db		;Unique marker byte. This is a byte that does not
+			; exist in the current unpacked block. If no unique
+			; byte exists, then pick one that is used rarely
+			; to avoid too much redundancy.
+
+Packed block data - variable size depending on whether 16 bit run is needed.
+
+MARKER	db		;mark a run (this is where MBYTE goes) 
+LENGTH	db		;length of run. if 0, then look at BIGLEN
+
+BIGLEN	dw		;16 bit run count (only exists if LENGTH==0)
+DATA	db		;byte to fill run with
+
+
+Example 1 - a 320x200, 4 color, packed page file, of a white screen. 
+
+	dw	0x1234		;marker
+	dw	320		;x size
+	dw	200		;y size
+	dw	0		;x offset
+	dw	0		;y offset
+	db	02h		;2 bits per pixel and 1 bit plane
+
+	db	0xff		;extra info flag
+	db	'A'		;vidmode
+	dw	1		;extra area descriptor (pal and bord)
+	dw	2		;bytes in extra area
+	db	2,0		;pallet and border (extra information)
+
+	dw	2		;number of packed blocks
+
+;first block
+	dw	5+5		;packed block size
+	dw	8192		;unpacked block size
+	db	0		;marker byte
+	db	0		;mark a run
+	db	0		;a 16 bit run count follows
+	dw	8192		;16 bit run count
+	db	0xff		;byte to fill run with
+;second block
+	dw	5+5		;packed block size
+	dw	7808		;unpacked block size
+	db	0		;marker byte
+	db	0		;mark a run
+	db	0		;a 16 bit run count follows
+	dw	7808		;16 bit run count
+	db	0xff		;byte to fill run with
+
+
+
+
+Example 2 - a 640x350, 16 color, packed page file, of a red screen (color 4).
+
+	dw	0x1234		;marker
+	dw	640		;x size
+	dw	350		;y size
+	dw	0		;x offset
+	dw	0		;y offset
+	db	31h		;bits per pixel and 1 bit plane
+
+	db	0xff		;new extra info flag
+	db	'G'		;vidmode
+	dw	3		;extra area descriptor (pal and bord)
+	dw	16		;bytes in extra area
+	db	0,1,2,3,4,5,14h,7
+	db	38h,39h,3ah,3bh,3ch,3dh,3eh,3fh
+
+	dw	16		;number of packed blocks
+;block 1 of first bit plane
+	dw	5+5		;packed block size
+	dw	8192		;unpacked block size
+	db	0		;marker byte
+	db	0		;mark a run
+	db	0		;a 16 bit run count follows
+	dw	8192		;16 bit run count
+	db	0		;byte to fill run with
+;block 2 of first bit plane
+	dw	5+5		;packed block size
+	dw	8192		;unpacked block size
+	db	0		;marker byte
+	db	0		;mark a run
+	db	0		;a 16 bit run count follows
+	dw	8192		;16 bit run count
+	db	0		;byte to fill run with
+;block 3 of first bit plane
+	dw	5+5		;packed block size
+	dw	8192		;unpacked block size
+	db	0		;marker byte
+	db	0		;mark a run
+	db	0		;a 16 bit run count follows
+	dw	8192		;16 bit run count
+	db	0		;byte to fill run with
+;block 4 of first bit plane
+	dw	5+5		;packed block size
+	dw	3424		;unpacked block size
+	db	0		;marker byte
+	db	0		;mark a run
+	db	0		;a 16 bit run count follows
+	dw	3424		;16 bit run count
+	db	0		;byte to fill run with
+;block 1 of second bit plane
+	dw	5+5		;packed block size
+	dw	8192		;unpacked block size
+	db	0		;marker byte
+	db	0		;mark a run
+	db	0		;a 16 bit run count follows
+	dw	8192		;16 bit run count
+	db	0		;byte to fill run with
+;block 2 of second bit plane
+	dw	5+5		;packed block size
+	dw	8192		;unpacked block size
+	db	0		;marker byte
+	db	0		;mark a run
+	db	0		;a 16 bit run count follows
+	dw	8192		;16 bit run count
+	db	0		;byte to fill run with
+;block 3 of second bit plane
+	dw	5+5		;packed block size
+	dw	8192		;unpacked block size
+	db	0		;marker byte
+	db	0		;mark a run
+	db	0		;a 16 bit run count follows
+	dw	8192		;16 bit run count
+	db	0		;byte to fill run with
+;block 4 of second bit plane
+	dw	5+5		;packed block size
+	dw	3424		;unpacked block size
+	db	0		;marker byte
+	db	0		;mark a run
+	db	0		;a 16 bit run count follows
+	dw	3424		;16 bit run count
+	db	0		;byte to fill run with
+;block 1 of third bit plane
+	dw	5+5		;packed block size
+	dw	8192		;unpacked block size
+	db	0		;marker byte
+	db	0		;mark a run
+	db	0		;a 16 bit run count follows
+	dw	8192		;16 bit run count
+	db	0xff		;byte to fill run with
+;block 2 of third bit plane
+	dw	5+5		;packed block size
+	dw	8192		;unpacked block size
+	db	0		;marker byte
+	db	0		;mark a run
+	db	0		;a 16 bit run count follows
+	dw	8192		;16 bit run count
+	db	0xff		;byte to fill run with
+;block 3 of third bit plane
+	dw	5+5		;packed block size
+	dw	8192		;unpacked block size
+	db	0		;marker byte
+	db	0		;mark a run
+	db	0		;a 16 bit run count follows
+	dw	8192		;16 bit run count
+	db	0xff		;byte to fill run with
+;block 4 of third bit plane
+	dw	5+5		;packed block size
+	dw	3424		;unpacked block size
+	db	0		;marker byte
+	db	0		;mark a run
+	db	0		;a 16 bit run count follows
+	dw	3424		;16 bit run count
+	db	0xff		;byte to fill run with
+;block 1 of fourth bit plane
+	dw	5+5		;packed block size
+	dw	8192		;unpacked block size
+	db	0		;marker byte
+	db	0		;mark a run
+	db	0		;a 16 bit run count follows
+	dw	8192		;16 bit run count
+	db	0		;byte to fill run with
+;block 2 of fourth bit plane
+	dw	5+5		;packed block size
+	dw	8192		;unpacked block size
+	db	0		;marker byte
+	db	0		;mark a run
+	db	0		;a 16 bit run count follows
+	dw	8192		;16 bit run count
+	db	0		;byte to fill run with
+;block 3 of fourth bit plane
+	dw	5+5		;packed block size
+	dw	8192		;unpacked block size
+	db	0		;marker byte
+	db	0		;mark a run
+	db	0		;a 16 bit run count follows
+	dw	8192		;16 bit run count
+	db	0		;byte to fill run with
+;block 4 of fourth bit plane
+	dw	5+5		;packed block size
+	dw	3424		;unpacked block size
+	db	0		;marker byte
+	db	0		;mark a run
+	db	0		;a 16 bit run count follows
+	dw	3424		;16 bit run count
+	db	0		;byte to fill run with
+
+
+
+Example 3 - For more detail lets consider a block that isn't all the same.
+Say the data consists of 30 2's, and 8, a 4, and 300 1's.
+
+; the block would look like this 
+
+	dw	5+10		;packed block size
+	dw	332		;30 + 1 + 1 + 300 bytes as above
+	db	ff		;what to mark a run with,
+                                ; because there are no ff's in our example.
+
+	db	ff		;mark a run 
+	db	30		;8 bit run count
+	db	2		;byte to fill run with - 2
+
+	db	8		;not a run marker, so must be data
+
+	db	4		;not a run marker, so must be data
+
+	db	ff		;mark a run
+	db	0		;means 16 bit run count follows
+	dw	300		;run count	
+	db	1		;byte to fill run with - 1
+
+
+The actual unpacked data that resides in memory consists 2 seperate
+sections.
+
+1. The control structure: contains x size, y size, x offset, y offset,
+   segment of bit mapped data, number of bits per pixel and number of
+   additional bit planes. this information is kept in pcpaint's data segment.
+
+2. The actual bit mapped data: contains the actual page image, mapped from
+   bottom left (so bottom scan line is first). The data is contiguous within
+   each bit plane, so scan line 1 follows scan line 0 directly. the page
+   can and does cross segment boundires (a bit plane can be larger than
+   64k). each bit plane follows the previous but starts on a paragraph
+   boundary, the printer driver will be passed the offset in paragraphs
+   between bit planes and the number of additional planes.
+   The bit planes start with bit 0, each additional plane is the next bit.
+
+

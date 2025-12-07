@@ -1,0 +1,158 @@
+ID:XD XDI Specification for DESQview
+Quarterdeck Technical Note
+by Daniel Travison
+
+Q: How can my device driver/TSR work better with DESQview?
+
+DESQview's External Device Interface
+
+DESQview version 2.26 (and above), can issue informative messages to third
+party software in order for that software to monitor certain DESQview
+operations such as starting a task or swapping out a process. These
+messages can be useful for determining when to allocate/deallocate
+resources (e.g., memory) on a process by process basis, communicating with
+tasks running within DESQview, rescheduling tasks, tracking DESQview's task
+switching, etc.
+
+DESQview provides this information through the External Device Interface
+(XDI) - Quarterdeck's specification for communicating with external
+drivers.
+
+An XDI driver may be implemented either as a DOS device driver (loaded by
+CONFIG.SYS), a Terminate and Stay Resident program (TSR) loaded before or
+after DESQview, or as a DESQview shared program (shared among several
+processes).  For the rest of this documentation, the term 'driver' will
+normally refer to a program that uses the XDI irrespective of its method of
+implementation (device driver, TSR or shared program).  Also, any number of
+XDI drivers can be loaded.  When DESQview starts, it simply attaches itself
+to the XDI chain and starts sending XDI messages to to previously loaded
+XDI drivers.
+
+Within the XDI, there are 15 subfunctions (messages). Fourteen of these
+messages inform the driver what action DESQview has just performed or
+is about to perform.  Your driver can choose to ignore the message and pass
+it on to the next driver in the chain, perform/schedule work based on the
+message, or save information for later use (e.g., the current mapping
+context).
+
+      XDI_CHECK_PRESENCE      Check for XDI driver presence
+      XDI_RESERVED_SUBFUNC    XDI driver custom subfunction
+      XDI_START_DV            DV system initialization complete
+      XDI_END_DV              DV system termination
+      XDI_START_PROC          DV process creation
+      XDI_END_PROC            DV process termination
+      XDI_START_TASK          Task creation
+      XDI_END_TASK            Task termination
+      XDI_SAVE_STATE          Task state save
+      XDI_RESTORE_STATE       Task state restore
+      XDI_KEYBOARD            Change of keyboard focus
+      XDI_PROCESS_DVP         Processing of DVP file complete
+      XDI_SWAPPING_OUT        Swap out of DV process
+      XDI_SWAPPED_IN          Swap in of DV process
+      XDI_FAILED_DVP          DV process creation failure
+
+An XDI driver can schedule second level handlers to make API calls, collect
+data, transfer data, dispatch tasks, perform initialization/termination
+when DESQview is started and quit.
+
+The fifteenth subfunction, XDI_RESERVED_SUBFUNC provides a method for
+applications to communicate with your driver without needing to grab an
+additional interrupt vector.  Additionally, this interface does not require
+DESQview to be loaded.  In other words, if DESQview is not loaded, the
+application and XDI driver will still be able to communicate.
+
+Q: When would I want to use the XDI specification?
+
+If your driver needs to write into an application's address space then you
+need to ensure that the address is valid when you perform the write. (e.g.,
+The DOS SETDTA call requires the caller provide a pointer to a buffer that
+will be filled in at a later time.  A communications handler might use a
+similar interface but perform the update at interrupt time.)  With
+DESQview, this buffer may get mapped in and out to accomodate running
+multiple programs. If your driver attempts to write into this buffer when
+DESQview has mapped some other application into it (e.g., at interrupt
+time) then you will be corrupting the unknown application. The XDI allows
+your driver to determine when the write operation is safe or specifically
+request that DESQview map the application in to allow safe access to the
+application's address space.
+
+Another example is the use of Multiplex boards.  Multiplex boards have two
+important features: One, they provide access to multiple external devices
+(e.g., modems) using a single IRQ and two, they provide a software
+interface for applications.  The software interface removes the need for
+the application to manage the hardware directly.  In the case of a
+multiplex board providing additional serial ports, the user will often want
+to run more than one program at a time to take advantage extra serial
+ports. (e.g., A number of BBS systems provide the option for running
+multiple copies at once and also support drivers for multiplex boards.)
+The programmer writing the driver will need to accomodate simultaneous
+access to the driver as well as provide a reliable software interface.
+
+Other issues addressed by the XDI:
+
+   1) Allocation of a software interrupt to allow the application to
+      communicate with the driver.  With more and more device drivers and
+      TSR's available, it is important to prevent possible conflicts with
+      other software. The XDI specification uses the multiplex interrupt
+      (INT 2Fh) as a basis for sharing a single interrupt using a well
+      defined interface.  Once the application has 'logged' itself with the
+      driver (XDI_RESERVED_SUBFUNC), the driver might provide an ID for
+      future use or simply manage it internally based on which process
+      DESQview has mapped in when the software interrupt is called.  This
+      portion of the interface functions in the same manner whether
+      DESQview is loaded or not.  When DESQview is not present, the driver
+      does not need to be concerned with the mapping context.
+
+   2) Allocation of memory/application that needs to be accessible at any
+      given time.  This might be a buffer for incoming data.  Normally, the
+      driver would need to allocate all of its memory needs during its
+      initialization code.  DESQview allows an XDI driver to allocate
+      COMMON memory (memory that does not get mapped out) during an XDI
+      call.  This allows the driver to allocate only the memory necessary
+      when a new application starts.  It DESQview is not present, the
+      application would allocate a buffer out of its own data space. A
+      check for DESQview would be all that is necessary for the application
+      to determine whether it needs to allocate a buffer or allow the
+      driver to allocate it from COMMON memory.
+
+   3) Preventing reentrancy during non-reentrant sections of code.  In a
+      perfect world, all of your driver's code would be reentrant.  Since
+      this may not be practical without unreasonble code or CPU overhead,
+      the XDI driver can temporarily suspend multitasking to perform its
+      critical work.  This does not mean that the XDI allows you to write
+      non-reentrant handlers but it can solve some sticky issues that arise
+      when you need to support simultaneous access.
+
+   4) The application can not keep up with the data rate.  There will be
+      times when the application can not empty the driver's buffer faster
+      than the driver can fill it.  The user may have started up a few
+      extra applications and the CPU is too slow to give everyone enough
+      time. The XDI driver could consider some percentage of the buffer as
+      a threshold. When this threshold is reached the driver can
+      temporarily override DESQview's dispatcher and force the
+      application's 'buffer management' routine to execute at the next
+      context switch.
+
+   5) The driver needs to know when the application exits to allow proper
+      cleanup.  Normally, the application itself would call the driver to
+      initiate cleanup.  Occasionally this will not occur (e.g., the user
+      shut down the application via DESQview's Close Window menu
+      selection).  DESQview notifies the XDI driver when a process ends to
+      allow the driver to determine if it needs to perform any cleanup for
+      the process.
+
+There are other areas where an XDI driver would be of use; resource
+tracking on a process by process basis, modifying the .DVP when each
+process starts, allocating additional system memory for the process at
+startup, tracking CPU usage, or even displacing DESQview's dispatcher.
+
+Q: How do I find out more about the XDI?
+
+DESQview's XDI is fully documented in Quarterdeck's API Reference Manual
+(versions 1.20 and later).  Included is a sample XDI driver (POKEXDI.ASM)
+that can be used as a template for designing your own. Contact Quarterdeck
+for information on obtaining a copy of our API Reference Manual or upgrading
+and older API Reference Manual.
+
+        Copyright (C) 1990 by Quarterdeck Office Systems
+             * * *   E N D   O F   F I L E    * * * 

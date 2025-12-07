@@ -1,0 +1,349 @@
+CHAPTER 6    THE 86 INSTRUCTION SET
+
+
+Effective Addresses
+
+Most memory data accessing in the 86 family is accomplished via
+the mechanism of the effective address.  Wherever an effective
+address specifier "eb", "ew" or "ed" appears in the list of 8086
+instructions, you may use a wide variety of actual operands in
+that instruction.  These include general registers, memory
+variables, and a variety of indexed memory quantities.
+
+GENERAL REGISTERS: Wherever an "ew" appears, you can use any of
+the 16-bit registers AX,BX,CX,DX,SI,DI,SP, or BP.  Wherever an
+"eb" appears, you can use any of the 8-bit registers
+AL,BL,CL,DL,AH,BH,CH, or DH.  For example, the "ADD ew,rw" form
+subsumes the 16-bit register-to-register adds; for example, ADD
+AX,BX; ADD SI,BP; ADD SP,AX.
+
+MEMORY VARIABLES: Wherever an "ew" appears, you can use a word
+memory variable.  Wherever an "eb" appears, you can use a byte
+memory variable.  Variables are typically declared in the DATA
+segment, using a DW declaration for a word variable, or a DB
+declaration for a byte variable.  For example, you can declare
+variables:
+
+     DATA_PTR  DW ?
+     ESC_CHAR  DB ?
+
+Later, you can load or store these variables:
+
+     MOV SI,DATA_PTR    ; load DATA_PTR into SI for use
+     LODSW              ; fetch the word pointed to by DATA_PTR
+     MOV DATA_PTR,SI    ; store the value incremented by the LODSW
+     MOV BL,ESC_CHAR    ; load the byte variable ESC_CHAR
+
+Alternatively, you can address specific unnamed memory locations
+by enclosing the location value in square brackets; for example,
+
+     MOV AL,[02000]     ; load contents of location 02000 into AL
+
+Note that A86 discerned from context (loading into AL) that a
+BYTE at 02000 was intended.  Sometimes this is impossible, and
+you must specify byte or word:
+
+     INC B[02000]       ; increment the byte at location 02000
+     MOV W[02000],0     ; set the WORD at location 02000 to zero
+                                                              6-2
+
+INDEXED MEMORY: The 86 supports the use of certain registers as
+base pointers and index registers into memory.  BX and BP are the
+base registers; SI and DI are the index registers.  You may
+combine at most one base register, at most one index register,
+and a constant number into a run time pointer that determines the
+location of the effective address memory to be used in the
+instruction.  These can be given explicitly, by enclosing the
+index registers in brackets:
+
+     MOV AX,[BX]
+     MOV CX,W[SI+17]
+     MOV AX,[BX+SI+5]
+     MOV AX,[BX][SI]5   ; another way to write the same instr.
+
+Or, indexing can be accomplished by declaring variables in a
+based structure (see the STRUC directive in Chapter 9):
+
+     STRUC [BP]        ; NOTE: based structures are unique to A86!
+       BP_SAVE   DW ?  ; BP_SAVE is a word at [BP]
+       RET_ADDR  DW ?  ; RET_ADDR is a word at [BP+2]
+       PARM1     DW ?  ; PARM1 is a word at [BP+4]
+       PARM2     DW ?  ; PARM2 is a word at [BP+6]
+     ENDS
+     INC PARM1         ; equivalent to INC W[BP+4]
+
+Finally, indexing can be done by mixing explicit components with
+declared ones:
+
+     TABLE    DB  4,2,1,3,5
+     MOV AL,TABLE[BX]        ; load byte number BX of TABLE
+
+
+Segmentation and Effective Addresses
+
+The 86 family has four segment registers, CS, DS, ES, and SS,
+used to address memory.  Each segment register points to 64K
+bytes of memory within the 1-megabyte memory space of the 86.
+(The start of the 64K is calculated by multiplying the segment
+register value by 16; i.e., by shifting the value left by one hex
+digit.)  If your program's code, data and stack areas can all fit
+in the same 64K bytes, you can leave all the segment registers
+set to the same value.  In that case, you won't have to think
+about segment registers--no matter which one is used to address
+memory, you'll still get the same 64K.  If your program needs
+more than 64K, you must point one or more segment registers to
+other parts of the memory space.  In this case, you must take
+care that your memory references use the segment registers you
+intended.
+
+Each effective address memory access has a default segment
+register, to be used if you do not explicitly specify which
+segment register you wish.  For most effective addresses, the
+default segment register is DS.  The exceptions are those
+effective addresses that use the BP register for indexing.  All
+BP-indexed memory references have a default of SS.  (This is
+because BP is intended to be used for addressing local variables,
+stored on the stack.)
+                                                              6-3
+
+If you wish your memory access to use a different segment
+register, you provide a segment override byte before the
+instruction containing the effective address operand.  In the A86
+language, you code the override by giving the name of the segment
+register you wish before the instruction mnemonic.  For example,
+suppose you want to load the AL register with the memory byte
+pointed to by BX.  If you code MOV AL,[BX], the DS register will
+be used to determine which 64K segment BX is pointing to.  If you
+want the byte to come from the CS-segment instead, you code CS
+MOV AL,[BX].  Be aware that the segment override byte has effect
+only upon the single instruction that follows it.  If you have a
+sequence of instructions requiring overrides, you must give an
+override byte before every instruction in the sequence.  (In that
+case, you may wish to consider changing the value of the default
+segment register for the duration of the sequence.)
+
+NOTE: This method for providing segment overrides is unique to
+the A86 assembler!  The assemblers provided by Intel and IBM
+(MS-DOS) attempt to figure out segment allocation for you, and
+plug in segment override bytes "behind your back".  In order to
+do this, those assemblers require you to inform them which
+variables and structures are pointed to by which segment
+registers.  That is what the ASSUME directive in those assemblers
+is all about.  I wrote Intel's first 86 assembler, ASM86, so I
+have been watching the situation since day one.  Over the years,
+I have concluded that the ASSUME mechanism creates far, far more
+confusion that it solves.  So I scrapped it; and the result is an
+assembler with far less red tape.  But if your program needs more
+than 64K, you do have to manage those segment registers yourself;
+so take care!
+
+
+Effective Use of Effective Addresses
+
+Remember that all of the common instructions of the 86 family
+allow effective addresses as operands.  (The only major functions
+that don't are the AL/AX specific ones: multiply, divide, and
+input/output).  This means that you don't have to funnel many
+through AL or AX just to do something with them.  You can perform
+all the common arithmetic, PUSH/POP, and MOVes from any general
+register to any general register; from any memory location
+(indexed if you like) to any register; and (this is most often
+overlooked) from any register TO memory.  The only thing you
+can't do in general is memory-to-memory.  Among the more common
+operations that inexperienced 86 programmers overlook are:
+
+   * setting memory variables to immediate values
+
+   * testing memory variables, and comparing them to constants
+
+   * preserving memory variables by PUSHing and POPping them
+
+   * incrementing and decrementing memory variables
+
+   * adding into memory variables
+                                                              6-4
+
+Encoding of Effective Addresses
+
+Unless you are concerned with the nitty-gritty details of 86
+instruction encoding, you don't need to read this section.
+
+Every instruction with an effective address has an encoded byte,
+known as the effective address byte, following the 1-byte opcode
+for the instruction. (For obscure reasons, Intel calls this byte
+the ModRM byte.)  If the effective address is a memory variable,
+or an indexed memory location with a non-zero constant offset,
+then the effective address byte will be immediately followed by
+the offset amount.  Amounts in the range -128 to +127 are given
+by a single signed byte, denoted by "d8" in the table below.
+Amounts requiring a 2-byte representation are denoted by "d16" in
+the table below.  As with all 16-bit memory quantities in the 86
+family, the word is stored with the least significant byte FIRST.
+
+The following table of effective address byte values is organized
+into 32 rows and 8 columns.  The 32 rows give the possible values
+for the effective address operand: 8 registers and 24 memory
+indexing modes.  A 25th indexing mode, [BP] with zero
+displacement, has been pre-empted by the simple-memory-variable
+case.  If you code [BP] with no displacement, you will get
+[BP]+d8, with a d8-value of zero.
+
+The 8 columns of the table reflect further information given by
+the effective address byte.  Usually, this is the identity of the
+other (always a register) operand of a 2-operand instruction.
+Those instructions are identified by a "/r" following the opcode
+byte in the instruction list.  Sometimes, the information given
+supplements the opcode byte in identifying the instruction
+itself.  Those instructions are identified by a "/" followed by a
+digit from 0 through 7.  The digit tells which of the 8 columns
+you should use to find the effective address byte.
+
+For example, suppose you have a perverse wish to know the precise
+bytes encoded by the instruction SUB B[BX+17],100.  This
+instruction subtracts an immediate quantity, 100, from an
+effective address quantity, B[BX+17].  By consulting the
+instruction list, you find the general form SUB eb,ib.  The
+opcode bytes given there are 80 /5 ib.  The "/5" denotes an
+effective address byte, whose value will be taken from column 5
+of the following table.  The offset 17 decimal, which is 11 hex,
+will fit in a single "d8" byte, so we take our value from the
+"[BX] + d8" row.  The table tells us that the effective address
+byte is 6F.  Immediately following the 6F is the offset, 11 hex.
+Following that is the ib-value of 100 decimal, which is 64 hex.
+So the bytes generated by SUB B[BX+17],100 are 80 6F 11 64.
+
+
+                                                              6-5
+
+Table of Effective Address byte values
+
+s  =     ES   CS   SS   DS
+rb =     AL   CL   DL   BL   AH   CH   DH   BH
+rw =     AX   CX   DX   BX   SP   BP   SI   DI
+digit=    0    1    2    3    4    5    6    7
+                                                  Effective
+EA byte                                           address:
+values:  00   08   10   18   20   28   30   38    [BX + SI]
+         01   09   11   19   21   29   31   39    [BX + DI]
+         02   0A   12   1A   22   2A   32   3A    [BP + SI]
+         03   0B   13   1B   23   2B   33   3B    [BP + DI]
+
+         04   0C   14   1C   24   2C   34   3C    [SI]
+         05   0D   15   1D   25   2D   35   3D    [DI]
+         06   0E   16   1E   26   2E   36   3E    d16 (simple var)
+         07   0F   17   1F   27   2F   37   3F    [BX]
+
+         40   48   50   58   60   68   70   78    [BX + SI] + d8
+         41   49   51   59   61   69   71   79    [BX + DI] + d8
+         42   4A   52   5A   62   6A   72   7A    [BP + SI] + d8
+         43   4B   53   5B   63   6B   73   7B    [BP + DI] + d8
+
+         44   4C   54   5C   64   6C   74   7C    [SI] + d8
+         45   4D   55   5D   65   6D   75   7D    [DI] + d8
+         46   4E   56   5E   66   6E   76   7E    [BP] + d8
+         47   4F   57   5F   67   6F   77   7F    [BX] + d8
+
+         80   88   90   98   A0   A8   B0   B8    [BX + SI] + d16
+         81   89   91   99   A1   A9   B1   B9    [BX + DI] + d16
+         82   8A   92   9A   A2   AA   B2   BA    [BP + SI] + d16
+         83   8B   93   9B   A3   AB   B3   BB    [BP + DI] + d16
+
+         84   8C   94   9C   A4   AC   B4   BC    [SI] + d16
+         85   8D   95   9D   A5   AD   B5   BD    [DI] + d16
+         86   8E   96   9E   A6   AE   B6   BE    [BP] + d16
+         87   8F   97   9F   A7   AF   B7   BF    [BX] + d16
+
+         C0   C8   D0   D8   E0   E8   F0   F8    ew=AX   eb=AL
+         C1   C9   D1   D9   E1   E9   F1   F9    ew=CX   eb=CL
+         C2   CA   D2   DA   E2   EA   F2   FA    ew=DX   eb=DL
+         C3   CB   D3   DB   E3   EB   F3   FB    ew=BX   eb=BL
+
+         C4   CC   D4   DC   E4   EC   F4   FC    ew=SP   eb=AH
+         C5   CD   D5   DD   E5   ED   F5   FD    ew=BP   eb=CH
+         C6   CE   D6   DE   E6   EE   F6   FE    ew=SI   eb=DH
+         C7   CF   D7   DF   E7   EF   F7   FF    ew=DI   eb=BH
+
+d8 denotes an 8-bit displacement following the EA byte, to be
+sign-extended and added to the index.
+
+d16 denotes a 16-bit displacement following the EA byte, to be
+added to the index.
+
+Default segment register is SS for effective addresses containing
+a BP index; DS for other memory effective addresses.
+                                                              6-6
+
+
+
+
+
+How to Read the Instruction Set Chart
+
+The following chart summarizes the machine instructions you can
+program with A86.  In order to use the chart, you need to learn
+the meanings of the specifiers (each given by 2 lower case
+letters) that follow most of the instruction mnemonics.  Each
+specifier indicates the type of operand (register byte, immediate
+word, etc.) that follows the mnemonic to produce the given
+opcodes.
+
+
+"c"  means the operand is a code label, pointing to a part of the
+    program to be jumped to or called.  A86 will also accept a
+    constant offset in this place (or a constant segment-offset
+    pair in the case of "cd").  "cb" is a label within about 128
+    bytes (in either direction) of the current location.  "cw" is
+    a label within the same code segment as this program; "cd" is
+    a pair of constants separated by a colon-- the segment value
+    to the left of the colon, and the offset to the right.  Note
+    that in both the cb and cw cases, the object code generated
+    is the offset from the location following the current
+    instruction, not the absolute location of the label operand.
+    In some assemblers (most notably for the Z-80 processor) you
+    have to code this offset explicitly by putting "$-" before
+    every relative jump operand in your source code.  You do NOT
+    need to, and should not do so with A86.
+
+"e"  means the operand is an Effective Address.  The concept of
+    an Effective Address is central to the 86 machine
+    architecture, and thus to 86 assembly language programming.
+    It is described in detail at the start of this chapter.  We
+    summarize here by saying that an Effective Address is either
+    a general purpose register, a memory variable, or an indexed
+    memory quantity.  For example, the instruction "ADD rb,eb"
+    includes the instructions: ADD AL,BL, and ADD CH,BYTEVAR, and
+    ADD DL,B[BX+17].
+
+"i"  means the operand is an immediate constant, provided as part
+    of the instruction itself.  "ib" is a byte-sized constant;
+    "iw" is a constant occupying a full 16-bit word.  The operand
+    can also be a label, defined with a colon.  In that case, the
+    immediate constant which is the location of the label is
+    used.  Examples:  "MOV rw,iw" includes the instructions: MOV
+    AX,17, or MOV SI,VAR_ARRAY, where "VAR_ARRAY:" appears
+    somewhere in the program, defined with a colon.  NOTE that if
+    VAR_ARRAY were defined without a colon, e.g., "VAR_ARRAY DW
+    1,2,3", then "MOV SI,VAR_ARRAY" would be a "MOV rw,ew" NOT a
+    "MOV rw,iw".  The MOV would move the contents of memory at
+    VAR_ARRAY (in this case 1) into SI, instead of the location
+    of the memory. To load the location, you can code "MOV
+    SI,OFFSET VAR_ARRAY".
+                                                              6-7
+
+"m"  means a memory variable or an indexed memory quantity; i.e.,
+    any Effective Address EXCEPT a register.
+
+"r"  means the operand is a general purpose register.  The 8 "rb"
+    registers are AL,BL,CL,DL,AH,BH,CH,DH; the 8 "rw" registers
+    are AX,BX,CX,DX,SI,DI,BP,SP.
+
+
+WARNING: Instruction forms marked with "*" by the mnemonic are
+part of the extended 186/286/NEC instruction set. Instructions
+marked with "#" are unique to the NEC processors.  These
+instructions will NOT work on the 8088 of the IBM-PC; nor will
+they work on the 8086; nor will the NEC instructions work on the
+186 or 286. If you wish your programs to run on all PC's, do not
+use these instructions!
+
+

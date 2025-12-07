@@ -1,0 +1,84 @@
+
+;Making SYMPHONY ver 1.00 to run with out SYMPHONY'S master disk -
+;unprotecting it:
+;
+;A>REN SYMPHONY.CMP SYMPHONY.XXX
+;A>DEBUG SYMPHONY.XXX
+;-R			;find the segment where loaded and add 1000 to it
+;			;DS=0DFA - xxxx=1DFA (0DFAH+1000H=1DFAH)
+;-E xxxx:3A05 75	;change INT 13 to INT 75H (see label SYMINT below)
+;-W			;save changed file
+;-Q			;exit debuger
+;A>REN SYMPHONY.XXX SYMPHONY.CMP
+;A>SYMPH		;execute THIS PROGRAM (it modifies the changed interupt
+;			;back to 13H since SYMPHONY does checksum of it's self)
+;
+;
+;
+;	assemble, link, exe2bin
+;
+;Execute this program before using SYMPHONY.
+;There is no need to re-execute this program after exit from SYMPHONY, in
+;order to use the SYMPHONY again, since it is a resident program
+;
+;
+;to further examine the symphony for possibly other way to solve this, using
+;DEBUG, do:
+;A>DEBUG SYMPHONY.EXE
+;-G2
+;-T3
+;-G8A40
+;-T		;at this point you will find the the subroutine that fills
+;		;location ds:8735 with n and int 13 (the second one) which
+;		;reads the serial number from flopy disk in A. Zeroing 8735
+;		;fools the symphony, and prevents it from testing for special
+;		;track/sector structure on the flopy. If the location 8735 is
+;		;not zeroed, debugging will not be possible after IP 8A4D,
+;		;since INT 3 will be modified by SYMPHONY.
+;
+
+SYMINT	EQU	75H	;interupt to use
+
+SYMFLG	EQU	8735H	;see above for info
+
+CSEG	SEGMENT
+	ASSUME	CS:CSEG,DS:CSEG
+	ORG	100H
+PROGRA:	XOR	AX,AX
+	MOV	ES,AX			;set to segment 0 (interupt table)
+	XOR	DX,DX
+	MOV	AL,SYMINT		;interupt number
+	MOV	CX,4			;get position in interupt table
+	MUL	CX
+	MOV	BX,AX
+	TEST	WORD PTR ES:[BX],0	;test if set?
+	JZ	DOIT			;no, go set it
+	INT	20H			;exit to dos with out mod
+
+DOIT:	                        	;get interupt routine address
+	MOV	word ptr ES:[BX],offset corc  	;store it at the apropriate int address
+	MOV	ES:[BX+2],CS		;also store the segment
+	MOV	DX,5+16			;lenght of this pgm in segments
+	MOV	AX,3103H		;exit & stay resident
+	INT	21H
+
+;this is the actual interupt
+CORC:	CLI
+	PUSH	ES			;save all used registers
+	PUSH	BP
+	PUSH	BX
+	MOV	BP,SP
+	MOV	ES,[BP+8]		;get calling segment from stack
+	MOV	BX,[BP+6]		;get calling address from stack
+	DEC	BX			;back up one
+	MOV	BYTE PTR ES:[BX],13H	;store interupt 13h there
+	MOV	BYTE PTR DS:SYMFLG,0	;zero out the flopy test flag
+	POP	BX			;restore registers
+	POP	BP
+	POP	ES
+	STI
+	IRET				;back to symphony
+
+CSEG	ENDS
+	END	PROGRA
+

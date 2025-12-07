@@ -1,0 +1,526 @@
+--NOTE!:
+-- The original file for this text disappeared. All of the text below
+--was scanned from the printouts on hand. Please check for subtle
+--errors  in code listing (eg.  l instead of 1).
+--
+
+--===========================================================
+Information on CALLID.PNT, the Caller*Id to RS-232 interface MacPaint file
+in this forum: [Converted to gif for IBM users]
+
+Several states now offer Caller*Id services.  Caller*Id is an extra price option,
+available from your local telephone company, that provides the telephone number
+of the person calling you.  The telephone number is delivered to a separate unit,
+the Caller*Id interface.  This interface is available from several dealers
+(Sears, AT&T Phone Stores, etc), and must be purchased separately.
+The current model is the 125C, priced at about $60 from Sears.
+
+All the interface units (125, 125A, 125B and the current 125C) have the same
+drawback: they only display the telephone number of the caller, not the caller's
+name.  That can make it difficult to "filter" people you don't want to talk to
+(like that annoying magazine subscription person).
+
+The circuit in CALLID.PNT provides a method of obtaining that information.
+Inside all of the Caller*Id interfaces is an XR2211 integrated circuit.  This
+"chip" has as it's output the data stream containing the information sent over
+the telephone line (for you techies, it's a Bell 202 data stream, sent between
+the first and second ring).
+
+All that is necessary to connect the Caller*Id unit to your RS-232 port are:
+an MC1488 integrated circuit (available from Radio Shack, for about $l) and
+a resistor (lOOK Ohm 1/4 watt, also available from Radio Shack).
+
+The MC1488 "boosts" the output voltage to the level expected by the RS-232 port
+on your computer, and the resistor provides some isolation and reduces the
+voltage drop on the output of the MC1488.
+
+The MC1488 needs a +/- 12volt power supply.  If you have one, you're all set.
+If not, Radio Shack sells small 9 volt power supplies for S5-6 each; you can
+put two back-to-back to get a +/- 9 volt supply, which is close enough.
+You could use a couple of 9volt batteries, too.
+
+Everything, excluding the power supplies, fits into the Caller*id interface case.
+I used a little hot-melt glue to place the MC1488 in an unused circuit board
+area (watch out for the plastic standoffs on the case!).  Small gauge wire
+(or wire-wrap wire) connects the components together.  If you're uncomfortable
+soldering to the integrated circuits, you can pick up IC jumper clips at Radio
+Shack as well (that way you can easily remove the "modification").
+
+I bring the RS-232 pin 3 and pin 7 connections to a 1/8 inch mini-phone jack,
+which I mounted on the case near the existing telephone jacks.
+
+Once the circuit is built, what do you do with it?  I use a Hypercard Stack
+built on the EXCELLENT Portfolio Hyper System (PHS), by Bob Davis 70625,717,
+to look up the phone number, announce the caller (using Macintalk) and provide
+filtering (based on time of day and flags on the caller's record).  I log all
+incoming calls, both to a separate file and to the record of the caller.
+
+My stack also contains records for telephone exchanges, so if the specific
+number is not found, it will announce where (what town) the call is coming from.
+
+In addition, since I have two Macintosh computers, I broadcast the information
+over Appletalk, so both machines can announce the caller.
+
+That should give you enough ideas!  Following is an extract of the major portion
+of the Hypercard script I use.  I can't upload the entire stack, since it's part
+of PHS.  It should give you enough of the logic needed to build your own
+application.
+
+By the way, all of this is PUBLIC DOMAIN, for NON-COMERCIAL USE.
+If you want to sell something with this, send me an EMAIL and we can discuss it.
+
+Mace Moneta
+CIS 73167,1546
+
+
+
+-- CallerID Support Code - COPYRIGHT 1989, 1990 BY Mace Moneta
+
+--===========================================================
+-- ALL RIGHTS RESERVED.
+-- FOR MORE INFORMATION CONTACT THE AUTHOR DIRECTLY.
+-------------------------------------------------------------
+
+--
+-- Put the IDLE handler to sleep while editing a field
+--
+on openField
+  global editingField
+  put true into editingField
+end openField
+
+--
+-- Wakeup the IDLE handler when finished field editing
+--
+on closeField
+  global editingField
+  put false into editingField
+end closeField
+
+--
+-- OPEN STACK
+--
+
+on openStack
+
+  --
+  -- Cache the stack in memory for fastest access
+  --
+  set cursor to watch
+  set lockScreen to true
+  show all cards
+  set lockScreen to false
+  set cursor to none
+  --
+  -- Initialize Variables
+  --
+  global editingField,lastLookup
+  global globalATPData, globalResponseData
+  global globalReceiveData, myEntityName
+  global globalSKTData, globalNBPData
+  global modemData,myName,serverName,EotDC2,EotHT
+  global soundList,soundCount,serialBuffer
+  put false into editingField
+  put sndList() into soundList
+  put the number of lines in soundList into soundCount
+  put empty into globalResponseData
+  put empty into globalAppleTalkData
+  put empty into modemData
+  put empty into serverName
+  put numToChar(4) & numToChar(18) into EotDC2
+  put numToChar(4) & numToChar(9) into EotHT
+  put the seconds into lastLookup
+  --
+  -- Before we can become an entity on the network, we must first
+  -- open up access to the network.  ATPOPEN performs this function
+  -- and relies on the variable "globalAppleTalkDATA".
+  -- Since ATPOPEN is not given a parameter, it will open both a client
+  -- and a server side allowing us to both issue requests and respond
+  -- to requests.
+  --
+  ATPOpen
+  if the result is empty then
+    --
+    -- If ATPOPEN was successful we can go ahead and register our name
+    -- with the network.
+    --
+    NBPOpen
+    --
+    -- We'll use the number of elapsed 1/60's of a second since IPL
+    --
+    -- as our unique "name".
+    --
+    put the ticks into myName
+    put "CallerID" into myType
+    NBPRegisterName myName,myType
+    if the result is not empty then
+      --
+      -- We had a problem connecting!
+      --
+      answer "Error connecting to AppleTalk!" with "Ok"
+    end if
+end if
+
+  --
+  -- Initialize the serial port to 1200bps, 1 stop, 8 data bits,
+  -- no parity.
+  --
+  put serialHandler("open","A",1200,8,"none",1,"CTS",1024) B
+  into serialBuffer
+
+end openStack
+
+on goingElsewhere
+  --
+  -- If we are leaving this stack (quiting or opening another stack)
+  -- terminate our session on Appletalk and close the serial port.
+  --
+  global serialBuffer
+  put empty into globalResponseData
+  put empty into globalAppleTalkData
+  NBPClose
+  ATPClose
+  get serialHandler("close","A",serialBuffer)
+end goingElsewhere
+
+--
+-- CLOSE STACK
+--
+
+on closeStack
+   goingElsewhere
+end closeStack
+
+--
+-- IDLE
+--
+
+on idle
+  global editingField,lastLookup
+  global talkName,talkKeyword,EotDC2,EotHT
+  global globalResponseData,globalReceiveData
+  global modemData,myName,serverName,dataSource
+  global soundList,soundCount,serialBuffer
+
+  if editingField then exit idle
+
+  --
+  -- Initialize variables
+  --
+  put empty into modemData
+  put empty into talkName
+  put empty into talkKeyword
+  put false into outOfArea
+  set cursor to hand
+  --
+  -- Check for activity on the serial port
+  --
+  put serialHandler("get","A",3) into modemData
+  --
+  -- If we got something, remember where it came from.
+  --
+if modemData is not empty then put "fromComm" into dataSource
+--
+-- If nothing came in over the serial port, check the other Mac,
+-- to see it it got anything
+--
+-- First, check to see if a "CallerID" server is on the network
+-- (a copy of this Hypercard stack, running on another machine)
+--
+put the seconds into it
+if serverName is empty and it > lastLookup then
+   set cursor to watch
+   put the seconds + 30 into lastLookup
+   put NBPLookupNames("CallerID","*","20","2","8") into entityNames
+   repeat with x=l to the number of lines in entityNames
+      put line x of entityNames into it
+      if "CallerID" is in item 2 of it and myName is not in item 1 of it then
+        put item 1 of it into serverName
+        exit repeat
+      end if
+   end repeat
+end if
+--
+-- Now ask the network for data
+--
+if modemData is empty and serverName is not empty then
+  ATPReceive "HandleReceive"
+  --
+  -- If we got something, remember where it came from.
+  --
+  if modemData is not empty then put "fromAT" into dataSource
+end if
+--
+-- Scan the data for EOT DC2 sequence (header for known number)
+-- or EOT HT (header for Out of Area call or Private - Blocked)
+--
+if modemData is not empty then
+  repeat with i = 1 to the length of modemData
+  if char i to i+1 of modemData is EotHT then put true into outOfArea
+  if char i to i+1 of modemData is EotDC2 or outOfArea then
+      --
+      -- Header found.  Extract the phone number of the caller
+      --
+      if outOfArea then
+        if char i+6 of modemData is "P" then
+          --
+          -- We've got a blocked call!  Announce as such by
+          -- looking up the record with pseudo phone number
+          -- CAL-LERÑIDBL.
+          --
+          put "CAL" into areaCode
+          put "LER" into exchange
+          put "IDBL" into number
+          put "CAL-LER-IDBL" into phone
+          else
+          --
+          -- Just an out of area call.  Look up the record
+          -- with pseudo phone number ???-???-???? and announce.
+          --
+          put "???" into areaCode
+          put "???" into exchange
+          put "????" into number
+          put "???-???-????" into phone
+          end if
+          else
+        --
+        -- We have an actual phone number!
+        --
+        put char i+10 to i+20 of modemData into phone
+        put char 1 to 3 of phone into areaCode
+
+   put char 4 to 6 of phone into exchange
+   put char 7 to 10 of phone into number
+   put areaCode & "-" & exchange & "-" & number into phone
+   end if
+--
+-- If we obtained data from the serial port,
+-- see if anyone on the network wants our data
+--
+if dataSource contains "fromComm" then
+   ATPSendRequest serverName,modemData, B
+   "HandleSend", 2, 2 0
+   --
+   -- If we got an error, the server went bye-bye. Clear
+   -- the serverName, so that we will re-issue the Lookup
+   -- for a server.
+   --
+   if the result is not empty then put empty into serverName
+   put empty into modemData
+   end if
+--
+-- Define a "trunk" number to search for, incase the full
+-- number is not found.
+--
+put areaCode & "-" & exchange & "-" & "????" into trunk
+--
+-- Search the directory for the phone number.
+-- In this stack, each record can contain up to 3 phone
+-- numbers. They are kept in the background field variables
+-- (bg fld) "Phone1", "Phone2" and "Phone3".
+--
+get the short name of this card
+if it is "Index" then go to next card
+find phone in bg fld "Phone1"
+if the result is "not found" then
+  find phone in bg fld "Phone2"
+  if the result is "not found" then
+    find phone in bg fld "Phone3"
+  end if
+end i f
+--
+-- If the number was not found, see if we have a trunk line
+--
+if the result is "not found" then
+   find trunk in bg fld "Phone1"
+   if the result is "not found" then
+     find trunk in bg fld "Phone2"
+     if the result is "not found" then
+       find trunk in bg fld "Phone3"
+     end if
+   end if
+end if
+--
+-- If we found the entry, extract the callers name and
+-- invoke the announceCaller routine
+--
+if the result is empty then
+   put bg fld "Name" into talkName
+   put bg fld "Keywords" into talkKeyword
+   announceCaller
+   --
+   -- Annotate the entry so we know the last call date and time
+   --
+   get line 1 of bg fld "Note"
+   if it is "NOTE PAD" or word 1 to 2 of it is "Last Call: " then
+     set locktext of bg fld "Note" to false
+     put "Last Call: " && the long date && the time B
+     into line 1 of bg fld "Note"
+     set locktext of bg fld "Note" to true
+   else
+     set locktext of bg fld "Note" to false
+
+            put "Last Call:" && the long date && the time & return B
+            before line 1 of bg fld "Note"
+            set locktext of bg fld "Note" to true
+            end if
+          --
+          -- An unknown caller; just announce that there is a call
+          --
+          if talkName is empty then
+            put "Unknown Caller NOSUFFIX" into talkKeyword
+            put "Telephone Call" into talkName
+            announceCaller
+            end if
+          --
+          -- Log the call to file "CallerID Log", if on main machine
+          --
+          if dataSource contains "fromComm" then
+            put "CallerID Log" && word 2 of the long date && B
+            word 4 of the long date into logFile
+            open file logFile
+            --
+            -- Position at EOF
+            --
+            repeat
+              read from file logFile for 16834
+              if it is empty then exit repeat
+              end repeat
+            --
+            -- Place the data in the log
+            --
+            put the time into timeStamp
+            if the length of timeStamp < 8 Then B
+            put "O" & timeStamp into timeStamp
+            put the long date into dateStamp
+            put word 1 of dateStamp & tab & B
+            word 2 to 4 of dateStamp into dateStamp
+            write dateStamp & tab & timeStamp & tab & phone & tab & B
+            talkName && "(" & talkKeyword & ")" & return B
+            to file logFile
+            close file logFile
+        end if
+        exit repeat
+     end if
+    end if
+  end repeat
+ end if
+end idle
+
+--
+-- This routine is invoked when someone is requesting our data.
+-- Return the last caller info, and clear it.
+--
+on HandleSend
+  global globalResponseData
+  put empty into globalResponseData
+end HandleSend
+
+--
+-- A server is responding to our request for the caller information.
+-- Place it in modemData, for normal processing.
+--
+on HandleReceive
+  global globalReceiveData,modemData
+  if globalReceiveData is not empty then B
+  put globalReceiveData into modemData
+end HandleReceive
+
+--
+-- Dummy handler to provide NOP response.  This is automatically
+-- invoked by the Appletalk routines, when there is no data to transfer.
+--
+on okay
+end okay
+
+--
+-- Here we vocalize the name of the caller using MacinTalk, or if a
+-- digitized sound is available with the same name, we play the sound.
+--
+-- Special values may be passed in the Keyword entry of the directory
+-- as follows:
+--
+-- 24HR         - This caller will be announced no matter what time it is.
+--                     Normally, calls between lOPM and 5AM are not announced.
+-- IGNORE      - This caller will never be announced (call screening).
+-- NOSUFFIX  - This caller will not have the "Calling" word appended
+--              to his/her name when being announced.  Normally, callers
+--              are announced as "name Calling" (eg. Joe Shmoe Calling).
+--
+on announceCaller
+  --
+  -- Get the callers name and the keywords defined for him/her
+  --
+  global talkName,talkKeyword,soundList,soundCount
+  --
+  -- Get the current hour, in 24 hour format
+  --
+  put the time into timeCheck
+  convert timeCheck to dateitems
+
+  -- If it is after 1OPM and before 5AM, don't announce the caller.
+  -- If the caller has the special "IGNORE" keyword, never announce
+  -- the caller (call screening).
+
+  put true into sayingIt
+  if item 4 of timeCheck > 22 or B
+  item 4 of timeCheck < 5 or B
+  talkKeyword contains "IGNORE" then put false into sayingIt
+  --
+  -- If the caller has the special "24HR" keyword, announce the caller
+  -- no matter what time it is.
+  --
+  if talkKeyword contains "24HR" then put true into sayingIt
+ --
+ -- If we should announce this caller, do it three times
+ --
+  if sayingIt then
+    put true into soundNotFound
+    repeat with soundName = 1 to soundCount
+      if line soundName of soundList is talkname then B
+      put false into soundNotFound
+    end repeat
+    put getPVolume() into saveVolume
+    setPVolume(7)
+    if soundNotFound then
+      if "NOSUFFIX" is not in talkKeyword then B
+      put talkName && "Calling" into talkName
+      talk talkName,140,120
+      wait 1 seconds
+      talk talkName,140,120
+      wait 1 seconds
+      talk talkName,140,120
+    else
+      play talkname
+      wait until the sound is "done"
+      wait 1 seconds
+      play talkname
+      wait until the sound is "done"
+      wait 1 seconds
+      play talkname
+      wait until the sound is "done"
+      end if
+      setPVolume(saveVolume)
+    end if
+end announceCaller
+
+-----------------------------------------------------------
+-- CallerID Support Code - COPYRIGHT 1989, 1990 BY Mace Moneta
+-- ALL RIGHTS RESERVED.
+-- FOR MORE INFORMATION CONTACT THE AUTHOR DIRECTLY.
+-----------------------------------------------------------
+
+
+
+                               /\   /\
+                              /  \ /  \
+                             /       /
+                            / L&F  DataSEC
+                            \ 914-HAK-VMBS
+                             \    /  3/12/24 MNP5
+                              \  /   PHALCON/SKISM
+                               \/         GHQ
+
+Downloaded From P-80 Systems 304-744-2253ÿ
+
+Downloaded From P-80 International Information Systems 304-744-2253

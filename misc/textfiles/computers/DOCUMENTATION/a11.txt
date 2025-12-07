@@ -1,0 +1,827 @@
+CHAPTER 11   MACROS AND CONDITIONAL ASSEMBLY
+
+
+Macro Facility
+
+A86 contains an easy-to-use, but very powerful macro facility.
+The facility subsumes the capabilities of most assemblers,
+including operand concatenation, repeat, indefinite repeat (often
+called IRP), indefinite repeat character (IRPC), passing macro
+operands by text or by value, comparing macro operands to
+strings, and detecting blank macro operands.  Unlike other
+assemblers, A86 integrates these functions into the main macro
+facility; so they can be invoked without clumsy syntax, or
+strange characters in the macro call operands.
+
+
+Simple Macro Syntax
+
+All macros must be defined before they are used.  A macro
+definition consists of the name of the macro, followed by the
+word MACRO, followed by the text of the macro, followed by #EM,
+which marks the end of the macro.
+
+Many assembly languages require a list of dummy operand names to
+follow the word MACRO.  A86 does not: the operands are denoted in
+the text with the fixed names #1, #2, #3, ... up to a limit of
+#9, for each operand in order.  If there is anything following
+the word MACRO, it is considered part of the macro text.
+
+Examples:
+
+; CLEAR sets the register operand to zero.
+
+CLEAR  MACRO  SUB #1,#1 #EM
+
+  CLEAR AX      ; generates a SUB AX,AX instruction
+  CLEAR BX      ; generates a SUB BX,BX instruction
+
+
+; MOVM moves the second operand to the first operand.
+;   Both operands can be memory variables.
+
+MOVM  MACRO
+  MOV AL,#2
+  MOV #1,AL
+#EM
+
+VAR1  DB  ?
+VAR2  DB  ?
+
+MOVM VAR1,VAR2  ; generates MOV AL,VAR2 followed by MOV VAR1,AL
+                                                             11-2
+
+Formatting in Macro Definitions and Calls
+
+The format of a macro definition is flexible.  If the macro text
+consists of a single instruction, the definition can be given in
+a single line, as in the CLEAR macro given above.  There is no
+particular advantage to doing this, however: A86 prunes all
+unnecessary spaces, blank lines, and comments from the macro text
+before entering the text into the symbol table.  I recommend the
+more spread-out format of the MOVM macro, for program
+readability.
+
+All special macro operators within a macro definition begin with
+a hash sign # (a hex 23 byte).  The letters following the hash
+sign can be given in either upper case or lower case.  Hash-sign
+operators are recognized even within quoted strings.  If you wish
+the hash sign to be treated literally, and not as the start of a
+special macro operator, you must give 2 consecutive hash signs:
+##.  For example:
+
+FOO MACRO
+  DB '##1'
+  DB '#1'
+#em
+
+FOO abc      ; produces  DB '#1'  followed by  DB 'abc'
+
+The format of the macro call line is also flexible.  A macro call
+consists of the name of the macro, followed by the operands to be
+plugged into the macro.  A86 prunes leading and trailing blanks
+from the operands of a macro call.  The operands to a macro call
+are always separated by commas.  Also, as in all A86 source
+lines, a semi-colon occurring outside of a quoted string is the
+start of a comment, ignored by A86.  If you want to include
+commas, blanks, or semi-colons in your operands, you must enclose
+your operand in single quotes.
+
+
+
+Macro Operand Substitution
+
+Some macro assemblers expect the operands to macro calls to
+follow the same syntax as the operands to instructions.  In those
+assemblers, the operands are parsed, and reduced to numeric
+values before being plugged into the macro definition text.  This
+is called "passing by value".  As its default, A86 does not pass
+by value, it passes by text.  The only parsing of operands done
+by the macro processor is to determine the start and the finish
+of the operand text.  That text is substituted, without regard
+for its contents, for the "#n" that appears in the macro
+definition.  The text is interpreted by A86 only after a complete
+line is expanded and as it is assembled.
+                                                             11-3
+
+If the first non-blank character after the macro name is a comma,
+then the first operand is null: any occurrences of #1 in the
+macro text will be deleted, and replaced with nothing.  Likewise,
+any two consecutive commas with no non-blanks between them will
+result in the corresponding null operand.  Also, out-of-range
+operands are null; for example, #3 is a null operand if only two
+operands are provided in the call.
+
+Null operands to macros are not in themselves illegal.  They will
+produce errors only if the resulting macro expansion is illegal.
+
+The method of passing by text allows operand text to be plugged
+anywhere into a macro, even within symbol names.  For example:
+
+; KF_ENTRY creates an entry in the KFUNCS table, consisting of a
+;   pointer to a KF_ action routine.  It also declares the
+;   corresponding CF_ symbol, which is the index within the table
+;   for that entry.
+
+KF_ENTRY  MACRO
+  CF_#1  EQU  ($-KFUNCS)/2+080
+  DW  KF_#1
+#EM
+
+KFUNCS:
+  KF_ENTRY  UP
+  KF_ENTRY  DOWN
+
+; The above code is equivalent to:
+;
+;  KFUNCS:
+;    DW KF_UP
+;    DW KF_DOWN
+;
+;  CF_UP    EQU  080
+;  CF_DOWN  EQU  081
+
+
+
+Quoted String Operands
+
+As mentioned before, if you want to include blanks, commas, or
+semicolons in your operands, you enclose the operand in single
+quotes.  In the vast majority of cases in which these special
+characters need to be part of operands, the user wants them to be
+quoted in the final, assembled line also.  Therefore, the quotes
+are passed in the operand.  To override this, and strip the
+quotes from the string, you precede the quoted string with a hash
+sign.  Examples:
+                                                             11-4
+
+DBW  MACRO
+  DB  #1
+  DW  #2
+#EM
+
+DBW  'E', E_POINTER
+DBW  'W', W_POINTER
+
+; note that if quotes were not passed, the above lines would have
+;   to be   DBW  '''E''', E_POINTER;    DBW  '''W''', W_POINTER
+
+FETCH_CHAR  MACRO
+  LODSB
+  #1
+  CALL PROCESS_CHAR
+#EM
+
+FETCH_CHAR  STOSB      ; generates STOSB as second instruction
+FETCH_CHAR  #'INC DI'  ; generates INC DI as second instruction
+
+
+
+Looping by Operands in Macros
+
+A86's macro facility contains two kinds of loops: you can loop
+once for each operand in a range of operands; or you can loop
+once for each character within an operand.  The first kind of
+loop, the R-loop, is discussed in this section; the second kind,
+the C-loop, is discussed later.
+
+An R-loop is a stretch of macro-definition code that is repeated
+when the macro is expanded.  In addition to the fixed operands #1
+through #9, you can specify a variable operand, whose number
+changes each time through the loop.  You give the variable
+operand one of the 4 names #W, #X, #Y, or #Z.
+
+An R-loop begins with #R, followed immediately by the letter
+W,X,Y, or Z naming the variable, followed by the number of the
+first operand to be used, followed by the number of the last
+operand to be used.  After the #Rxnn is the text to be repeated.
+The R-loop ends with #ER.  For example:
+
+STORE3 MACRO
+  MOV AX,#1
+#RY24               ; "repeat for Y running from 2 through 4"
+  MOV #Y,AX
+#ER
+#EM
+
+STORE3  VAR1,VAR2,VAR3,VAR4
+
+; the above call produces the 4 instructions MOV AX,VAR1; MOV VAR2,AX;
+;   MOV VAR3,AX; MOV VAR4,AX.
+                                                             11-5
+
+The #L Last Operator and Indefinite Repeats
+
+A86 recognizes the special operator #L, which is the last operand
+in a macro call.  #L can appear anywhere in macro text; but its
+big power occurs in conjunction with R-loops, to yield an
+indefinite-repeat facility.
+
+A common example is as follows: you can take any macro that is
+designed for one operand, and easily convert it into a macro that
+accepts any number of operands.  You do this by placing the
+command #RX1L, "repeat for X running from 1 through L", at the
+start of the macro, and the command #ER at the end just before
+the #EM.  Finally, you replace all instances of #1 in the macro
+with #X.  We see how this works with the CLEAR macro:
+
+CLEAR MACRO #RX1L
+  SUB #X,#X
+#ER
+#EM
+
+CLEAR AX,BX  ; generates both SUB AX,AX and SUB BX,BX in one macro!
+
+It is possible for R-loops to iterate zero times.  In this case,
+the loop-text is skipped completely.  For example, CLEAR without
+any operands would produce no expanded text.
+
+
+Character Loops
+
+We have seen the R-loop; now we discuss the other kind of loop in
+macros, the character loop, or C-loop.  In the C-loop, the
+variable W,X,Y, or Z does not represent an entire operand; it
+represents a character within an operand.
+
+You start a C-loop with #C, followed by one of the 4 letters
+W,X,Y, or Z, followed by a single operand specifier-- a digit,
+the letter L, another one of W,X, Y, or Z defined in an outer
+loop, or one of the more complicated specifiers defined later in
+this chapter.  Following the #Cxn is the text of the C-loop.  The
+C-loop ends with #EC. The macro will loop once for every
+character in the operand. That single character will be
+substituted for each instance of the indicated variable operand.
+For example:
+
+PUSHC  MACRO  #CW1
+  PUSH #WX
+#EC#EM
+
+PUSHC ABC ; generates 3 instructions PUSH AX | PUSH BX | PUSH CX
+
+If the C-operand is quoted in the macro call, the quotes ARE
+removed from the operand before passing characters to the loop.
+It is not necessary to precede the quoted string with a hash sign
+in this case.  If you do, the hash sign will be passed as the
+first character.
+                                                             11-6
+
+If the C-operand is a null operand (no characters in it), the
+loop text is skipped completely.
+
+
+The "B"-Before and "A"-After Operators
+
+So far, we have seen that you can specify operands in your macro
+in fourteen different ways: 1,2,3,4,5,6,7,8,9,W,X,Y,Z,L.  We now
+multiply these 14 possibilities, by introducing the "A" and "B"
+operators.  You can precede any of the 14 specifiers with "A" or
+"B", to get the adjacent operand after or before the specified
+operand.  For example, BL means the operand just before the last
+operand; in other words, the second-to-the-last operand.  AZ
+means the operand just after the Z operand.  You can even repeat,
+up to a limit of 4 "B"s or 3 "A"s:  for example, BBL is the
+third-to-last operand.
+
+Note that any operand specifier can appear in contexts other than
+by itself following a # within a macro.  For example, BBL could
+appear as the upper limit to an R-loop: #RZ1BBL loops with Z
+running from the first operand to the third-to-last operand.
+
+In the case of the variable operand to a C-loop, the "A" and "B"
+specifiers denote the characters before or after the current
+looping-character.  An example of this is given in the next
+section.
+
+
+Multiple Increments within Loops
+
+We have seen that you end an R-loop with a #ER, and you end a
+C-loop with a #EC.  We now present another way to end these
+loops; a way that lets you specify a larger increment to the
+macro's loop counter.  You can end your loops with one of the 4
+additional commands #E1, #E2, #E3, or #E4.
+
+For R-loops terminated by #ER, the variable operand advances to
+the next operand when the loop is made.  If you end your R-loop
+with #E2, the variable operand advances 2 operands, not just one.
+For #E3, it advances 3 operands; for #E4, 4 operands.  The #E1
+command is the same as #ER.
+
+The most common usage of this feature is as follows:  You will
+recall that we generalized the CLEAR macro with the #L-variable,
+so that it would take an indefinite number of operands.  Suppose
+we want to do the same thing with the DBW macro.  We would like
+DBW to take any number of operands, and alternate DBs and DWs
+indefinitely on the operands.  This is made possible by creating
+an R-loop terminated by #E2:
+
+DBW  MACRO  #RX1L
+  DB  #X
+  DW  #AX
+#E2
+#EM
+
+DBW  'E',E_POINTER,  'W',W_POINTER   ; two pairs on same line!
+                                                             11-7
+
+The #E2 terminator means that we are looping on a pair of
+operands.  Note the crucial usage of the "A"-after operator to
+specify the second operand of the operand pair.
+
+A special note applies to the DBW macro above: A86 just happens
+to accept a DW directive with no operands (it generates no object
+code, and issues no error).  This means that DBW will accept an
+odd number of operands with no error, and do the expected thing
+(it alternates bytes and words, ending with a byte).
+
+You could likewise generalize a macro with 3 or 4 operands, to an
+indefinite number of triples or quadruples; by ending the R-loop
+with #E3 or #E4.  The operands in each group would be specified
+by #X, #AX, #AAX, and, for #E4, #AAAX.
+
+For C-loops terminated by #E1 through #E4, the character pointer
+is advanced the specified number of characters.  You use this in
+much the same way as for R-loops, to create loops on pairs,
+triplets, and quadruplets of characters.  For example:
+
+PUSHC2  MACRO  #CZ1
+  PUSH #Z#AZ
+#E2
+#EM
+
+PUSHC2  AXBXSIDI  ; generates PUSH AX | PUSH BX | PUSH SI | PUSH DI
+
+
+Negative R-loops
+
+We now introduce another form of R-loop, called the Q-loop-- the
+negative repeat loop.  This loop is the same as the R-loop,
+except that the operand number decrements instead of increments;
+and the loop exits when the number goes below the finish-number,
+not above it.  The Q-loop is specified by #Qxnn instead of #Rxnn,
+and #EQ instead of #ER.  You can also use the multiple-decrement
+forms #E1 #E2 #E3 or #E4 to terminate an Q-loop.
+
+Example:
+
+MOVN MACRO #QXL2   ; "negative repeat X from L down to 2"
+  MOV #BX,#X
+#EQ#EM
+
+MOVN AX,BX,CX,DX   ; generates the three instructions:
+                   ;    MOV CX,DX
+                   ;    MOV BX,CX
+                   ;    MOV AX,BX
+
+Note: the above functionality is already built into the MOV
+instruction of A86.  The macro shows how you would implement it
+if you did not already have this facility.
+                                                             11-8
+
+Nesting of Loops in Macros
+
+A86 allows nesting of loops within each other. Since we provide
+the 4 identifiers W,X,Y,Z for the loop operands, you can nest to
+a level of 4 without restriction-- just use a different letter
+for each nesting level.  You can nest even deeper, for example,
+by having two nested R-loops that use W is its indexing letter.
+The only restriction to this is that you cannot refer to the W of
+the outer loop from within the inner W loop.  (I challenge anyone
+to come up with an application in which these limitations /
+restrictions cause a genuine inconvenience!)
+
+
+Implied Closing of Loops
+
+If you have a loop or loops ending when the macro ends, and if
+the iteration count for those loops is 1, you may omit the #ER,
+#EC, or #EQ.  A86 closes all open loops when it sees #EM, with no
+error.
+
+For example, if you omit the #ER for the loop version of the
+CLEAR macro, it would make no difference-- A86 automatically
+places an #ER code into the macro definition for you.
+
+
+Passing Operands by Value
+
+As already stated, A86's defualt mode for passing operands is by
+text-- the characters of the operand are copied to the macro
+expansion line as-is, without any evaluation.  You may override
+this with the #V operator.  When A86 sees #Vn in a macro
+definition, it will evaluate the expression given in the text of
+operand n, and pass a string representing the decimal constant
+answer, instead of the original text.  The operand must evaluate
+to an absolute constant value, less than 65536.  For example:
+
+JLV MACRO
+  J#1 LABEL#V2
+#EM
+
+JINDEX = 3
+JLV NC,JINDEX+1     ; generates JNC LABEL4
+JINDEX = 6
+JLV Z,JINDEX+2      ; generates JZ LABEL8
+
+
+Passing Operand Size
+
+The construct #Sn is translated by A86 into the decimal string
+representing the number of characters in operand n.  One use of
+this would be to make a conditional-assembly test of whether an
+operand was passed at all, as we'll see later in this chapter.
+Another use is to generate a length byte preceding a string, as
+required by some high-level languages such as Turbo Pascal.
+Example:
+                                                             11-9
+
+LSTRING MACRO
+  DB #S1,'#1'
+#EM
+
+LSTRING  SAMPLE     ; generates  DB 6,'SAMPLE'
+
+
+Generating the Number of an Operand
+
+The construct #Nn is translated by A86 into the decimal string
+represented by the position number n of the macro operand.  Note
+that this value does not depend on the contents of the operand
+that was passed to the macro.  Thus, for example, #N2 would
+translate simply to 2; so this usage of #N is silly.  #N achieves
+usefulness when n is variable: W,X,Y,Z, or L.  I give an example
+of #N with a loop-control variable in the next section. Here is
+an example of #NL, used to generate an array of strings, preceded
+by a byte telling how many strings are in the array:
+
+ZSTRINGS MACRO
+  DB #NL           ; generates the number of operands passed
+#RX1L
+  DB '#X',0
+#EM
+
+ZSTRINGS  TOM,DICK,HARRY   ; generates DB 3 followed by strings
+
+
+Parenthesized Operand Numbers
+
+We've seen that macro operands are usually specified in your
+macro definition by a single character: either a single digit or
+one of the special letters W,X,Y,Z, or L.  A86 also allows you to
+specify a constant operand number up to 255.  You do so by giving
+an expression enclosed in parentheses, rather than a single
+character.  The expession must evaluate at the time the macro is
+defined, to a constant between 0 and 255.  You can use this
+feature to translate many programs that use MASM's REPT
+directive.  For example, if the following REPT construct occurs
+within a MASM macro:
+
+  TEMP = 0
+REPT 100
+  TEMP = TEMP + 1     ; MASM needs an explicitly-set-up counter
+  DB TEMP
+ENDM
+
+you may translate it into an A86 loop, as follows:
+
+#RX1(100)      ; the counter X is built into the A86 loop
+  DB #NX
+#ER
+
+If the REPT does not occur within a macro, you must define a
+macro containing the loop, which you may then immediately call.
+                                                            11-10
+
+Note that the expression enclosed in praentheses must not itself
+contain any macro operators.  Thus, for example, you cannot
+specify #(#NY+1) to represent the operand after Y-- you must use
+#AY.
+
+
+Exiting from the Middle of a Macro
+
+For MASM compatibility, A86 offers the #EX operator, which is
+equivalent to MASM's EXITM directive.  #EX is typically used in a
+conditional assembly block within a loop, to terminate the loop
+early.  When the #EX code is seen in a macro expansion, the
+expansion ceases at that point, and assembly returns to the
+source file (or to the outer macro in a nested call).  You
+couldn't use #EM to do this, because that would signal the end of
+the macro definition, not just the call.
+
+
+Local Labels in Macros
+
+Some assemblers have a LOCAL pseudo-op that is used in
+conjunction with macros.  Symbols declared LOCAL to a macro have
+unique (and bizarre) symbol names substituted for them each time
+the macro is called.  This solves the problem of duplicate label
+definitions when a macro is called more than once.
+
+In A86, the problem is solved more elegantly, by having a class
+of generic local labels throughout assembly, not just in macros.
+Recall that symbols consisting of a single letter, followed by
+one or more decimal digits, can be redefined.  You can use such
+labels in your macro definitions.
+
+I have recommended that local labels outside of macros be
+designated L1 through L9.  Within macro definitions, I suggest
+that you use labels M1 through M9.  If you used an Ln-label
+within a macro, you would have to make sure that you never call
+the macro within the range of definition of another Ln-label with
+the same name.  By using Mn-labels, you avoid such potential
+conflicts.
+
+The following example of a local label within a macro is taken
+from the source of the macro processor itself:
+
+; "JHASH label" checks to see if AL is a hash sign.  If it is,
+;    it processes the hash sign term, and jumps to label.
+;    Otherwise, it drops through to the following code.
+
+JHASH MACRO
+  CMP AL,'##'       ; is the scanned character a hash sign?
+  JNE >M1           ; skip if not
+  CALL MDEF_HASH    ; process the hash sign
+  JMP #1            ; jump to the label provided
+M1:
+  #EM
+                                                            11-11
+
+  ...
+L3:                 ; loop here to eat empty lines, leading blanks
+  CALL SKIP_BLANKS  ; skip over the leading blanks of a line
+  INC SI            ; advance source ptr beyond the next non-blank
+  JHASH L3          ; if hash sign then process, and eat more blanks
+  CMP AL,0A         ; were the blanks terminated by a linefeed?
+  JE L3             ; loop if yes, nothing on this line
+L5:                 ; loop here after a line is seen to have contents
+  CMP AL,';'        ; have we reached the start of a comment?
+  JE L1             ; jump if yes, to consume the comment
+  JHASH >L6         ; if hash sign then process it; get next char
+  ...
+L6:
+  LODSB             ; fetch the next definition char from the source
+  CMP AL,' '        ; is it blank?
+  JA L5             ; loop if not, to process it
+  ...
+
+
+Debugging Macro Expansions
+
+There is a tool called EXMAC which will help you troubleshoot
+program lines that call macros.  If you are not sure about what
+code is being generated by your macro calls, EXMAC will tell you.
+See Chapter 13 for details.
+
+
+Conditional Assembly
+
+A86 has a conditional assembly feature, that allows you to
+specify that blocks of source code will or will not be assembled,
+according to the values of equated user symbols.  The controlling
+symbols can be declared in the program (and can thus be the
+result of assembly-time expressions), or they can be declared in
+the assembler invocation.
+
+You should keep in mind the difference between conditional
+assembly, invoked by #IF, and the structured-programming feature,
+invoked by IF without the hash sign.  #IF tests a condition at
+assembly time, and can cause code to not be assembled and thus
+not appear in the program.  IF causes code to be assembled that
+tests a condition at run time, possibly jumping over code.  The
+skipped code will always appear in the program.
+
+All conditional assembly lines are identified by a hash sign # as
+the first non-blank character of a line.  The hash sign is
+followed by one of the four keywords IF, ELSEIF, ELSE or ENDIF.
+
+#IF starts a conditional assembly block.  On the same line,
+following the #IF, you provide either a single name, or an
+arbitrary expression evaluating to an absolute constant.  In this
+context, a single name evaluates to TRUE if it is defined and not
+equal to the absolute constant zero.  A name is FALSE if it is
+undefined, or if it has been equated to zero.  An expression is
+TRUE if nonzero, FALSE if zero.
+                                                            11-12
+
+If the #IF expression evaluates to FALSE, then the following
+lines of code are skipped, up to the next matching #ELSEIF,
+#ELSE, or #ENDIF.  If the expression is TRUE, then the following
+lines of code are assembled normally.  If a subsequent matching
+#ELSEIF or #ELSE is encountered, then code is skipped up to the
+matching #ENDIF.
+
+#ELSEIF provides a multiple-choice facility for #IF-blocks.  You
+can give any number of #ELSEIFs between an #IF and its matching
+#ENDIF.  Each #ELSEIF has a name or expression following it on
+the same line. If the construct following the #IF is FALSE, then
+the assembler looks for the first TRUE construct following an
+#ELSEIF, and assembles that block of code.  If there are no TRUE
+#ELSEIFs, then the #ELSE-block (if there is one) is assembled.
+
+You should use the ! instead of the NOT operator in conditional
+assembly expressions.  The ! operator performs the correct
+translation of names into TRUE or FALSE values, and handles the
+case !undefined without reporting an error.
+
+#ELSE marks the beginning of code to be assembled if all the
+previous blocks of an #IF have been skipped over.  There is no
+operand after the #ELSE.  There can be at most one #ELSE in an
+#IF-block, and it must appear after any #ELSEIFs.
+
+#ENDIF marks the end of an #IF-block.  There is no operand after
+#ENDIF.
+
+It is legal to have nested #IF-blocks; that is, #IF-blocks that
+are contained within other #IF-blocks.  #ELSEIF, #ELSE, and
+#ENDIF always refer to the innermost nested #IF-block.
+
+As an example of conditional assembly, suppose that you have a
+program that comes in three versions: one for Texas, one for
+Oklahoma, and one for the rest of the nation.  The three programs
+differ in a limited number of places.  Instead of keeping three
+different versions of the source code, you can keep one version,
+and use conditional assembly on the boolean variables TEXAS and
+OKLAHOMA to control the assembler output.  A sample block would
+be:
+
+#if TEXAS
+  DB 0,1,2,3
+#elseif OKLAHOMA
+  DB 4,5,6,7
+#else
+  DB 8,9,10,11
+#endif
+
+If a block of code is to be assembled only if TEXAS is false,
+then you would use the exclamation point operator:
+
+#if !TEXAS
+  DB 0FF
+#endif
+                                                            11-13
+
+Conditional Assembly and Macros
+
+You may have conditional assembly blocks either in macro
+definitions or in macro expansions.  The only limitation is that
+if you have an #IF-block in a macro expansion, the entire block
+(i.e., the matching #ENDIF) must appear in the same macro
+expansion.  You cannot, for example, define a macro that is a
+synonym for #IF.
+
+To have your conditional assembly block apply to the macro
+definition, you provide the block normally within the definition.
+For example:
+
+X1 EQU 0
+  BAZ MACRO
+#if X1
+  DB 010
+#else
+  DB 011
+#endif
+#EM
+  BAZ
+X1 EQU 1
+  BAZ
+
+In the above sequence of code, the conditional assembly block is
+acted upon when the macro BAZ is defined.  The macro therefore
+consists of the single line DB 011, with all the conditional
+assembly lines removed from the definition.  Thus, both
+expansions of BAZ produce the object-code byte of 011, even
+though the local label X1 has turned non-zero for the second
+invocation.
+
+To have your conditional assembly block appear in the macro
+expansion, you must literalize the hash sign on each conditional
+assembly line by giving two hash signs:
+
+X1 EQU 0
+  BAZ MACRO
+##if X1
+  DB 010
+##else
+  DB 011
+##endif
+#EM
+  BAZ
+X1 EQU 1
+  BAZ
+
+Now the entire conditional assembly block is stored in the macro
+definition, and acted upon each time the macro is expanded. Thus,
+the two invocations of BAZ will produce the different object
+bytes 011 and 010, since X1 has become non-zero for the second
+expansion.
+                                                            11-14
+
+You will usually want your conditional assembly blocks to be
+acted upon at macro definition time, to save symbol table space.
+You will thus use the first form, with the single hash signs.
+
+
+Simulating MASM's Conditional Assembly Constructs
+
+Microsoft's MASM assembler has an abundance of confusing
+conditional assembly directives, all of which are subsumed by
+A86's #IF expression evaluation policies.  IF and IFDEF are both
+covered by A86's #IF directive.  IFE and IFNDEF are duplicated by
+#IF followed by the exclamation-point (boolean negation)
+operator.  IFB and IFNB test whether a macro operand has been
+passed as blank-- they can be simulated by testing the size of
+the operand with the #Sn operator.  Finally, IFIDN and IFDIF do
+string comparisons of macro operands.  This is more generally
+subsumed by the string-comparison capabilities of the operators
+EQ, NE, and =.
+
+Examples of translation of each of these constructs is given in
+the next chapter, on compatibility with other assemblers.
+
+
+Conditional Assembly and the XREF Program
+
+Previous versions of A86 contained a warning, that XREF will not
+correctly handle conditional-assembly blocks controlled by
+variables whose values change during assembly.  Starting with
+V3.12, this has been corrected, by writing to the SYM file a log
+of each conditional-assembly test result.  XREF will consult the
+log to determine which blocks to consider.
+
+
+Declaring Variables in the Assembler Invocation
+
+To facilitate the effective use of conditional assembly, A86
+allows you to declare boolean (true-false) symbols in the command
+line that invokes the assembler.  The declarations can appear
+anywhere in the list of source file names.  They are
+distinguished from the file names by a leading equals sign =.  To
+declare a symbol TRUE (value = 1), give the name after the equals
+sign.  DO NOT put any spaces between the equals sign and the
+name! To declare a symbol FALSE (value = 0), you can give an
+equals sign, an exclamation point, then the name.  Again, DO NOT
+embed any blanks!  Example: if your source files are src1.8,
+src2.8, and src3.8, then you can assemble with TEXAS true by
+invoking A86 as follows:
+
+   a86 =TEXAS src1.8 src2.8 src3.8
+
+You can assemble with TEXAS explicitly set to FALSE as follows:
+
+   a86 =!TEXAS src1.8 src2.8 src3.8
+                                                            11-15
+
+Note that if TEXAS is used only as a conditional-assembly
+control, then you do not need to include the =!TEXAS in the
+invocation, because an undefined TEXAS will automatically be
+interpreted as false.
+
+A user pointed out to me that it's impossible to get an
+equals-sign into an environment variable.  So A86 now accepts an
+up-arrow (hex 5E) character in place of an equals-sign for an
+invocation variable.
+
+
+Null Invocation Variable Names
+
+A86 will ignore an equals-sign by itself in the invocation line,
+without error.  This allows you to generate assembler invocation
+lines using parameters that could be either boolean variable
+names, or null strings. For example, in the previously-mentioned
+TEXAS-OKLAHOMA-nation example, the program could be invoked via a
+.BAT file called "AMAKE.BAT", coded as follows:
+
+      A86 =%1 *.8
+
+You invoke A86 by typing one of the following:
+
+      amake texas
+      amake oklahoma
+      amake
+
+The third line will produce the assembler invocation  A86 = *.8;
+causing no invocation variables to be declared.  Thus both TEXAS
+and OKLAHOMA will be false, which is exactly what you want for
+the rest-of-the-nation version of the program.
+
+
+Changing Values of Invocation Variables
+
+The usual prohibition against changing the value of a symbol that
+is not a local label does not apply to invocation variables.  For
+example, suppose you have a conditional control variable DEBUG,
+which will generate diagnostic code for debugging when it is
+true.  Suppose further that you have already debugged source
+files src1.8 and src3.8; but you are still working on src2.8. You
+may invoke A86 as follows:
+
+   A86 src1.8 =DEBUG src2.8 =!DEBUG src3.8
+
+The variable DEBUG will be TRUE only during assembly of src2.8,
+just as you want.
+
+

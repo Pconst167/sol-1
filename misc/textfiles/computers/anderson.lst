@@ -1,0 +1,247 @@
+_C CUSTOMIZED MEMORY ALLOCATORS_
+by Paul Anderson
+
+[LISTING ONE]
+
+
+/* sym1.c - symbol table data types */
+
+#include <stdio.h>
+#include "xalloc.h"
+#include "defs.h"
+
+main()
+{
+   Symbol *p1, *p2;
+   char *ps = "test string";
+   int *p5;
+
+   p1 = (Symbol *) xmalloc(sizeof(struct Symbol));
+   p1->dtype = STRING;
+   p1->val.pstring = xmalloc(strlen(ps) + 1);
+   strcpy(p1->val.pstring, ps);
+
+   p2 = (Symbol *) xmalloc(sizeof(struct Symbol));
+   p2->dtype = DOUBLE;
+   p2->val.pdouble = (double *) xmalloc(sizeof(double));
+   *p2->val.pdouble = 6.7e-13;
+
+   printf("%s\n", p1->val.pstring);
+   printf("%g\n", *p2->val.pdouble);
+
+   p5 = (int *) xmalloc(30000 * sizeof(int));
+}
+
+$ sym1
+test string
+6.7e-13
+file sym1.c - line 26:  malloc error for 60000 bytes
+
+
+[LISTING TWO]
+
+#include <stdio.h>
+#include <malloc.h>
+
+#define MAXBUF 256                /* size of debug buffer */
+static char *dbuf[MAXBUF];        /* debug buffer */
+
+/* ymalloc2.c - front end for malloc()
+                Version 2
+*/
+
+char *ymalloc(file, lineno, nbytes)
+char *file;
+int lineno;
+unsigned int nbytes;
+{
+   char *pheap;
+   void install();
+
+   pheap = malloc(nbytes);
+   if (pheap == (char *) NULL) {
+     fprintf(stderr,"file %s - line %d:  malloc error for %u bytes\n",
+                     file, lineno, nbytes);
+     exit(1);
+   }
+   install(pheap);                  /* place in debug buffer */
+   return pheap;
+}
+
+void install(pheap)               /* store heap pointer in debug buffer */
+char *pheap;
+{
+   register char **pbuf;
+
+   for (pbuf = dbuf; pbuf < dbuf + MAXBUF; pbuf++)
+       if (*pbuf == (char *) NULL) {
+          *pbuf = pheap;
+          return;
+       }
+   fprintf(stderr, "No room left in debug buffer\n");
+   exit(1);
+}
+
+char *yrealloc(file, lineno, oldp, nbytes)
+char *file, *oldp;
+int lineno;
+unsigned int nbytes;
+{
+   char *newp;
+   register char **pbuf;
+   short found = 0;
+
+   if (oldp != (char *) NULL)
+      for (pbuf = dbuf; pbuf < dbuf + MAXBUF; pbuf++)
+          if (*pbuf == oldp) {      /* find oldp's slot */
+             found = 1;
+             break;
+          }
+   if (!found) {
+      fprintf(stderr,"file %s - line %d:  realloc error for address %x\n",
+                     file, lineno, oldp);
+      exit(1);
+   }
+   newp = realloc(oldp, nbytes);
+   if (newp == (char *) NULL) {
+      fprintf(stderr,"file %s - line %d:  realloc error for %u bytes\n",
+                     file, lineno, nbytes);
+      exit(1);
+   }
+   *pbuf = newp;         /* replace in debug buffer's old slot */
+   return newp;
+}
+
+void yfree(file, lineno, pheap)
+char *file, *pheap;
+int lineno;
+{
+   register char **pbuf;
+
+   if (pheap != (char *) NULL)
+      for (pbuf = dbuf; pbuf < dbuf + MAXBUF; pbuf++)
+          if (*pbuf == pheap) {
+             *pbuf = NULL;
+             free(pheap);
+             return;
+          }
+   fprintf(stderr,"file %s - line %d:  free error for address %x\n",
+                     file, lineno, pheap);
+   exit(1);
+}
+
+
+[LISTING THREE]
+
+
+/* sym2.c - more symbol table data types */
+
+#include <stdio.h>
+#include "xalloc.h"
+#include "defs.h"
+
+main()
+{
+   Symbol *p1, *p2;
+   char *ps = "test string";
+   char *ps2 = "much longer test string";
+
+   p1 = (Symbol *) xmalloc(sizeof(struct Symbol));
+   p1->dtype = STRING;
+   p1->val.pstring = xmalloc(strlen(ps) + 1);
+   strcpy(p1->val.pstring, ps);
+
+   p2 = (Symbol *) xmalloc(sizeof(struct Symbol));
+   p2->dtype = DOUBLE;
+   p2->val.pdouble = (double *) xmalloc(sizeof(double));
+   *p2->val.pdouble = 6.7e-13;
+
+   printf("%s\n", p1->val.pstring);
+   printf("%g\n", *p2->val.pdouble);
+
+   p1->val.pstring = xrealloc(p1->val.pstring, strlen(ps2) + 1);
+   strcpy(p1->val.pstring, ps2);
+   printf("%s\n", p1->val.pstring);
+
+   xfree((char *) p2->val.pdouble);
+   xfree(ps2);                      /* free a bad pointer */
+}
+
+$ sym2
+test string
+6.7e-13
+much longer test string
+file sym2.c - line 31:  free error for address 2634
+
+
+
+Example 1: Out of bounds references
+
+/* twzone.c - array out of bounds */
+
+main()
+{
+    int buf[10];
+
+    buf[-4] = 1;             /* negative subscript */
+    buf[10] = 2;             /* one step beyond */
+
+    printf("%d %d\n", *(buf - 4), *(buf + 10));
+}
+
+
+Example 2: Program that demonstartes xcalloc()
+
+
+/* neg.c - negative subscripts with xcalloc */
+
+#include <stdio.h>
+
+main()
+{
+   char *xcalloc();
+   int *p, *q;
+
+   p = (int *) xcalloc(10, sizeof(int));
+   q = (int *) xcalloc(15, sizeof(int));
+
+   fill(p);                            /* fill with 10 numbers */
+   display(p);                         /* print 10 numbers */
+
+   fill(q);                            /* fill with 15 numbers */
+   display(q);                         /* print 15 numbers */
+}
+
+$ neg
+  1  2  3  4  5  6  7  8  9 10
+  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15
+
+
+ Example 3: xcalloc() routine
+
+
+
+#include <stdio.h>
+#include <malloc.h>
+#include <memory.h>
+
+char *xcalloc(nitems, size)            /* custom calloc() */
+unsigned nitems, size;
+{
+   char *pheap;
+   unsigned blksize;
+
+   blksize = nitems * size;                    /* size of chunk */
+
+   if ((pheap = malloc(blksize + sizeof(int))) == NULL) {
+      fprintf(stderr, "Can't malloc on heap\n");
+      exit(1);
+   }
+   *(int *)pheap = nitems;                     /* store no. of items in heap */
+
+   memset(pheap + sizeof(int), 0, blksize);    /* zero the area */
+
+   return pheap + sizeof(int);                 /* pointer to data */
+}
+
+

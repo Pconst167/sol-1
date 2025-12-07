@@ -1,0 +1,66 @@
+			  (%) GETTING BUSTED (%)
+		    (%) an experience and a warning (%)
+
+		       ^^  By  Paranoid Punkpig  ^^
+			--- Resident (415) Bum ---
+
+
+I'm sure most of you have done some kinds of illegal activity, and betcha
+might've gotten arrested..  Lemmie tell ya, getting arrested is no joke:
+you're parents get notified, and they are told of the activity you were doing
+(in my case, fucking around with fire in a condemed building).	You also get a
+record (you go on file down at the nearest police station, and you might get
+kicked out of school..	First lemmie lay it all out for ya:
+
+It was a Friday night, and it was just after a school dance, and, as usual, i
+was disappointed as hell (i go to a pretty tame school).  Me and a friend
+decided to, rather than hang around with a bucha people, go investigate this
+old shopping mall that was being torn down by school..	we had both been by
+there many times, but had never considered entering the damn thing..  what a
+mistake that was!  First off, it was dark, and we didn't have a flashlight
+(duhh...  who carries a flashlight with them?!), anywaze, so we had to use
+newspaper, and light it...  THAT was the first mistake, cuz there was so much
+smoke, some fucking rent-a-cop saw it pouring out of the building, and thought
+it was a fuckin' fire!!  So, there we were, not knowing that outside, there
+were about a dozen cops, about to enter the building..	We were having the time
+of our lives, fucking around:  going around in an abandoned shopping mall can
+be cool, try it!!  Finally, after about an hour, the smoke started gettin' to
+us, and we decided to leave...	anywayze, it was past 1:00 and this was when i
+didn't and couldn't drive, so i needed to walk home (another hour)..  we then
+proceeded to leave when we heard the cops opening the exit door (the ONLY exit
+door!!)...  at the time, we were right by the door, kinda behind it, so that
+they didn't know that we were there..  We put the "torches" out fast as hell,
+but still, there were some cinders, and, the cops spotted it, and us...
+
+Then, they shined their flashlights in our faces, and started sayin' stuff
+like:  "Whatcha doin' here, punks?" "What're ya doin with fire, you fuckin'
+assholes?!" etc..  Oh yeah, they asked our ages, and we said 11..  that was
+cool as hell, cuz they relaxed then, cuz they didn't think that 11 year olds
+would try anything...  (keep that in mind..  if you get busted, then act
+scared, as if you wouldn't do anythnig, and the cops will *RELAX*)..  they then
+did the old feel routine, where they see if you have any guns, knives, etc.  on
+you...	They didn't check us out very thoroughly, tho, cuz my friend had a
+knife in his denim, which the cops didn't find.  They took us outside, to the
+"meter-maid-mobile" (you know, the little three wheelers that meter maids use),
+and were about to cuff us..  (yeah, at age 13!!) anywaze, that's when my friend
+said, "R-U-N-!", at which point we both jammed!!  shit, i ran so fast, you
+wouldn't believe it!  the cops yelled something like "stop, or we'll shoot",
+but that's a buncha shit, cuz we were just kids...  cops cant shoot people
+unless they pose a threat to the cop...  we ran, and ran, and ran and ran....
+and we made it home ok without getting busted by the cops, BUT!  somehow, they
+got a look at us, and about 2 weeks later, the same cops (we were walkin' by
+school again), saw us, and recognized us...  they brought us
+in..............but dat's another story...
+
+
+
+		     (^) Paranoid - Punkpig (^)
+
+
+-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+Call MARIN-80 :: 40 MEGS d/l (Pirate, hacking, public) :: Apple II's
+  IBM :: Commodore's :: Atari's :: *San Francisco's* one and only!!
+		       (%)  (415) 479-7218  (%)
+-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+

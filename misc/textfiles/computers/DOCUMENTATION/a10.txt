@@ -1,0 +1,686 @@
+CHAPTER 10   RELOCATION AND LINKAGE
+
+
+A86 allows you to produce either .COM files, which can be run
+immediately as standalone programs, or .OBJ files, to be fed to
+the MS-DOS LINK program.  In this chapter I'll discuss .OBJ mode
+of A86.
+
+
+.OBJ Production Made Easy
+
+I'll start by giving you the minimum amount of information you
+need to know to produce .OBJ files.  If you are writing short
+interface routines, and do not want to concern yourself with the
+esoterica of .OBJ files (segments, groups, publics, etc.), you
+can survive quite nicely by reading only this section.
+
+There are two ways you can cause A86 to produce a .OBJ file as
+its object output.  One way is to explicitly give .OBJ as the
+output file name: for example, you can assemble the source file
+FOO.8 by giving the command "A86 FOO.8 FOO.OBJ".  The other way
+is to specify the switch +O (letter O not digit 0).  This is
+illustrated by the invocation "A86 +O FOO.8", which will have the
+same effect as the first invocation.
+
+My design philosophy for .OBJ production is to accommodate two
+types of user.  The first type of user is writing new code, to
+link to other (usually high level language) modules.  That person
+should be able to write the module with a minimum of red tape,
+and have A86 do the right thing.  The second type of user has
+existing modules written for Intel/IBM assemblers, and wants to
+port them to A86.  A86 should recognize and act upon all the
+relocation directives (SEGMENT, GROUP, PUBLIC, EXTRN, NAME, END)
+given.  The assembly should work even if several files, assembled
+separately under the Intel/IBM assembler, are fed to a single A86
+assembly.  You'll see if you read on through this entire chapter
+that the multiple-files requirement causes A86 to interpret some
+of the relocation directives a little differently (while
+achieving compatible results).
+
+Let's suppose you're writing new code: for example, an interface
+routine to the "C" language, that multiplies a 16-bit number by
+10.  "C" pushes the input number onto the stack, before calling
+your routine.  Your code needs to get the number, multiply it by
+10, and return the answer in the AX register.  You can code it:
+
+_MUL10:          ; "C" expects all public names to start with "_"
+  PUSH BP        ; "C" expects BP to be preserved
+  MOV BP,SP      ; we use BP to address the stack
+  MOV AX,[BP+4]  ; fetch the number N, beyond BP and the ret addr
+  ADD AX,AX      ; 2N
+  MOV BX,AX      ; 2N is saved in BX
+  ADD AX,AX      ; 4N
+  ADD AX,AX      ; 8N
+  ADD AX,BX      ; 8N + 2N = 10N
+  POP BP         ; BP is restored
+  RET            ; go back to caller
+                                                             10-2
+
+These 11 lines can be your entire source file!  If you name the
+file MUL10.8, A86 will create an object file MUL10.OBJ, that
+conforms to the standard SMALL model of computation for high
+level languages.  If you use RETF instead of RET (thus, by the
+way, getting the operand from BP+6 instead of BP+4), the object
+module will conform to the standard LARGE model of computation.
+All the red tape information required by the high level language
+is provided implicitly by A86.  I'll go through this information
+in detail later, but you should need to read about it only if
+you're curious.
+
+What happens if you need to access symbols outside the module
+you're assembling?  If the type of the symbol is correctly
+guessed from the instruction that refers to it, then you can
+simply refer to it, and leave it undefined within the module. For
+example, if A86 sees the instruction CALL PRINT with PRINT
+undefined, it will assume that PRINT is a NEAR procedure.  If
+PRINT is never defined within the module, A86 will act as if you
+declared PRINT via the directive EXTRN PRINT:NEAR.  The address
+of PRINT will be plugged into your instruction by LINK when it
+combines A86's .OBJ file with the high level language's .OBJ
+files, to make the final program.
+
+In general, the undefined operand to any CALL or JMP instruction
+is assumed to be NEAR.  The second (source) operand to a MOV or
+arithmetic instruction is assumed to be ABS (i.e., an immediate
+constant).  An undefined first (destination) operand is assumed
+to be a simple memory variable, of the same size (BYTE or WORD)
+as the register given in the second operand.  If your external
+symbol does not comply with these guidelines, you need to declare
+it with an EXTRN before you use it.  (You can also use EXTRN to
+declare types of non-complying forward references within your
+module, as you'll see later.)
+
+If you'd like to link the MUL10 procedure to Turbo Pascal V4.0 or
+later, you need to append the line CODE SEGMENT PUBLIC to the top
+of the program, to name the program segment according to Turbo
+Pascal's expectations.  You may dispense with the leading
+underscore in the name MUL10-- Turbo Pascal does not require or
+expect it.
+
+At this point, if you're a casual user, I think you've read
+enough to get going!  Read further only if you wish; or if you
+get stuck, and need to master the esoterica.
+                                                             10-3
+
+Overview of Relocation and Linkage
+
+When you assemble a program directly into a .COM file, the
+program has just two forms: the source program, that you can
+understand, and the .COM file, that the computer can "understand"
+(i.e., execute).  A .OBJ file is an intermediate format: neither
+you nor the (executing) computer can make sense out of a .OBJ
+file; only programs like LINK interpret .OBJ files.  The purpose
+of a .OBJ file is to allow you to assemble or compile just a part
+of a program.  The other parts (also in the form of .OBJ files)
+can be produced at a different time; often by a different
+assembler or compiler, whose source files are in a different
+language.  It's easy to see where the word "linkage" comes from:
+the LINK program puts the pieces of a program together.  The
+"relocation" comes because the assembler or compiler that makes a
+given program piece doesn't know how many other pieces will come
+before it, or how big the other pieces will be.  Each piece is
+constructed as if it started at location 0 within the program;
+then LINK "relocates" the piece to its true location.
+
+Many of the relocation features of 86 assembly language are
+couched in terms of LINK's point of view, so we must look at the
+way LINK sees things.  LINK calls a .OBJ file an "object module",
+or just "module".  Each module has a NAME, that can be referred
+to when LINK issues diagnostic messages, such as error messages
+and symbol maps.  If a program symbol is used only within a
+single module, it does not need to be given to LINK, except
+possibly to pass along to a symbolic debugger.  On the other
+hand, if a program symbol is defined in one module and referenced
+in other modules, then LINK needs to know the name of the symbol,
+so it can resolve the references.  Such a symbol is PUBLIC in the
+module in which it is defined; it is "external" in the other
+modules, containing references to it.  Finally, exactly one
+module in a program must contain the starting location for the
+program; that module is called the "main module", and it must
+supply the starting address (which is not necessarily at the
+beginning of the module).
+
+In the 86 family of microprocessors, the LINK system also does
+much to manage the memory segments that a program will fit into,
+and get its data from.  The (grotesquely ornate) level of support
+for segmentation was dictated by Intel when it specified (and IBM
+and the compiler makers accepted) the format that .OBJ files will
+have.  I attended the fateful meeting at Intel, in which the
+crucial design decisions were made.  I regret to say that I sat
+quietly, while engineers more senior than I applied their fertile
+imaginations to construct fanciful scenarios which they felt had
+to be supported by LINK.  Let's now review the resulting
+segmentation model.
+                                                             10-4
+
+The parts of a program, as viewed by LINK, come in three
+different sizes: they can be (1) pieces of a single segment, (2)
+an entire single segment, or (3) a sequence of consecutive
+segments in 86 memory.  Size (1) should have been called
+something like FRAGMENT, but is instead called SEGMENT.  Size (2)
+should have been called SEGMENT, but is instead called GROUP.
+Size (3) should have been called "group", but is instead called
+"class".  Let me cling to the sensible terminology for one more
+paragraph, while I describe the worst scenario Intel wanted to
+support; then when I discuss individual directives, I'll
+regretfully revert to the official terminology.
+
+The scenario is as follows: suppose you have a program that
+occupies about 100K bytes of memory.  The program contains a core
+of 20K bytes of utility routines that every part of the program
+calls.  You'd like every part of the program to be able to call
+these routines, using the NEAR form to save memory.  By gum, you
+can do it!  You simply(!) slice the program into three fragments:
+the utility routines will go into fragment U, and the rest of the
+program will be split into equal-sized 40K-byte fragments A and
+B.  Now you arrange the fragments in 8086 memory in the order
+A,U,B.  The fragments A and U form a 60K-byte block, addressed by
+a segment register value G1, that points to the beginning of A.
+The fragments U and B form another 60K-byte block addressed by a
+segment register value G2, that points to the beginning of U.  If
+you set the CS register to G1 when A is executing, and G2 when B
+is executing, the U fragment is accessible at all times.  Since
+all direct JMPs and CALLs are encoded as relative offsets, the
+U-code will execute direct jumps correctly whether addressed by
+G1 with a huge offset, or G2 with a small offset.  Of course, if
+U contains any absolute pointers referring to itself (such as an
+indirect near JMP or CALL), you're in trouble.
+
+It's now been over a decade since the fateful design meeting took
+place, and I can report that the above scenario has never taken
+place in the real world.  And I can state with some authority
+that it never will.  The reason is that the only programs that
+exceed 64K bytes in size are coded in high level language, not
+assembly language.  High level language compilers follow a very,
+very restricted segmentation model-- no existing model comes
+remotely close to supporting the scheme suggested by the
+scenario.  But the 86 assembly language can support it-- the
+directives "G1 GROUP A,U" and "G2 GROUP B,U", followed by chunks
+of code of the appropriate object size, headed by directives "A
+SEGMENT", "B SEGMENT", and "U SEGMENT".  The LINK program is
+supposed to sort things out according to the scenario; but I
+can't say (and I have my doubts) if it actually succeeds in doing
+so.
+
+The concept of "class" was added as an afterthought, to implement
+the more sensible and usable features that outsiders thought
+GROUPs were implementing;  namely, the ability to specify that
+different (and disjoint!) segments occur consecutively in memory.
+This allows programs to be arranged in a consistent manner-- for
+example, with all program code followed by all static data
+segments followed by all dynamically allocated memory.
+                                                             10-5
+
+The NAME Directive
+
+Syntax:  NAME module_name
+
+The NAME directive specifies that "module_name" be given to LINK
+as the name of the module produced by this assembly.  The symbol
+"module_name" can be used elsewhere in your program without
+conflict: it can even, if you like, be a built-in assembler
+mnemonic (e.g. "NAME MOV" is acceptable)!
+
+If you do not provide a NAME directive, A86 will use the name of
+the output object file, without the .OBJ extension.   If you
+provide more than one NAME directive, A86 will use the last one
+given, with no error reported.
+
+
+
+The PUBLIC Directive
+
+Syntax:  PUBLIC  sym1, sym2, sym3, ...
+         PUBLIC
+
+The PUBLIC directive allows you to explicitly list the symbols
+defined in this assembly, that can be used by other modules.  If
+you do not give any PUBLIC directives in your program, A86 will
+use every relocatable label and variable name in your program,
+except local labels (the redefinable labels consisting of a
+letter followed by digits: L7, M1, Q234, etc.).  Symbols EQUated
+to constants, and symbols defined within structures and DATA
+SEGMENTs, are not implicitly declared PUBLIC: you have to
+explicitly include them in a PUBLIC directive.
+
+A86 maintains an internal flag, telling it whether to figure out
+for itself which symbols are PUBLIC, or to let the program
+explicitly declare them.  The flag starts out "implicit", and is
+set to "explicit" only if A86 sees a PUBLIC directive with no
+names at all, or a PUBLIC directive containing at least one name
+that would have been implicitly made PUBLIC.
+
+If you are writing new code, you'll probably want to keep the
+flag "implicit".  You use the PUBLIC directive only for those
+symbols which have the form of local labels, but aren't (e.g., a
+memory variable I1987 for 1987 income); and for absolute values
+that are globally accessed -- e.g. specify "PUBLIC
+OPEN_FILES_LIMIT" for a symbol defined as "OPEN_FILES_LIMIT EQU
+20".
+
+If you are porting existing code, that code will already have
+PUBLIC directives in it, and A86 will go to "explicit" mode,
+duplicating the functionality of other assemblers.
+
+The PUBLIC directive with no names is used to force "explicit"
+mode, thus causing (if there are no further PUBLICs with names)
+the .OBJ file to declare no symbols PUBLIC.
+                                                             10-6
+
+There is another side effect to the PUBLIC directive: if a symbol
+is declared PUBLIC in a module, it had better be defined in that
+module.  If it isn't then A86 includes it in the .ERR listing of
+undefined symbols in the module, and suppresses output of the
+object file.
+
+
+The EXTRN Directive
+
+Syntax:  EXTRN  sym1:type, sym2:type, ...
+
+where "type" is one of:  BYTE WORD DWORD QWORD TBYTE FAR
+or synonymously:           B    W    D     Q     T     F
+or:                        NEAR  ABS
+
+The EXTRN directive allows you to attach a type to a symbol that
+may not yet be defined (and may never be defined) within your
+program.  This is often necessary for the assembler to generate
+the correct instruction form when the symbol is used as an
+operand.  All the possible types except ABS are defined elsewhere
+in the A86 language, but I list them again here for convenience:
+
+   B or BYTE:   byte-sized memory variable
+   W or WORD:   word (2 byte) sized memory variable
+   D or DWORD:  doubleword (4-byte) sized memory variable
+   Q or QWORD:  quadword (8-byte) sized memory variable
+   T or TWORD:  10-byte-sized memory variable
+   NEAR:        program label accessed within a segment
+   FAR:         program label accessed from outside this segment
+   ABS:         an absolute number (i.e., an immediate constant)
+
+An example of EXTRN usage is as follows: suppose there is a word
+memory variable IFARK in your program.  The variable might be
+declared at the end of the program; or it might be defined in a
+module completely outside of this program.  Without an EXTRN
+directive, A86 will assemble an instruction such as "MOV
+AX,IFARK" as the loading of an immediate constant IFARK into the
+AX register.  If you place the directive "EXTRN IFARK:W" at the
+top of your program, you'll get the correct instruction form for
+MOV AX,IFARK-- moving a word memory variable into the AX
+register.
+
+A86 will allow more than one EXTRN directive for a given symbol,
+as long as the same type is given every time.  A86 will even
+allow an EXTRN directive for a symbol that has already been
+defined, as long as the type declared is consistent with the
+symbol's definition.  These allowances exist so that you can
+assemble multiple files written for another assembler, that had
+been fed separately to that assembler.
+                                                             10-7
+
+Note that EXTRN is viewed quite differently by A86 than by other
+assemblers.  In fact, if it weren't for those other assemblers,
+I'd use the mnemonic DECLARE instead of EXTRN.  A86 doesn't
+really use EXTRN to determine which symbols are external-- it
+uses those symbols that are undefined at the end of assembly.  As
+I stated earlier in the chapter, an undefined symbol can be
+referenced without being declared via EXTRN. Conversely, a
+defined symbol can be declared (and redeclared) via EXTRN; being
+defined, such a symbol will not be specified "external" in the
+.OBJ file.
+
+Because EXTRN is useful in forward reference situations, it is
+now recognized even when A86 is assembling a .COM file.
+
+For those of you who are accustomed to the more traditional use
+of EXTRN, and who do not like external records to be created
+"behind your back", A86 offers the "+x" option.  If you include
+"+x" in the program invocation, A86 will require that all
+undefined symbols be explicitly declared via an EXTRN.  Any
+undefined, undeclared symbols will be included in the .ERR
+listing of undefined symbols, and object file output will be
+suppressed.
+
+
+MAIN: The Starting Location for a Program
+
+I've already stated that exactly one module in a program is the
+"main" module, containing the starting address of the entire
+program.  In A86 when assembling .OBJ files, the starting address
+is given by the label MAIN.  You simply provide the label "MAIN:"
+where you want the program to start.  The module containing MAIN
+is the main module.
+
+
+The END Directive
+
+Syntax:  END
+         END start_addr
+
+The END directive is used by other assemblers for two purposes,
+both of which are now a little silly.  The first purpose is to
+signal the end of assembly.  This was necessary back in the days
+when source files were input on media such as paper tape: you had
+to tell the assembler explicitly that the content of the tape has
+ended.  Today the operating system can tell you when you've
+reached the end of the file, so this function is an anachronism.
+
+The second purpose of END is, nonsensically, to allow you to
+specify the starting location of the program.  I suppose the
+person who wrote the first assembler back in the 1950's was too
+short on memory to implement a separate START directive, or a
+MAIN label like A86 has, and decided to let END do double duty.
+I've always considered the example "END START" to have an
+Alice-in-Wonderland quality; it is fuel for the
+high-level-language snobs who like to attack assembly language.
+Please defeat the snobs, and use "MAIN:" if you are writing new
+code.
+                                                             10-8
+
+For compatibility, A86 treats "END start_addr" exactly the same
+as if you had coded "MAIN EQU start_addr".  Note that if you want
+your program to assemble under both A86 and that other assembler,
+you can specify "END MAIN"-- A86 treats MAIN EQU MAIN as a legal
+redefinition of the symbol MAIN.
+
+A86 ignores END when there is no starting-address operand, thus
+allowing assembly of multiple files written for other assemblers.
+
+
+The SEGMENT Directive
+
+Syntax:  seg_name SEGMENT [align] [combine] ['class_name']
+
+where "align" is one of:  BYTE   WORD   PARA   PAGE
+"combine" is one of:      PUBLIC  STACK  COMMON  MEMORY
+                            AT number
+
+The SEGMENT directive says that assembled object code will
+henceforth go to a block of code whose name is "seg_name".
+"seg_name" is a symbol that represents a value that can be loaded
+into a segment register.  If "seg_name" is not declared in a
+GROUP directive, then its value should in fact be loaded into a
+segment register, in order to address the code.  If "seg_name" is
+declared in a GROUP directive, then the code is a a part of the
+segment addressed by the name of the group.
+
+A program can consist of any number of named segments, to be
+combined in numerous exotic ways to produce the final program.
+You can redirect your object output from one segment to another
+in your assembly, by providing a SEGMENT directive before each
+piece of code.  You can even return to a segment you started
+earlier, by repeating a SEGMENT with the same name-- the
+assembler just picks up where it left off, subject to some
+possible skipping for memory alignment, that I'll describe
+shortly.
+
+The specifications following the word SEGMENT help to describe
+how the code in this module's part of the segment will be
+combined with code for the same segment name given in other
+modules; and also how this named segment will be grouped with
+other named segments.  Other assemblers require the
+specifications to be given in the order indicated.  A86 will
+accept any order, and will accept commas between the
+specifications if you want to provide them.  The only restriction
+is that "AT number" must be followed by a comma if it is not the
+last specification on the line.
+                                                             10-9
+
+The "align" specification tells if each piece of code within the
+segment should be aligned so that its starting address is an even
+multiple of some number.  BYTE alignment means there is no
+requirement; WORD alignment requires each piece to start at a
+multiple of 2; PARA alignment, at a multiple of 16; PAGE
+alignment, at a multiple of 256.  For example, suppose you have a
+segment containing memory variables.  You can declare the segment
+with the statement "VAR_DATA SEGMENT WORD", which insures that
+the segment is aligned to an even memory address.  That way you
+can insure that all 16-bit and bigger memory quantities in the
+segment are aligned to even addresses, for faster access on the
+16-bit machines of the 86 family.
+
+There are special rules governing alignment for multiple pieces
+of the same named segment within the same program module.  Other
+assemblers outlaw conflicting alignment specifications in this
+situation; A86 accepts them, and uses the strictest specification
+given.  Furthermore, the alignment given for any specification
+beyond the first will control the alignment for that piece of
+code within this module's chunk.  For example, if a program
+contains two pieces of code headed by "VAR_DATA SEGMENT WORD",
+A86 will insert a byte between the pieces if the first piece has
+an odd number of bytes.  This insures correct assembly for
+multiple files written for another assembler.
+
+If no "align" type is given for any of the pieces of a named
+segment, an alignment of PARA is assumed.
+
+
+The "combine" specification tells how the chunk of code from this
+module will be combined with the chunks of the same named
+segment, that come from other modules.  Yes, I know, that sounds
+like what "align" does; but "combine" takes a different, more
+major point of view:
+
+* PUBLIC is the kind of combination we've been talking about all
+  along: each piece of the segment is located off the end of the
+  previously linked piece, subject to possible gaps for
+  alignment.  The size of the segment is the sum of the sizes of
+  the pieces, plus the sizes of the gaps.
+
+* STACK is a combination type reserved for the system's stack
+  segment.  To illustrate how STACK segment chunks are combined,
+  let's describe the only way a stack segment should ever be
+  used.  We'll call the segment STACK; and we declare it as
+  follows:
+
+    STACK SEGMENT WORD STACK
+        DW 100 DUP (?)
+    TOP_OF_STACK:
+                                                            10-10
+
+  The code just given declares a stack area of 200 bytes (100
+  words) for this module.  If identical code occurs in each of
+  three modules which are then linked together, the resulting
+  STACK segment will have 600 bytes (the sizes are added), but
+  TOP_OF_STACK will be the same address (600) for each module
+  (each piece is overlayed at the top of the segment).  That way,
+  every module can declare and access the top of the stack, which
+  is the only static part of the stack that any code should ever
+  refer to.
+
+* COMMON is a type of memory area supported by FORTRAN.  Each
+  module's chunk of a COMMON segment starts at location 0, and
+  overlaps (usually duplicates) the pieces from all the other
+  modules.  The size of a COMMON segment is the size of the
+  largest chunk.
+
+* MEMORY is supposed to be another kind of COMMON segment, that
+  is distinguished by automatically being located beyond all
+  other segments in memory.  The MS_DOS LINK program, however,
+  does not implement MEMORY segments, and instead treats them
+  identically to PUBLIC (not COMMON!) segments.  I can see no
+  useful purpose to the MEMORY combine type, since the
+  functionality can be achieved by putting a COMMON segment into
+  a 'class' by itself, that goes above all the other classes.  So
+  don't use MEMORY.
+
+  Sorry, I don't support the assembly of multiple files written
+  for other assemblers, that contain STACK, COMMON, or MEMORY
+  segments.  If I did, I would have to detect the file breaks,
+  and duplicate the overlapping functionality of these segment
+  types.  Since I don't think anybody out there is using these
+  esoteric types, I didn't bother to support them to that extent.
+  Objections, anyone?
+
+* "AT number" defines a non-combinable segment at the absolute
+  memory location whose segment register value is "number".  This
+  form is useful for initializing data in fixed locations, such
+  as the 86 interrupt vector (IVECTOR SEGMENT AT 0 followed by
+  ORG 4 * INT_NUMBER), or for reading fixed memory locations,
+  such as the BIOS variables area (BIOS_DATA SEGMENT AT 040).
+
+The combine type specification can be repeated in subsequent
+pieces of a given segment, but if it is, it must be the same in
+all pieces.
+
+Finally, if no combine type is ever given for a named segment in
+a module, that segment is non-combinable-- no other modules may
+define that segment; the code given in the one module constitutes
+the entire segment.
+                                                            10-11
+
+The last specification available on a SEGMENT line is the class
+name, which is identified by being enclosed in single quotes.
+Unlike a segment name, which can be used as an instruction
+operand and hence cannot conflict with other assembler symbols, a
+class name can be assigned without regard to its usage elsewhere
+in the program.  It can even be a built-in A86 mnemonic.  In
+fact, both the SMALL and LARGE high-level-language models specify
+the class name 'CODE' for code segments, and the SMALL model
+specifies the class name 'DATA'.
+
+If no class name is given for a segment, A86 specifies the null
+(zero length) string as the class name.
+
+
+DATA SEGMENT, STRUC and CODE SEGMENT Directives
+
+The DATA SEGMENT and STRUC directives work in .OBJ mode exactly
+as they do in .COM mode-- they define a special assembly mode, in
+which declarations are made, but no object code is output.
+Offsets within DATA segments and structures are absolute, as in
+.COM mode.  Assembly resumes as before when an ENDS or CODE
+SEGMENT directive is encountered.
+
+For MASM compatibility (especially in modules written to link to
+Turbo Pascal V4.0 programs), I now recognize the keywords CODE,
+DATA, and STACK as ordinary relocatable segment names.  The
+ordinary functionality takes effect whenever a SEGMENT directive
+is given with CODE, DATA or STACK as the segment name, and with
+one or more relocatable parameters (e.g., PUBLIC) given after
+SEGMENT.
+
+
+The ENDS Directive
+
+Syntax:  [seg_name] ENDS
+
+The ENDS directive closes out the segment currently being
+assembled, and returns assembly to the segment being assembled
+before the last SEGMENT directive.  The "seg_name", if given,
+must match the name in that last SEGMENT directive.  ENDS allows
+you to "nest" segments inside one another.  For example, you can
+declare some static data variables that are specific to a certain
+section of code at the top of that section:
+
+  _DATA SEGMENT BYTE PUBLIC 'DATA'
+      VAR1  DB ?
+      VAR2  DB ?
+  _DATA ENDS
+
+These four lines can be inserted inside any other segment being
+assembled.  They will cause the two variable allocations to be
+tacked onto the segment _DATA; and assembly will then continue in
+whatever segment surrounded the four lines.  Observe that the
+"nesting" does not occur in the final program; only the
+presentation of the source code is nested.
+                                                            10-12
+
+If you are not nesting segments inside one another, then the ENDS
+directive serves only to lend a clean, "block-structured"
+appearance to your source code.  It does not assist A86 in any
+particular way; in fact, it consumes a bit more object output
+memory (slightly reducing object output capacity) if you have
+ENDSs, rather than just starting up new segments with SEGMENT
+directives.
+
+
+Default Outer SEGMENT
+
+Other assemblers outlaw any code outside of a SEGMENT
+declaration, forcing you to give a SEGMENT declaration before you
+can assemble anything.  A86 lets you assemble just your code; you
+don't have to worry about SEGMENTs if you don't want to.
+
+If you do provide code outside of all SEGMENT declarations, A86
+performs the following steps, to find a reasonable place to put
+the code:
+
+1. If there are any segments explicitly declared whose name is or
+   ends with "_TEXT", then the first such segment declared is
+   used.  It is as if the SEGMENT declaration appeared at the top
+   of, rather than within, the program.
+
+2. If there is no such explicit segment, A86 creates a BYTE
+   PUBLIC segment of class 'CODE', and proceeds to construct a
+   name for the segment.  If there are no RETF instructions in
+   the outer segment, the name chosen is "_TEXT", conforming to
+   the SMALL model of computation.  If there is a RETF
+   instruction, the name chosen is "modulename_TEXT", where
+   "modulename" is the name of this module.  Recall that
+   "modulename" comes from the NAME directive if there is one;
+   from the name of the .OBJ file if there isn't.
+
+
+The GROUP Directive
+
+Syntax:  group_name GROUP seg_name1, seg_name2, ...
+
+The GROUP directive causes A86 to tell LINK that all the listed
+segments can fit into a single 64K-byte block of memory, and
+instruct LINK to make that fit.  (If they won't fit, LINK will
+issue an error message.)  Having declared the group, you can then
+use "group_name" as the segment register value that will allow
+simultaneous access to all the named segments.  The order of
+names given in the list does not necessarily determine the order
+in which the segments will finally appear within the group.
+
+The most useful application of the GROUP directive is to allow
+you to structure the pieces of a program, all of whose code and
+data will fit into a single 64K segment.  You organize the pieces
+into SEGMENTs, and declare all the SEGMENTs to be within the same
+GROUP.  When the program starts, all segment registers are set to
+point to the GROUP, and you never have to worry about segment
+registers again in the program.
+                                                            10-13
+
+WARNING: If your segments will be GROUPed in the final program,
+you should have the appropriate GROUP directive in every module
+assembled.  If you don't, then any memory pointers generated will
+be relative to the beginning of the individual named segments,
+not to the beginning of the whole group.
+
+Because of the obscure scenario I described in the Overview
+section, Intel does not prohibit more than one GROUP from
+containing some of the same segments; so neither does A86.  Any
+pointers within a segment will be calculated from the beginning
+of the last GROUP that the segment was declared within.  But
+again, I have my doubts as to whether LINK will handle this
+correctly.
+
+
+The SEG Operator
+
+Syntax:  SEG operand
+
+The SEG operator returns the segment containing its operand-- a
+value suitable for loading into one of the segment registers. If
+the operand is an explicit far constant such as 01811:0100, the
+value returned is the lefthand component of the constant (01811
+in this example).  Otherwise, the result depends on A86's output
+mode:
+
+When A86 is assembling to an OBJ file, the result is the named
+relocatable segment containing the operand.  SEG is most useful
+when the operand is not defined in this A86 module: in that case,
+the segment value will be plugged in by LINK.
+
+When A86 is assembling to a COM file, SEG always returns the CS
+register, with one exception: symbols declared within a SEGMENT
+AT structure return the value of the containing segment.  COM
+files have no facility for explicitly specifying relocatable
+segments, so for compatibility A86 assumes that all non-absolute
+segment references are to the program's segment itself.
+
+

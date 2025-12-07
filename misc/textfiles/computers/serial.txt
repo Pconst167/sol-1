@@ -1,0 +1,169 @@
+================= PROGRAMMING THE SERIAL PORT ==================
+
+     Here's some bits and pieces that might be of interest.
+
+----------------------------------------------------------------
+INT 14 - SERIAL I/O - INITIALIZE USART
+   REG AH = 0
+   REG AL = INITIALIZING PARAMETERS
+   BIT  7 - 6 - 5 4 - 3  2    1 - 0
+  -BAUD RATE-    PARITY  STOP    WORD
+           BITS  LENGTH
+  000  110 BD    00 NONE 0-1   10 - 7
+  001  150 BD    01 ODD 1-2   11 - 8
+  010  300 BD    11 EVEN
+  011  600 BD
+  100 1200 BD
+  101 2400 BD
+  110 4800 BD
+  111 9600 BD (4800 ON PCjr)
+       DX = PORT NUMBER
+----------------------------------------------------------------
+INT 14 - SERIAL I/O - TRANSMIT CHARACTER
+   REG AH = 1
+       AL = CHARACTER
+       DX = PORT NUMBER
+   ON RETURN:
+      REG AH = RS-232 STATUS CODE
+           BIT 0 = DATA READY
+               1 = OVERRUN ERROR
+               2 = PARITY ERROR
+               3 = FRAMING ERROR
+               4 = BREAK DETECTED
+               5 = TRANSMISSION BUFFER REG. EMPTY
+               6 = TRANSMISSION SHIFT REG. EMPTY
+               7 = TIME OUT
+          AL = MODEM STATUS
+           BIT 0 = DELTA CLEAR-TO-SEND
+               1 = DELTA DATA-SET-READY
+               2 = TRAILING EDGE RING DETECTED
+               3 = CHANGE, RECEIVE LINE SIGNAL DETECTED
+               4 = CLEAR-TO-SEND
+               5 = DATA-SET-READY
+               6 = RING DETECTED
+               7 = RECEIVE LINE SIGNAL DETECTED
+----------------------------------------------------------------
+INT 14 - SERIAL I/O - RECEIVE CHARACTER
+   REG AH = 2
+   ON RETURN:
+      REG AL = CHARACTER RECEIVED
+      REG AH = RS-232 STATUS CODE (SEE ABOVE)
+----------------------------------------------------------------
+INT 14 - SERIAL I/O - GET USART STATUS
+   REG AH = 3
+   ON RETURN:
+      REG AH = RS-232 STATUS CODE (SEE ABOVE)
+      REG AL = MODEM STATUS CODE (SEE ABOVE)
+
+----------------------------------------------------------------
+  The following applies to COM1 (COM2 addresses are different).
+----------------------------------------------------------------
+
+procedure SendChar(C: byte);
+begin
+  while (Port[$3FD] and $20)=0 do ;
+  Port[$3F8] := C;
+end;
+
+Function ReadChar: byte;
+begin
+  while not odd(Port[$3FD]) do ;
+  ReadChar:= Port[$3F8];
+end;
+
+procedure SetSerial(BaudRate: Integer);
+{ Set serial parameters on to COM1:BaudRate,N,8,1 }
+var
+  x  : integer;
+begin
+  x := trunc(115200.0 / BaudRate);
+  Port[$3FB] := 128;
+  Port[$3F8] := x and 255;
+  Port[$3F9] := x shr 8;
+  Port[$3FB] := 3;   {Line Control Register}
+  Port[$3FC] := 3;   {Modem Control Register}
+  Port[$3F9] := 0;   {Interupt Enable Register}
+end;
+
+----------------------------------------------------------------
+
+Port(hex)      Description
+
+3F8      I/O   Transmitter Holding Register / Receiver Data Register
+3F8/3F9   O    Baud Rate Divisor
+3F9      I/O   Interupt Enable Register
+3FA       I    Interupt Identification Register
+3FB      I/O   Line Control Register
+3FC       O    Modem Control Register
+3FD       I    Line Status Register  (see "RS-232 STATUS CODE" above)
+3FE       I    Modem Status Register (see above for bits)
+
+Programming the 8250 Serial Chip.
+
+1. Set Baud Rate.
+  x := trunc(115200.0 / BaudRate);
+  Port[$3FB] := 128;
+  Port[$3F8] := x and 255;
+  Port[$3F9] := x shr 8;
+
+  Take For example 2400 baud; the following would be needed
+  in Assembly Language:
+
+           mov   dx,3FBh
+           mov   al,128
+           out   dx,al
+           mov   dx,3F8h
+           mov   al,30H
+           out   dx,al
+           inc   dx
+           mov   al,0
+           out   dx,al
+
+
+- You might like to set up a table if more that one baud rate is used.
+
+
+2. Set LCR ($3FB)
+  Bit 7    Normally 0, set to 1 to change baud rate
+      6    Normally 0 (Break Disabled).
+      5    Normally 0, "Stick Parity" disabled
+      4    Parity: 0 = Odd, 1 = Even
+      3    Parity: 0 = No parity generated, 1 = Generate parity
+      2    Stop Bits: 0 = 1 bit, 1 = 2 bits (or 1.5 if Char len = 5 bits)
+    1+0    Character Length:
+           00 = 5 bits, 01 = 6 bits, 10 = 7 bits, 11 = 8 bits.
+
+  For 8 Data Bits, No Parity, 1 Stop Bit - value of LCR is 3
+
+3. Set MCR ($3FC)
+
+ Bit 7..5  Always  0
+        4  Loop Back (output goes straight to input)
+        3  Normally 0, set to 1 for serial interrupt.
+        2  Not Used
+        1  Activate RTS line
+        0  Activate DTR line
+
+  Value of MCR is normally 3.  I won't go into the details of interrupts
+  send me a message if you do need the info.
+
+
+4. Set up IER ($3F9)
+
+  This is normally 0.
+
+
+That's all that's needed to set it up.
+
+
+To receive a character:
+  A character is ready in the Receiver Data Register  when bit 0 ("Received
+  Data Ready") of line status register is 1. See ReadChar function.
+
+To send a character.
+  You must wait until the previous character has been sent.
+  Bit 5 ("Transmitter Holding Register Empty") will be zero when it is
+  O.K for you to send a character. See the SendChar procedure.
+
+                                                          ==== PY ====
+

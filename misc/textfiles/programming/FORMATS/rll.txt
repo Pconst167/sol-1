@@ -1,0 +1,297 @@
+Article 17745 of comp.sys.ibm.pc:
+>From: pete@octopus.UUCP (Pete Holzmann)
+Subject: RLL Technical Details (long) (was Re: RLL- why it is hard on drives)
+Message-ID: <218@octopus.UUCP>
+Date: 15 May 88 03:16:04 GMT
+Organization: Octopus Enterprises, Cupertino CA
+
+If you read all the way through this, you will (hopefully) understand WHY
+RLL works/doesn't work depending on the configuration you set up. You will
+also understand WHY many of the horror stories applied to RLL are almost
+certainly mis-applied.
+
+I. How is data stored on a disk drive?
+
+As magnetic flux reversals (think of it as + to -). The POLARITY of the
+magnetic flux doesn't mean a thing. It is the TIMING of the flux reversals
+that is used to encode data.
+
+II. What is RLL? What does the '2,7' in '2,7 RLL' mean?
+
+RLL means Run Length Limited. The Limits in disk drive RLL refer to the
+minimum and maximum time between flux reversals. '2,7' means minimum of 2,
+maximum of 7. A minimum of zero would mean that flux reversals can occur
+in every clock period. Thus, '2,7' means that flux reversals occur at least
+every 8th clock period (7 periods without a reversal), but no more often
+than every third clock.
+
+RLL codes are 'self clocking'. Since you are guaranteed to have a flux
+reversal within a limited time, a phase-locked-loop circuit can find the
+basic clock period of data on the drive. As the basic clock period gets
+smaller and/or the maximum inter-flux-reverse time increases, the job
+gets harder and harder for the phase-locked-loop circuitry.
+
+III. What about MFM?
+
+MFM is simply 1,3 RLL encoding, with a basic clock period of 50 nsec.
+One data bit is encoded every two clock periods. The MFM code is relatively
+easy to understand [and I have some notes handy], so I'll give the complete
+details:
+
+In this table of flux encoding, '0' means no flux change, '1' means a
+	flux change encoding a '1' data bit, 'C' means a flux change
+	required to encode a '0' data bit due to clocking requirements.
+
+The code: 1 always becomes 0 1
+	  0 becomes 0 0 if preceeded by a 1
+	  0 becomes C 0 if preceeded by a 0
+
+Message Data:	1   0   0   0   0   0   0   0   0   0   0   0
+Disk Data:	0 1 0 0 C 0 C 0 C 0 C 0 C 0 C 0 C 0 C 0 C 0 C 0 ...
+
+Message Data:	1   1   1   1   1   1   1   1   1   1   1   1
+Disk Data:	0 1 0 1 0 1 0 1 0 1 0 1 0 1 0 1 0 1 0 1 0 1 0 1 ...
+
+Message Data:	1   0   0   1   1   0   1   0   0   1   0
+Disk Data:	0 1 0 0 C 0 0 1 0 1 0 0 0 1 0 0 C 0 0 1 0 0
+
+Note that there are between 1 and 3 zeros between every 1 in the disk data!
+
+Note that since 'C' is physically the same as '1' (both are flux reversals),
+    the setup gets in trouble if it loses track of clock periods!
+
+The way this is used on a disk drive is that there is a special data sequence
+encoded at the beginning of each sector, with special hardware to detect
+it: First, there is a long string of zero's; a hardware 'zero detector' is
+enabled to look for it. At this point, it could as easily find a string of
+one's as a string of zero's, since they are identical when taken out of
+context. Second, a special byte is encoded that VIOLATES the RLL rules: an
+'A1' or 'A8' byte is written, with a clock missing in one of the sequential
+zero bits (the A1 and A8 tell us whether we are looking at the header of
+the sector, which contains cyl/sector/etc info, or the data portion of the
+sector). The special byte is called the Address Mark. If zeros followed by
+an Address Mark are found, then the PLL (phase locked loop) is synchronized
+and data can be read.
+
+IV. Ok, so explain the 'RLL' schemes.
+
+I don't have complete tables of code schemes for all of the RLL formats
+handy; it would also take a long time to type them all in. Instead, I'll
+explain what IS important about them.
+
+First, let's compare 2,7 RLL with 1,3 RLL. Both codes happen to encode
+one data bit into 2 clock periods. With 1,3 RLL (MFM), a flux reversal
+can occur every two clock periods. With 2,7 RLL, a flux reversal can occur
+every 3 clock periods. If we increase the clock rate by 50% using a 2,7
+RLL scheme, we get the same maximum flux reversal rate as for MFM. But, we
+get 50% more data out of the drive, at a 50% higher data rate.
+
+Other RLL encoding schemes involve changes in the number of clock periods
+used to encode a data bit. For example, 1,7 RLL encodes 2 data bits into
+3 clock periods. The 1,7 clock period must be kept the same as for 1,3 (MFM)
+(I hope you see why by now: both schemes involve a flux change as often as
+every 2 clocks). The result is a 50% increase in storage capacity, just as
+with 2,7 RLL.
+
+Why not use 1,7 RLL? Because the difference between minimum and maximum
+flux-change-intervals is so great. It turns out that the PLL electronics
+for detecting this wide a range of intervals is a real pain; worse, presumably,
+than the problems involved in implementing 2,7 RLL.
+
+Other encoding schemes use different clock rates and different min/max
+combinations. They all set things up so the maximum flux-reversal frequency
+is the same.
+
+The IMPORTANT differences between the schemes involve maximum clock freqency
+(50% higher for 2,7 RLL than MFM, 100% higher for ARLL than MFM) and maximum
+Frequency Ratio (comparing minimum and maximum flux-reversal intervals).
+In addition, some schemes involve simpler encoding/decoding algorithms (e.g.
+the normal 1,3 RLL/MFM); others are very complex: 2,7 RLL is a variable length
+code (e.g. 0011 maps to 00001000 but 010 maps to 100100); I don't have a
+simple formula for the 2,7 RLL code! Variable length codes make error
+recovery more difficult, and hence make bad-sector marking more important.
+
+A high frequency clock requires great accuracy in timing all along the chain
+from disk surface to final data to be read (and the reverse). The time period
+during which the controller must decide whether a flux reversal is present
+or not is called the 'window'. The variation in flux-reversal detection
+(+ or - from the nominal 'perfect detection time') allowed by a given encoding
+scheme is called the 'required window margin'. Higher frequency clocks have
+smaller window margin requirements. On a given drive/controller combination,
+the window margin can be measured: simply sync up the electronics to the
+pulses on the drive, read a worst-case data pattern, and see what kind of
+variation in flux-reversal timing you get. Good drive/controller combinations
+will place all flux reversals in a very narrow time window, giving a very
+good window margin, and hence will work well with high-frequency encoding
+schemes.
+
+A big difference between minimum and maximum flux reversal intervals
+simply requires complex decoding and phase-locked-loop circuitry
+that can handle a wide range of frequencies. All of which leads us to...
+
+V. What does all this mean in terms of real drives, controllers, etc.?
+
+First, let's understand which parts of the whole deal go where. Here are
+the pieces needed to read/write disk info, and where they are located:
+
+	Component			Where it is
+
+	Disk surface			Drive
+	Head				Drive
+	Analog head electronics		Drive
+	   (conditions signal to/from
+	    head)
+	Cable				Between drive and controller
+	Analog data separator		Controller
+	  (detects flux reversals)
+	Phase Locked Loop		Controller
+	  (determines data clocking)
+	Digital read/write stuff	Controller
+	  (includes bit/byte conversions,
+	    etc etc etc)
+
+Note that MOST of the junk is in the controller, not the drive!
+
+On the drive:
+
+    Oxide-surface disks on early drive designs (e.g. ST-225, ST-238) do not
+    place the flux-reversal with enough accuracy to be used in most RLL
+    situations. This is why ST-225/238 drives have so much trouble.
+    Newer drive designs use plated media, which allow better magnetic
+    definition.
+
+    The drive head and associated electronics are usually tuned to match
+    the expected signals to and from the drive. If the drive was designed
+    without 'RLL' (2,7) in mind, the frequency response of the drive
+    electronics is 'mushy': it may not provide a crisp/accurate enough
+    signal to allow the PLL to correctly sync up. On more recent drives,
+    the same exact setup is used for 'MFM' (1,3 RLL) and 'RLL' (2,7); the
+    drives that are certified for RLL are simply tested to verify that
+    everything is OK. (The reason I'm so down on Seagate ST225/238 is that
+    they didn't redesign anything. They simply test the same old stuff, and
+    if it happens to pass the RLL test, they sell it as RLL).
+
+On the controller:
+
+    On an 'RLL' controller, everything must be carefully designed to meet the
+    tighter timing requirements. Note that a VERY accurate controller can
+    make up for a somewhat mushy drive: the overall timing requirements are
+    based on the sum total of electronics in the path from disk media to final
+    digital output. Spreading the timing error evenly between drive and
+    controller is theoretically cheaper, since neither one need be set up
+    for very tight tolerances; however, a very accurate controller is not
+    that hard to build today, hence the better success we're all having
+    at running 'non-RLL' drives with RLL controllers.
+
+In general:
+
+    There's no such thing as a free lunch. There is no encoding scheme
+    (so far) that gets you more data without requiring more density or
+    more timing accuracy of some kind. Somebody mentioned an amazing new
+    Perstor controller that doubles drive density, supposedly without
+    increasing the timing requirements. HAH! You sure can't get double
+    the flux-reversals in the same space, so you MUST do it by increasing
+    the timing requirements. The Perstor simply is an ARLL controller
+    (I'm not certain, but I believe ARLL, getting 100% more data than MFM,
+    is a 4,7 RLL encoding scheme); it will have trouble with some low
+    quality drives just like the other RLL controllers do.
+
+    I have not personally tested the window margins on lots of drives or
+    controllers. I have talked with people who HAVE done this testing; their
+    results say that the Adaptec RLL controllers have the best timing of
+    all RLL controllers on the market today (as of a month ago), and confirm
+    what I've heard/seen about Miniscribe and Maxtor drives (they also have
+    good enough timing), and about Seagate ST225/238 (poor to marginal).
+
+VI. What about ESDI and SCSI?
+
+Well, they are kind of handy: all of the data encoding/decoding circuitry
+is on the drive; it is all designed together, and is well matched (hopefully!).
+Putting it all together like that makes it easier to use fancier high frequency
+encoding schemes, so you'll typically see higher data densities on ESDI and
+SCSI drives.
+
+VII. Anything else?
+
+Sure! There are lots of even more technical, related issues to discuss:
+bit shift details (bit shift is a lower level description of what causes
+large window margins on a given drive); signal-to-noise ratios; pulse
+amplification; pulse equalization; etc etc... and far on into things that
+I know nothing about (and hope I never have to!). Actually, it's pretty
+amazing when you think about it: for 99.999% of the people out there,
+this stuff is just boxes, cables and cards that you plunk together and
+they just *work*!
+
+Well, that's about it. I've run out of time, so I'd better send this now.
+I hope it helped more than it confused! [And no, I don't think you'll find
+drive manufacturers or controller manufacturers very willing to provide
+detailed spec's on their window margins; that would make it too easy to
+compare drive quality! :-(]
+
+Pete
+
+P.S.: If you read all the way to here, congratulations! I don't really expect
+that this stuff would really be interesting enough for people to read through
+250 lines of gobbledy gook... :-)
+--
+  OOO   __| ___      Peter Holzmann, Octopus Enterprises
+ OOOOOOO___/ _______ USPS: 19611 La Mar Court, Cupertino, CA 95014
+  OOOOO \___/        UUCP: {hpda,pyramid}!octopus!pete
+___| \_____          Phone: 408/996-7746
+
+
+From ucdavis!ucbvax!hplabs!pyramid!octopus!pete Tue May 17 11:13:55 PDT 1988
+Article 17805 of comp.sys.ibm.pc:
+Path: ucdavis!ucbvax!hplabs!pyramid!octopus!pete
+>From: pete@octopus.UUCP (Pete Holzmann)
+Newsgroups: comp.sys.ibm.pc,comp.periphs,comp.sys.misc
+Subject: HERE IS THE RLL code! (unburied sooner than I thought...)
+Message-ID: <226@octopus.UUCP>
+Date: 16 May 88 19:57:19 GMT
+Reply-To: pete@octopus.UUCP (Pete Holzmann)
+Followup-To: comp.periphs
+Organization: Octopus Enterprises, Cupertino CA
+Lines: 38
+Xref: ucdavis comp.sys.ibm.pc:17805 comp.periphs:1029 comp.sys.misc:1515
+
+[Note: I've directed followups to comp.periphs, although I don't personally
+	read that group]
+
+You asked for it; I happened to find a copy in one of my magazines (Fall
+1986 Computer Technology Review)... so here it is: the RLL code!
+
+I think you'll agree that it *is* a variable length code, with constant
+encoding density. It is kind of fun to play with it and verify that it
+really is a 2,7 RLL code. It isn't at all obvious how to start with "I
+want a 2,7 RLL code" and end up with this chart:
+
+	Data		Code
+
+	1		00
+	01		0001
+	10		0100
+	11		1000
+	000		100100
+	001		001000
+	010		000100
+	0110		00100100
+	0011		00001000
+
+Have fun!
+
+Pete
+
+P.S.: People have requested the ERLL and ARLL codes. I don't have them handy.
+	I'm not sure I have a recent enough printed reference. I know where
+	to go (actually, who to talk to) to get the chart; but if somebody
+	on the net has the codes handy, maybe they can pipe up! I can't be
+	the only one with access to this stuff!
+
+--
+  OOO   __| ___      Peter Holzmann, Octopus Enterprises
+ OOOOOOO___/ _______ USPS: 19611 La Mar Court, Cupertino, CA 95014
+  OOOOO \___/        UUCP: {hpda,pyramid}!octopus!pete
+___| \_____          Phone: 408/996-7746
+
+
+ 

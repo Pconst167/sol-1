@@ -1,0 +1,107 @@
+Text: tickle.dr
+Purpose: Tutorial on cracking Tickle.exe using hmemcpy and memory breakpoints
+Program: Tickle.exe - Keeps your ISP connection alive
+By: drLAN, mexelite
+
+
+Let's get started cracking this baby...
+
+Run the program and select:
+  - Tickle
+    - Register
+
+Now type in any name and code, but don't press enter yet.  First pop over
+in to SoftICE by pressing Ctrl-D.  Let's set a breakpoint on hmemcpy.  This
+routine is often used to manipulate strings in memory.  To set the breakpoint
+type: bpx hmemcpy.  Make sure you get your name and code typed in before you
+set the hmemcpy breakpoint, or sICE will break for each character you type.
+
+Now toggle back to the program with Ctrl-D and press Enter or click OK.  As
+soon as you hit Enter, sICE pops, at your hmemcpy breakpoint.
+
+Now let's scan memory for the reg code we entered.  I entered the following:
+
+Name: drLAN
+Code: 006969
+
+So my search looks like: s 0 l ffffffff '006969'
+
+sICE should find an echo of this string setting in memory.  It found mine
+at 013F:0076177C.  Your actual segment:offset will probably vary.  Ok, so
+now we found a copy of our string in memory, now what.  Well, let's set a
+breakpoint on this memory location.  There are many ways to do this and you
+may need to use differemt approaches depending on the program you are working
+on.  Some common approaches are to breakpoint on a memory location (BPM).
+Any reads/writes at that location will trigger the breakpoint.  Another
+approach is to set the breakpoint on a memory range, from the first char of
+your reg code to the last.  Or, if you know a little about the proggie you
+might want to break on a single byte (BPMB), a word (BPMW), or a double word
+(BPMD).  Each of these approaches has its merrits depending on what you're
+looking for.  I commonly use BPM and BPMB.
+
+So based on where it found my string, here are the BPM and BPR approaches.
+NOTE: Only use one of the two.  I used approach #1.
+
+#1: Breakpoint on memory location:
+bpm 013f:0076177c                       <== this is the one I set
+
+#2: Breakpoint on memory range:
+bpr 013f:0076177c 013f:00761781 RW
+
+Note the last two digits changed on the ending range.  That's because it is
+pointing to the memory location containing the last character of our string.
+First character is at 013f:0076177c.  String length is 6.  So the last char
+is at 013f:0076177c+(6-1), or 013f:00761781.
+
+Usually the program will create another copy of the string in memory before
+doing its final comparison(s).  So, it's often this second copy we need to
+scan for.  We could single step through the program for a while, using F10.
+After each CALL, do the scan again to see if it has made a second copy.  If
+so, set a memory breakpoint at that address, too.  Don't clear the first one
+unless that memory segment is completely overwritten with something different
+that the code you typed.
+
+If you don't feel like stepping through the code for the rest of your life,
+you can press Ctrl-D a second time from within sICE and you'll break at
+another hmemcpy.  If you break on the first memory address, just press Ctrl-D
+again until you hit the second hmemcpy.  Now scan again and see if there is a
+second copy of the string in memory.  If so, set your memory breakpoint here.
+If not, F10 a few times to step through some code.  Do your scan after any
+CALL routine.  Do the scan periodically anyway.  If you type S, then up arrow
+it should fill out the rest of your scan command from the buffer, so you don't
+have to retype the whole thing each time.
+
+Eventually you will find the second copy of the string in memory.  This will
+turn out to be the copy we're interested in.  Set your memory breakpoint (BPM)
+here.
+
+Then press Ctrl-D again.  Now you should be sitting one instruction before
+the good-guy/bad-guy compare routine.  The code should look something like
+this:
+
+MOV     CL,DL
+CMP     DL,BL
+JNZ     78005DAC        ; bad-guy, jump to sorry sucker
+TEST    CL,CL
+JZ      78005DB6        ; good-guy, jump to thanks for registering
+
+Now, if you scroll up through your data window using your mouse, or change
+focus to that window and use Ctrl-Up Arrow, you will see the code that points
+these registers at memory locations for the compare routine.  You should
+see DL being pointed to [EAX] (the good code) and BL being pointed to [ESI]
+(our code/the bad guy code).  You can verify this with D EAX, and D ESI.  If
+you scrool up the code you find should look like this:
+
+MOV     ESI,[ESP+18]
+MOV     EAX,[ESP+14]
+MOV     DL,[EAX]        ; points DL to the memory location of good-guy code
+MOV     BL,[ESI]        ; points BL to the memory location of bad-guy code
+
+Then we hit the code above...
+
+D ESI   ; bad-guy code (the one we entered)
+D EAX   ; good-guy code (you know what to do with this one)
+
+Beautiful, there's your good-guy code.  Clear your breakpoints and register
+this baby!
+

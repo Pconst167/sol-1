@@ -1,0 +1,205 @@
+% Blue Nine %
+
+Here is Conzouler's contribution to IR6. First, the textfile, then the
+source code. Blue Nine is by the a poison used in the book Neuromancer,
+which seem to has inspired quite a few viruswriters. Ah, just in case
+you wondered - TU
+
+ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+        A technical discussion about the Blue Nine virus
+                   Written by: Conzouler.
+                   (Terribly serious :-)
+ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+
+  The Blue Nine virus was born on 19:th of November 1994.
+It has about the same features as the Cybernetic Eel which I wrote this
+summer but the code is much better and it doesn't disinfect files but
+does instead redirect any reads from the infected areas of an infected
+file, this method is, quite naturally, called redirection. It also makes
+use of another infection engine, putting itself in the end of the
+infected files.
+
+  This version does not have any payloads, it just reproduces and hides
+itself. But we are working on a Novell password stealer to add, hence
+the redirection, it will work on write protected network drives and
+disks too. We have some betas with a disk/file trasher and a joke on
+the 25:th of any month, but they aren't distributed.
+
+  Well, that was a brief description of it, now I will go in to
+the details.
+
+  First of all, when a program is executed it performs an installation
+check and checks the dos version by setting cx to 666 and issuing get dos
+version (int 21/ah=30). If the virus already is resident it will change cx
+to 444 and the virus will just restore the host program in memory and jump
+back to the entry point. If cx not equals 444 then the virus will check if
+the dos version is higher 3.30 and, if so, go resident.
+
+  If the installation checks fails the go resident routine will attempt to
+allocate memory for the virus. First of all it has to deallocate some of
+the memory allocated to the host program. This is done by moving the word at
+cs-1:[3] to bx, subtracting the virus size from bx and issuing int21/ah=4A.
+  Then it uses the int 21/ah=48 to allocate memory to itself. When the
+memory has been allocated the virus has to determine its entry point
+(the delta offset). To do that it fetches the word at cs:[101] which is
+the address of the jmp instruction that jumps to the virus entry point.
+Using this offset it sets ds:si to the start of the virus and es:di to
+the beginning of the newly allocated memory. Cx is set to the size of
+the virus, thus preparing for a rep movsb which will put the virus in
+its own allocated memory block.
+
+  The rep movsb instruction is replaced by the following code:
+
+label:  lodsb
+        stosb
+        loop    label
+
+This is exactly the same as rep movsb except that it destroys al and
+that TB-Scan cannot find it. That means that TB-Scan does NOT emulate as
+Venkmann says or possibly that the emulator is awfully bad. But that
+doesn't matter, let's go on..
+
+  The virus will then jump to the int 21 hooking routine in the new
+block by subtracting the segment address by 10h to compensate for the
+PSP that is missing in the new block. This address and the offset of the
+hooking routine are pushed and a retf will jump to the new block.
+
+  The next step is to hook int 21. This is done using the normal dos
+method, not by directly change the vectors. First it calls int 21/ax=3521
+to get the original vector. It then calls int 21/ax=2521 to put itself
+in the vector.
+
+  And now there is only one step left. It has to restore the host
+program. Since the original first 3 bytes of the host are saved right
+before the entry point (at offset 103 in our new block) it moves them to
+offset 100h of the host and jumps there using a retf construction
+similar to the one mentioned above.
+
+  At this point the host program is running as usual, totally unaware of
+the Blue Nine hiding in the dark, just waiting for an opportunity to
+infect another unsuspicious program...
+
+  The virus will infect any .com file that is run after the virus has
+gone resident. It will also infect .com files in a dir listing on a
+random basis (25% chance).
+  The infection is simple and effective. The virus opens its victim,
+reads the first three bytes, searches to eof, appends itself and creates
+a jump construct at the beginning of the file pointing to the start of
+the virus.
+
+  An infected file would look like this:
+     ÚÄÄÄÄÄÄÄÄÄÄÄÄÄ¿
+     ³  E9 xx xx   ³ <-- A jump to the virus entry point
+     ÃÄÄÄÄÄÄÄÄÄÄÄÄÄ´
+     ³    Host     ³ <-- The original program except for the
+     ³   program   ³     first three bytes.
+     ³    ....     ³
+     ÃÄÄÄÄÄÄÄÄÄÄÄÄÄ´
+     ³  xx xx xx   ³ <-- The first three bytes of the original program
+     ÃÄÄÄÄÄÄÄÄÄÄÄÄÄ´
+     ³  Virus      ³ <-- Guess what...
+     ³    code...  ³
+     ÀÄÄÄÄÄÄÄÄÄÄÄÄÄÙ
+
+
+  Now we have only the fun left, stealth...
+
+  Size stealth:
+After a successful find first/next using fcbs (ah=11/12) the fcbfind
+routine will be called from the int 21 handler. First it filters out all
+other files but those with extension .com. It then checks if the seconds
+of the time field are set to 4, and if that is the case it will decrease
+the size field with the virus size and return to dos.
+  If it is a .com file but the seconds don't match and the lowest 2 bits
+of port 41 is zero (25% chance, 41 is the timer) then the filename will
+be converted to a nul terminated ascii string, opened and sent to the
+infection routine.
+  This will work on a dir command since Bill Gates is fucked up and
+uses fcbs instead of handles as recommended since dos 2.11.
+  Since other programs like Norton uses handles I've added a similar
+function for the calls 4E/4F (find first/next using handles) but I
+haven't bothered doing an infection therein.
+
+  Redirection, the innovation in this virus...
+
+  The state of the art technique for avoiding checksummers and
+self-checkers has been disinfection. Disinfection works very fine and
+isn't too slow but it has one (minor) disadvantage, it doesn't work on
+write protected disks and it doesn't work in networks where the file
+are more likely to be write protected.
+
+  The solution that I've created to this problem is, like boot-sector
+viruses, to redirect all reads from an infected area of a file.
+  When an infected file is opened using dos function 3D (open) or
+6C00 (extended open) the virus will use the internal dos call
+int 2F/ax=1220 which converts a handle to a number for an entry in
+the system file tables (sft), this number is then converted to an address
+to the specific sft for that file using int 2F/ax=1226. You can see
+exactly how this is done in the getsft routine in the virus code.
+  The 14:th bit in the 5:th word from this address is set, marking
+that the file's date/time should not be set on closing. The original
+first three bytes of the file are read into the date/time field at
+offset 0D in the sft and the last byte of the date/time field is set to
+31 marking that the file is to be redirected. Then the size dword at
+offset 11 in the sft is decreased by the size of the virus and the virus
+returns to the caller.
+  Whenever this file is being read the virus
+will catch the 3F (read from file) call and if the offset is within the
+first 3 bytes of the file those will be replaced by those saved in the
+date/time field.
+  The only catch with the redirection is that a file could be destroyed
+if something (another virus for example) appends to the file. The simple
+solution to this problem is to disinfect a file if a write is
+attempted.
+
+  All interrupt, calls and data structures referred to in this article
+can be found in Ralph Brown's interrupt list. The sft and the memory
+control block are described under the dos call get list of lists (int
+21/ah=52), a cookie. The int 2F/1220/1226 calls are described in
+separate entries in the interrupt list.
+
+  Now I'm going to tell you about the TB-Fooling tricks in the Blue Nine
+  virus.
+
+* The int 21/ax=2521 call will set the Memory resident flag.
+  Just set ax to 2125 and perform an xchg ah,al instruction.
+
+* The rep movsb will set the Relocation flag, just do as described
+  above.
+
+* Any write (int 21/40) will set the suspicious File access flag.
+  You can use this code:
+      mov   ah, 40h xor 39 (or whatever)
+      xor   ah, 39
+      int   21h
+
+* The described 2F functions will also set the F flag.
+  The same code works even here:
+      mov   ax, 1220h xor 4321
+      xor   ax, 4321
+      int   21h
+
+* A read at cs:[101] will set the Delta offset flag, this can be avoided
+  by pushing this word and pop it into a register.
+
+* A compare with 'MZ' will cause the Z flag (exe/com determination).
+  Just xor both 'MZ' and the word you are checking with the same number
+  or xchg the word and compare it with 'ZM' instead.
+
+* A push of 100h followed by ret or retf will set the Back to entry point
+  flag. Remove by moving 100 to ax and pushing ax instead.
+
+The general method for removing a TB flag is to confuse the code a bit,
+xor:ing, xchg:ing, pushing/poping all works fine, just try a few times.
+If you cant guess where in the code a flag is you can use ';' to exclude
+pieces of code and see if the flag disappears, just remember that a flag
+can be in more than one position.
+
+    That's all for this time folks...
+         ...until next time I may have done some multipartitite...
+                ...or maybe I'm just too lazy...
+                           - Cya -
+
+                              -® Conzouler ¯-
+
+

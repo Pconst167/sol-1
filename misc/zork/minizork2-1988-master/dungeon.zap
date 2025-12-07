@@ -1,0 +1,367 @@
+
+
+	.FUNCT	LAMP-F
+	EQUAL?	PRSA,V?THROW \?CCL3
+	EQUAL?	PRSO,LAMP \?CCL3
+	PRINTR	"You'd break it!"
+?CCL3:	EQUAL?	PRSA,V?LAMP-OFF,V?LAMP-ON,V?EXAMINE \?CCL9
+	ZERO?	LAMP-BURNED-OUT /?CCL9
+	PRINTR	"The lamp has burned out."
+?CCL9:	EQUAL?	PRSA,V?LAMP-ON \?CCL15
+	CALL	INT,I-LANTERN
+	PUT	STACK,0,1
+	RFALSE	
+?CCL15:	EQUAL?	PRSA,V?LAMP-OFF \?CCL17
+	CALL	INT,I-LANTERN
+	PUT	STACK,0,0
+	RFALSE	
+?CCL17:	EQUAL?	PRSA,V?EXAMINE \FALSE
+	PRINTI	"The lamp is o"
+	FSET?	LAMP,ONBIT \?PRG27
+	PRINTC	110
+	JUMP	?PRG29
+?PRG27:	PRINTI	"ff"
+?PRG29:	PRINT	PERIOD-CR
+	RTRUE	
+
+
+	.FUNCT	I-LANTERN,TICK,TBL
+	VALUE	'LAMP-TABLE >TBL
+	GET	TBL,0 >TICK
+	CALL	QUEUE,I-LANTERN,TICK
+	PUT	STACK,0,1
+	ZERO?	TICK \?CND1
+	FCLEAR	LAMP,ONBIT
+	SET	'LAMP-BURNED-OUT,TRUE-VALUE
+?CND1:	CALL	ACCESSIBLE?,LAMP
+	ZERO?	STACK /?CND3
+	ZERO?	TICK \?PRG10
+	PRINTI	"You'd better have more light than from the "
+	PRINTD	LAMP
+	PRINT	PERIOD-CR
+	JUMP	?CND3
+?PRG10:	GET	TBL,1
+	PRINT	STACK
+	CRLF	
+?CND3:	ZERO?	TICK /FALSE
+	ADD	TBL,4 >LAMP-TABLE
+	RETURN	LAMP-TABLE
+
+
+	.FUNCT	CAROUSEL-ROOM-F,RARG
+	EQUAL?	RARG,M-LOOK \?CCL3
+	PRINTI	"Eight identical passages leave this large circular room. The ceiling is lost in gloom."
+	ZERO?	CAROUSEL-ON /?CND6
+	PRINTR	" A loud whirring sound comes from all around, and you feel disoriented."
+?CND6:	CRLF	
+	RTRUE	
+?CCL3:	ZERO?	CAROUSEL-ON /FALSE
+	EQUAL?	RARG,M-BEG \FALSE
+	EQUAL?	PRSA,V?WALK \FALSE
+	EQUAL?	PRSO,P?DOWN,P?UP /FALSE
+	PRINTI	"You're not sure which direction is which..."
+	CRLF	
+	CRLF	
+	EQUAL?	PRSO,P?WEST /?CTR19
+	RANDOM	100
+	GRTR?	80,STACK \FALSE
+?CTR19:	CALL	PICK-ONE,CAROUSEL-EXITS
+	CALL	GOTO,STACK
+	RSTACK	
+
+
+	.FUNCT	VIOLIN-F
+	EQUAL?	PRSA,V?PLAY \FALSE
+	EQUAL?	PRSO,VIOLIN \FALSE
+	PRINTR	"An offensive noise issues from the violin."
+
+
+	.FUNCT	BILLS-F
+	EQUAL?	PRSA,V?BURN \FALSE
+	PRINTI	"Nothing like having money to burn! "
+	RFALSE	
+
+
+	.FUNCT	MENHIR-ROOM-F,RARG
+	EQUAL?	RARG,M-FLASH \?CCL3
+	ZERO?	MENHIR-POSITION /?CCL3
+	CALL	DESCRIBE-MENHIR
+	RSTACK	
+?CCL3:	EQUAL?	RARG,M-LOOK \FALSE
+	PRINTI	"Large limestone chunks lie about this former quarry, which appears to have produced menhirs (standing stones). Obvious passages lead north and south."
+	CRLF	
+	IN?	MENHIR,LOCAL-GLOBALS \TRUE
+	CALL	DESCRIBE-MENHIR
+	RTRUE	
+
+
+	.FUNCT	DESCRIBE-MENHIR
+	EQUAL?	HERE,MENHIR-ROOM \?PRG23
+	EQUAL?	MENHIR-POSITION,FALSE-VALUE \?CCL6
+	PRINTR	"One large menhir blocks a dark opening leading southwest."
+?CCL6:	EQUAL?	MENHIR-POSITION,1 \?CCL10
+	PRINTR	"A menhir lies near a southwest passage."
+?CCL10:	EQUAL?	MENHIR-POSITION,2 \?CCL14
+	PRINTR	"A dark opening leads southwest."
+?CCL14:	EQUAL?	MENHIR-POSITION,3 \?PRG21
+	PRINTR	"There is a huge menhir here."
+?PRG21:	PRINTR	"A huge menhir is floating in midair above a southwest passage."
+?PRG23:	PRINTR	"A dark opening leads southwest."
+
+
+	.FUNCT	GLOBAL-MENHIR-F
+	PRINTR	"It's not here."
+
+
+	.FUNCT	MENHIR-F
+	EQUAL?	PRSA,V?LOOK-BEHIND,V?LOOK-UNDER \?CCL3
+	ZERO?	MENHIR-POSITION \?CCL3
+	PRINTR	"There's a dark passage beyond the menhir."
+?CCL3:	EQUAL?	PRSA,V?TURN,V?MOVE,V?TAKE \?CCL9
+	PRINTR	"The menhir weighs many tons!"
+?CCL9:	EQUAL?	PRSA,V?READ \?CCL13
+	PRINTR	"""F"""
+?CCL13:	EQUAL?	PRSA,V?EXAMINE \?CCL17
+	PRINTR	"The menhir is carved with an ornate letter ""F""."
+?CCL17:	EQUAL?	PRSA,V?ENCHANT \?CCL21
+	EQUAL?	SPELL-USED,W?FLOAT \?CCL21
+	SET	'MENHIR-POSITION,3
+	PRINTR	"The menhir floats majestically into the air. The passage beyond beckons invitingly."
+?CCL21:	EQUAL?	PRSA,V?DISENCHANT \FALSE
+	EQUAL?	SPELL-USED,W?FLOAT \FALSE
+	SET	'MENHIR-POSITION,FALSE-VALUE
+	EQUAL?	HERE,MENHIR-ROOM,KENNEL \FALSE
+	PRINTR	"The menhir sinks to the ground."
+
+
+	.FUNCT	COLLAR-F
+	EQUAL?	PRSA,V?TAKE \?CCL3
+	ZERO?	CERBERUS-LEASHED /?CCL3
+	CALL	JIGS-UP,STR?127
+	RSTACK	
+?CCL3:	EQUAL?	PRSA,V?ENCHANT \FALSE
+	EQUAL?	SPELL-USED,W?FLOAT \FALSE
+	CALL	PERFORM,V?ENCHANT,CERBERUS
+	RTRUE	
+
+
+	.FUNCT	TOMB-PSEUDO
+	EQUAL?	PRSA,V?ENTER \FALSE
+	CALL	DO-WALK,P?SOUTH
+	RSTACK	
+
+
+	.FUNCT	GLOBAL-CERBERUS-F
+	PRINTR	"He's not here."
+
+
+	.FUNCT	CERBERUS-F
+	EQUAL?	PRSA,V?RAISE,V?RUB,V?WAVE \?CCL3
+	EQUAL?	PRSO,WAND \?CCL3
+	PRINTI	"The dog looks puzzled."
+	CRLF	
+	RFALSE	
+?CCL3:	ZERO?	WAND-ON /?CCL9
+	EQUAL?	PRSA,V?INCANT,V?SAY /FALSE
+?CCL9:	CALL	HELLO?,CERBERUS
+	ZERO?	STACK /?CCL13
+	ZERO?	CERBERUS-LEASHED /?PRG19
+	PRINTR	"""Arf! Arf!"""
+?PRG19:	PRINTR	"""Grrrr!"""
+?CCL13:	EQUAL?	PRSA,V?MUNG,V?ATTACK \?CCL22
+	ZERO?	CERBERUS-LEASHED /?PRG28
+	REMOVE	CERBERUS
+	PRINTR	"With a quiet bark of disappointment, the creature expires into a small pile of dust which blows away into nothing."
+?PRG28:	PRINTR	"The maddened dog-thing snaps at you viciously."
+?CCL22:	EQUAL?	PRSA,V?PUT-ON,V?PUT \?CCL31
+	EQUAL?	PRSO,COLLAR \?CCL31
+	SET	'CERBERUS-LEASHED,TRUE-VALUE
+	MOVE	COLLAR,CERBERUS
+	FSET	COLLAR,NDESCBIT
+	FSET	COLLAR,TRYTAKEBIT
+	PUTP	CERBERUS,P?LDESC,STR?131
+	PRINTR	"All three heads begin licking your face, and its huge tail wags enthusiastically, almost blowing you over from the breeze it creates."
+?CCL31:	EQUAL?	PRSA,V?ENCHANT \?CCL37
+	EQUAL?	SPELL-USED,W?FLOAT \?CCL40
+	SET	'SPELL-HANDLED?,TRUE-VALUE
+	PRINTR	"The huge dog rises an inch off the ground, for a moment."
+?CCL40:	EQUAL?	SPELL-USED,W?FEEBLE \FALSE
+	PRINTR	"What an effect! He now has the strength of just one elephant, rather than ten!"
+?CCL37:	ZERO?	CERBERUS-LEASHED \?CCL48
+	PRINTR	"The three-headed dog snaps at you viciously!"
+?CCL48:	ZERO?	CERBERUS-LEASHED /FALSE
+	EQUAL?	PRSA,V?RUB \FALSE
+	PRINTR	"The dog slobbers and whines with uncontained joy."
+
+
+	.FUNCT	HEADS-F
+	EQUAL?	PRSA,V?TELL,V?HELLO \?CCL3
+	PRINTR	"Dead Flatheads tell no tales."
+?CCL3:	EQUAL?	PRSA,V?RUB,V?ATTACK,V?KICK /?CCL7
+	EQUAL?	PRSA,V?BURN,V?TAKE,V?OPEN \FALSE
+?CCL7:	CALL	JIGS-UP,STR?133
+	RSTACK	
+
+
+	.FUNCT	CRYPT-OBJECT-F
+	EQUAL?	PRSA,V?OPEN \FALSE
+	PRINTR	"The crypt is sealed for all time."
+
+
+	.FUNCT	ZORK3-F,RARG
+	EQUAL?	RARG,M-LOOK \FALSE
+	PRINTI	"A rough-hewn stair leads down into darkness. "
+	IN?	WAND,WINNER \?CCL8
+	PRINTI	"The wand vibrates and are compelled downward. There is a burst of light, and you tumble down the staircase! At the bottom, a vast red-lit hall, guarded by sinister statues, is visible far ahead.
+
+You have conquered the Wizard of Frobozz and become master of his domain, but the final challenge awaits! (The Zork Trilogy concludes with ""Zork III: The Dungeon Master"".)"
+	CRLF	
+	CRLF	
+	CALL	FINISH
+	RSTACK	
+?CCL8:	CALL	JIGS-UP,STR?135
+	RSTACK	
+
+
+	.FUNCT	LEDGE-IN-RAVINE-F,RARG
+	EQUAL?	RARG,M-LOOK \?CCL3
+	PRINTI	"To the south, a stream runs through a narrow ravine. It looks as if you could scramble down to the stream. A smokey odor drifts in from the west. "
+	CALL	P-DOOR,STR?136
+	RSTACK	
+?CCL3:	EQUAL?	PRSA,V?LOOK /FALSE
+	CALL	PCHECK
+	RFALSE	
+
+
+	.FUNCT	P-DOOR,STR
+	ZERO?	PLOOK-FLAG /?PRG3
+	SET	'PLOOK-FLAG,FALSE-VALUE
+	RFALSE	
+?PRG3:	PRINTI	"On the "
+	PRINT	STR
+	PRINTI	" side of the room is an oak door with a small barred window and a formidable lock (with keyhole)."
+	ZERO?	MUD-FLAG /?CND5
+	PRINTC	32
+	PRINT	PLACE-MAT-VISIBLE
+	ZERO?	MATOBJ /?CND5
+	PRINTI	" Lying on the place mat is a "
+	PRINTD	MATOBJ
+	PRINTR	"."
+?CND5:	CRLF	
+	RTRUE	
+
+
+	.FUNCT	PCHECK
+	SET	'PLOOK-FLAG,FALSE-VALUE
+	IN?	KEY,KEYHOLE-2 \?CCL3
+	FSET	KEY,NDESCBIT
+	JUMP	?CND1
+?CCL3:	FCLEAR	KEY,NDESCBIT
+?CND1:	CALL	HELD?,PLACE-MAT
+	ZERO?	STACK /?CND4
+	SET	'MUD-FLAG,FALSE-VALUE
+?CND4:	ZERO?	MUD-FLAG /?CCL8
+	MOVE	PLACE-MAT,HERE
+	FSET	PLACE-MAT,NDESCBIT
+	RTRUE	
+?CCL8:	FCLEAR	PLACE-MAT,NDESCBIT
+	RTRUE	
+
+
+	.FUNCT	DREARY-ROOM-F,RARG
+	EQUAL?	RARG,M-LOOK \?CCL3
+	PRINTI	"The room is eerily lit by a red glow emanating from a crack in one wall. The light falls upon a dusty wooden table. "
+	CALL	P-DOOR,STR?137
+	RSTACK	
+?CCL3:	CALL	PCHECK
+	RFALSE	
+
+
+	.FUNCT	PDOOR-F,K
+	EQUAL?	PRSA,V?LOOK-UNDER \?CCL3
+	ZERO?	MUD-FLAG /?CCL3
+	PRINT	PLACE-MAT-VISIBLE
+	CRLF	
+	RTRUE	
+?CCL3:	EQUAL?	PRSA,V?UNLOCK \?CCL9
+	EQUAL?	PRSI,KEY \?CCL12
+	SET	'PUNLOCK-FLAG,TRUE-VALUE
+	PRINTR	"The door is now unlocked."
+?CCL12:	EQUAL?	PRSI,GOLD-KEY \?PRG19
+	PRINT	DOESNT-FIT-LOCK
+	RTRUE	
+?PRG19:	CALL	PICK-ONE,YUKS
+	PRINT	STACK
+	CRLF	
+	RTRUE	
+?CCL9:	EQUAL?	PRSA,V?LOCK \?CCL22
+	EQUAL?	PRSI,KEY \?CCL25
+	SET	'PUNLOCK-FLAG,FALSE-VALUE
+	PRINTR	"The door is locked."
+?CCL25:	EQUAL?	PRSI,GOLD-KEY \?PRG32
+	PRINT	DOESNT-FIT-LOCK
+	RTRUE	
+?PRG32:	CALL	PICK-ONE,YUKS
+	PRINT	STACK
+	CRLF	
+	RTRUE	
+?CCL22:	EQUAL?	PRSA,V?PUT-UNDER \?CCL35
+	EQUAL?	PRSO,ROBOT-LABEL \?CCL38
+	PRINTI	"The tiny paper vanishes under the door."
+	CRLF	
+	EQUAL?	HERE,LEDGE-IN-RAVINE \?CCL43
+	PUSH	DREARY-ROOM
+	JUMP	?CND41
+?CCL43:	PUSH	LEDGE-IN-RAVINE
+?CND41:	MOVE	PRSO,STACK
+	RTRUE	
+?CCL38:	EQUAL?	PRSO,NEWSPAPER \FALSE
+	PRINTR	"The newspaper crumples up and won't go under the door."
+?CCL35:	EQUAL?	PRSA,V?CLOSE,V?OPEN \FALSE
+	ZERO?	PUNLOCK-FLAG /?PRG53
+	CALL	OPEN-CLOSE
+	RSTACK	
+?PRG53:	PRINTR	"The door is locked."
+
+
+	.FUNCT	PWINDOW-F
+	EQUAL?	PRSA,V?LOOK-INSIDE \?CCL3
+	SET	'PLOOK-FLAG,TRUE-VALUE
+	FSET?	PDOOR,OPENBIT \?CCL6
+	PRINTR	"The door is open!"
+?CCL6:	EQUAL?	HERE,DREARY-ROOM \?CCL11
+	PUSH	LEDGE-IN-RAVINE
+	JUMP	?CND9
+?CCL11:	PUSH	DREARY-ROOM
+?CND9:	CALL	GO&LOOK,STACK
+	RSTACK	
+?CCL3:	EQUAL?	PRSA,V?ENTER \FALSE
+	PRINTR	"Perhaps if you were diced...."
+
+
+	.FUNCT	PKEYHOLE-F
+	EQUAL?	PRSA,V?LOOK-INSIDE \?CCL3
+	PRINTI	"You can"
+	IN?	KEY,KEYHOLE-2 /?PRG13
+	EQUAL?	HERE,DREARY-ROOM \?CCL12
+	PUSH	LEDGE-IN-RAVINE
+	JUMP	?CND10
+?CCL12:	PUSH	DREARY-ROOM
+?CND10:	CALL	LIT?,STACK
+	ZERO?	STACK \?PRG15
+?PRG13:	PRINTI	"'t"
+?PRG15:	PRINTR	" see light through the keyhole."
+?CCL3:	EQUAL?	PRSA,V?PUT \FALSE
+	IN?	KEY,KEYHOLE-2 \?CCL21
+	EQUAL?	PRSO,LETTER-OPENER \?PRG29
+	ZERO?	MUD-FLAG /?CND25
+	SET	'MATOBJ,KEY
+?CND25:	MOVE	KEY,DREARY-ROOM
+	PRINTR	"There is a faint thud behind the door."
+?PRG29:	PRINTI	"The "
+	PRINTD	PRSO
+	PRINTR	" doesn't fit."
+?CCL21:	CALL	PERFORM,V?UNLOCK,PDOOR,PRSO
+	RTRUE	
+
+	.ENDI

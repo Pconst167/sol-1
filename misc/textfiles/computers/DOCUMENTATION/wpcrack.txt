@@ -1,0 +1,325 @@
+Newsgroups: sci.crypt,alt.sources
+From: rdippold@cancun.qualcomm.com (Ron Dippold)
+Subject: WPCRACK.DOC
+Message-ID: <rdippold.725047389@cancun>
+Date: Tue, 22 Dec 1992 18:03:09 GMT
+
+WPCRACK 1.0 - Word Perfect 5.x Password Finder
+Now, files with forgotten passwords are no longer lost forever!
+
+Copyright (C) 1991 Ron Dippold
+
+What This Is
+------------------------------------------------------------------------------
+Word Perfect's manual claims that "You can protect or lock your documents with
+a password so that no one will be able to retrieve or print the file without
+knowing the password - not even you," and "If you forget the password, there
+is absolutely no way to retrieve the document."  [1]
+
+Pretty impressive!  Actually, you could crack the password of a Word Perfect
+5.x file on a 8 1/2" x 11" sheet of paper, it's so simple.  If you are counting
+your files being safe, they are NOT.  Bennet [2] originally discovered how the
+file was encrypted, and Bergen and Caelli [3] determined further information
+regarding version 5.x.	I have taken these papers, extended them, and written
+some programs to extract the password from the file.
+
+If you don't care about theory, skip to the next section (Why This Program).
+
+
+Stupid, Stupid, Stupid!
+-----------------------------------------------------------------------------
+Word Perfect allows you to add a password to a file.  When you save it, it will
+be encrypted, and it requires the password to uncrypt it.  Word Perfect
+encrypts the file by a method of two exclusive ORs.  First, it takes the length
+of the password plus 1 and increments this for each character, wrapping from
+255 to 0.  This incrementing sequence is XORed with the text to be encrypted.
+Secondly, the password is repeatedly XORed with blocks of the plaintext of
+the same size as the password.
+
+As a simple example, say the password is "BONE".  The incrementing sequence
+would start with 5 (one more than the number of characters in BONE).  BONE in
+hexidecimal is 42 4F 4E 45.
+
+	Text:        H  e  l  l  o  !
+							 48 65 6C 6C 6F 21
+	Sequence:    05 06 07 08 09 0A
+	Password:    42 4F 4E 45 42 4F
+	-------------------------------
+	Result:      0F 2C 25 21 24 64
+
+It also stores a 16-bit checksum that is computed as following:
+
+	checksum = 0
+	for each character in the password {
+		rotate the checksum right by one bit
+		XOR the character into the high 8 bits of the checksum
+	}
+
+Now, this method of encryption worked well in Word Perfect 4.x., where the
+actual text is the only thing encrypted.  To determine the password that was
+used, you would have to determine the characters and the length.  Not easy, and
+it would take lots of compuuting power, basically brute force trying different
+passwords that had the correct checksums (very thoughtful of them to leave that
+in there).
+
+However, someone did a very dumb thing and extended this scheme to Word Perfect
+5.x incorrectly.  In Word Perfect 5.x, when you encrypt a file IT ENCRYPTS
+INFORMATION THAT IS CONSTANT FROM FILE TO FILE.  There are certain bytes that
+are guaranteed to be the same always, and 22 total bytes that never seem to
+change.
+
+What this means is that we have known plaintext for some encrypted text!  And
+because the method of encryption is so regular, it is a simple method to
+reverse the encryption method to find the password.  The password is repeatedly
+applied to the text, so we have a check.
+
+Say we are trying a password length of 4.  We know the incrementing sequence
+must start at 5 (4+1).  So we XOR that, the first encrypted byte, and the known
+value of that byte and we get back a character.  This might be the first
+character of the password.  Now, we check it!  We just move over 4 bytes (since
+it repeats), increment the sequence number by 4, and repeat.  If the character
+is the same as the password we first got, this could be the password.
+
+In reality, it's not so easy.  The known bytes are spread out, and for some
+password lengths there are some letters we can't figure out.  And if anything
+that I expect to stay constant changes that'll mess things up.
+
+The first problem can be solved if there is only one missing character: since
+WP was so nice as to include the checksum, I can just try all possible values
+of the missing character until the checksum matches.
+
+The second problem I deal with by trying to get up to five complete versions
+of the password for each length from different sections of the known info.
+Then I run a "vote" to see how well each charcter agrees with each other and
+an overall confidence level for that length.  Any that are above a threshold
+I explore further as shown below.
+
+I also know that certain password values are forbidden, namely anything above
+128 and lower case characters (they are translated to upper case) so this helps
+pare down the choices.
+
+If there is more than one missing character (possible on very long passwords,
+above 14 characters), then it is up to the person running the program to figure
+out what they could possibly be.  After all, if it is "IMP_RTANT REPO_T" where
+the "_" are the missing characters, "IMPORTANT REPORT" should be obvious to
+most people.
+
+The method is very flexible, it seems to get most passwords easily, and
+anything really strange should be caught by the flexible threshold.
+
+
+
+Why This Program
+------------------------------------------------------------------------------
+I know people are going to instantly accuse me of writing this just as a tool
+for hackers to steal confidential data.  However, I have seen too many people
+asking how to recover their own locked files ("I forgot my password!") and
+losing many hours to think that this does not have plenty of legitimate use.
+
+The algorithm for cracking the programs has been available for quite some time,
+I just automated it and did some filling in the blanks.  Anyone who thought
+their files were safe when encrypted like this was fooling themselves (or were
+fooled by the claims made about the encryption).  What can I say, every tool
+has the potential for abuse.  The idea here is for you to save your files that
+you've forgotten the password to.
+
+WPCRACK also has some purely technical interest value.  Watching how easily
+it can crack a WP file, even on a 4 MHz XT, can be unnerving.  The algorithm
+really doesn't take that much processing power.
+
+
+
+How to Use It
+-------------------------------------------------------------------------------
+
+The syntax is:
+   WPCRACK (-d) (-t) <filename> ( <threshold> )
+
+Parameters:
+
+<filename> is the Word Perfect file to crack.
+
+<threshold> is the percentage confidence threshold over which a length is
+considered to be a possibility.  This can vary from 0 (always) to 100
+(only the best) and defaults to 80.  If you can't get a password from
+a file you KNOW is protected, lower the threshold.  You'll have more
+garbage to sort through, but you'll get something.
+
+Switches:
+
+-d : Normally when WPCRACK prints the characters, it prints the actual
+     characters. Unfortunately, control characters are allowed in passwords,
+     and these can do strange things to the screen output.  The -d switch
+     will print the decimal values of each character on the line below.  This
+     is not pretty, but may be the only option you have to find out what
+     character that really is.
+
+-t : This will force WPCRACK to print all answers in table form, rather
+     that using special displays for passwords with one or no missing
+     characters (see below).  This lets you see ALL possible passwords.
+
+Note:
+
+WPCRACK can spit out quite a bit out output.  You might consider redirecting
+the output to a file by adding a "> filename" to the end of the line if it goes
+by too fast.  This will send all the output to the file, which you can then
+edit, print, or do whatever you want with.  For example:
+
+  WPCRACK MYFILE.WP > OUTPUT.TXT
+
+And then you can view or print OUTPUT.TXT
+
+
+
+The Results
+-------------------------------------------------------------------------------
+WPCRACK will check the file for passwords of length 1 to 17 currently.  It will
+generate up to five passwords for each length (less for the larger passwords,
+as we only have 22 bytes to work with total).  It then decides how closely
+all the guesses agree with each other.  If we chose the wrong length, we would
+expect the different guesses to be almost random.  If the length is correct,
+they should almost all agree.
+
+WPCRACK weights the results for each length to get a "confidence level" and
+then compares that to the threshold.  Any below the threshold are automatically
+discarded and no longer figure in anything more.
+
+The remaining lengths are sorted by confidence level, highest to lowest.  Then
+for each of the lengths, the following is done.
+
+CRACKWP checks to see how many missing letters there are.  These are positions
+in the password that we have absolutely _no_ guesses for.
+
+No Missing Characters:
+
+If there are no missing characters, WPCRACK tried every combination of the
+possible characters for each position.  It determines the checksum for that
+combination, and if it matches the checksum stored in the file, it prints the
+password.
+
+For a file where the correct password is "PASS1" you will see:
+
+  PASS1   -- Good Checksum
+
+
+One Missing Character:
+
+When there is only one missing character, WPCRACK makes use of the checksum
+stored in the file.  It generates every combination of the known characters
+in the password.  Then it works backwards from these and the checksum to
+figure out what the character must have been.  If the character is a legal
+character for a password, the resulting password is printed.
+
+For a file where the correct password is "BIG_PASSWORD" you might see:
+
+
+  BIG_PASSWO D
+            ^
+ The missing character will be extrapolated from the checksum
+
+  BIG_PASSWORD   -- Good Checksum
+
+
+More Missing Characters or Table Mode:
+
+When there is more that one missing character, there isn't anything to do
+except show you all the possibilities and let the superior text recognition
+system in your head see if it recognizes anything reasonable.
+
+In addition, if just letting WPCRYPT run doesn't produce the desired results,
+this will let you bypass all the extra processing and do it yourself straight
+from the possibilities.
+
+The format of a password table for a length is:
+
+   # of matches: 43355
+  Primary Guess: PASS1  Checksum good!
+
+The "Primary Guess" means that all these characters are the best guesses for
+each position.  The numbers above them are the number of occurences of each
+character.  In the above example, there were 4 places that WPCRACK attempted to
+determine the first character of the password.  "P" turned up 4 times.  "A"
+turned up in the second position 3 times.  The number of times per character
+varies because the known bytes are not evenly distributed.
+
+In this case, the checksum of the primary guess matched, so it shows that.
+
+Now if we have a case where there are multiple character possibilities for
+one or more positions, you will see something like this:
+
+Password length of 15 with 20% confidence level:
+
+   # of matches: 111111101100121
+  Primary Guess: FWII/N E'  Y];  (Incomplete!)
+
+   # of matches: 100010000100001
+     Alternates: Z           ?
+
+In this case, there are three characters that we have no clue about (the ones
+with zeros above them in the primary guess.  There is another line of counts
+and characters below it - these are more possibilities.  Here, the first
+character of the password is equally likely to be a "F" or "Z".  A more useful
+useful result might be something like this if you force table mode:
+
+   # of matches: 43353
+  Primary Guess: HELLA  Checksum bad!
+
+   # of matches: 00002
+     Alternates:     O
+
+In this case, three times the last character turned out to be "A", and twice it
+was "O".  "O" was the correct letter, apparently, for then it would spell
+"HELLO".  Table mode lets you see this, although the "no missing characters"
+display should have picked the "HELLO" correctly as well.  I'm sure there is
+some good use for this...  It's too nifty to leave out and makes a good
+safety net.
+
+
+
+Notes
+-------------------------------------------------------------------------------
+  The longer the password used, the less chance of determining all of it.
+Luckily, most people don't use passwords greater than 13 characters, and
+CRACKWP should get anything less than that.  And when CRACKWP can't figure it
+out, you will be shown all of the password that it can figure out and you might
+be able to do something with what's shown, just like a crossword puzzle.
+
+  If any of the 22 bytes I assumed are constant change, then things get
+hairy!  This is why I do all the contortions with voting, table display, etc.
+Unless the change is really drastic, CRACKWP should be able to find it anyway.
+
+  I'd suggest the folks at Word Perfect use a different method in version 6.0!
+For a product such as this, it's really bad that it's so insecure.  This is
+good for those of us who forget our passwords, but bad for someone who thinks
+their data is safe.
+
+  I haven't tried this on any Word Perfect 5.x other than the IBM version.  If
+you have it for another computer and are interested in getting a version for
+it, and you have InterNet access, send me the following:  a UUENCODED (short)
+Word Perfect 5.x file, a UUENCODED version of the file after it has been
+saved with a password, and a letter saying hello and the password you used.
+See my address below.
+
+
+
+References
+-------------------------------------------------------------------------------
+[1] "WordPerfect for IBM Personal Computers" WordPerfect Corporation, 1989
+[2] Bennet,J "Analysis of the Encryption Algorith used in the Word Perfect
+    Word Processing Program" 1987, "Cryptologia" Vol XI, No. 4. pp 206-210
+[3] Bergen, H.A. and Caelli, W. J. "File Security in WordPerfect 5.0" 1990,
+    "Cryptologia"
+
+
+==============================================================================
+You can reach me at my Internet address of rdippold@qualcomm.com or contact
+me at one of the fine boards below:
+
+Board                   Phone                    My Username
+-------------------------------------------------------------
+ComputorEdge On-Line    (619) 573-1635           SYSOP .
+Radio-Active            (619) 268-9625           Iceman
+
+-- 
+All employees:  We are phasing in a paperless office. We are starting with
+the restrooms.

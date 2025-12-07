@@ -1,0 +1,1101 @@
+---------------------------------
+
+OPTIMIZE.TXT
+
+---------------------------------
+
+Some useful informations about how to optimize code on a 386/486/Pentium
+
+This initially was a posting on the Internet made by
+
+        Michael Kunstelj.
+        Contact at :  virteam@smoke.canberra.edu.au
+                        or
+                      mick@cairo.anu.edu.au
+
+Initially it included 486 and Pentium optimizations with some "holes"
+(like the profiling instructions), i filled the Pentium "holes"
+then refined some exaplanations (uh! maybe i made 'em worse! :} ).
+Then added some not-so-obviuos cache optimization techniques
+and other infos about specific optimizations you can make on 386.
+
+        Lorenzo Micheletto
+N.B.
+        I added some generic examples about how a cpu works
+        BUT they are just examples, intel cpus work in slightly different ways.
+
+N.B./2
+        Always check in the books for things you are not sure
+        there may be typos here.
+
+----------------------------------
+Brief intro about how a CPU works
+----------------------------------
+
+Now a brief intro on the innards Intel CPUs.
+
+Most processors these days have within in them a system termed a "pipeline".
+The 486 / 586 are certainly within this category.  However, most people 
+aren't quite sure what exactly a pipeline is, here follows a complete
+explanation:
+
+The execution of a machine code instruction can be roughtly split
+in five stages:   [n.b. this is a generic pipeline]
+        1) FETCH instruction opcode and immediate data
+        2) DECODE opcode and align immediata data into temporary registers
+        3) CALCULATE ADDRESS OF OPERANDS and load 'em into memory.
+           (calculate the address of memory locations to access
+            and select the register operands to use)
+           (sometimes called DECODE 2)
+        4) EXECUTE instruction (loading memory operands if needed)
+           & write results to INTERNAL registers
+        5) WRITEBACK memory-operand results to memory
+
+Every stage takes ONE OR MORE cpu cycles to be completed, but usually
+a modern cpu needs just one cpu cycle for every execution stage
+(excluding stages 1 and 5 that have to deal with memory/cache access
+ and stage 4 when "complex" microcoded instructions are executed).
+
+A cpu-core ( the "real" cpu, not cache support nor the other things
+that are usually integrated into a modern cpu) has five "specialized"
+units, one for every stage of instruction execution, plus a "register file"
+(and ultra-fast on-chip memory where internal register values
+ are stored) and a CONTROL UNIT.
+
+The control unit "coordinates" the action of all the other units
+so they can work together.
+
+Here follows an extended ascii drawing
+of ONE on the many ways these units can be connected
+(use a ms-dos text editor to see this, or convert it to the
+ Windows line-drawing character set if you are using a Windows editor):
+
+              MEMORY INPUT ("memory load" unit)
+                        ³                                ÚÄÄÄÄÄÄÄÄÄÄÄÄ¿
+                        ÀÄÄÄÄÄÂÄ>ÚÄÄÄÄÄÄÄÄÄÄÄÄ¿<ÄÄÄÄÄÄÄÄ>³            ³
+                             ÚÅ¿ ³ FETCH      ³          ³            ³
+       ÚÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÙ³À>ÀÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄ¿       ³            ³
+       ³ (instruction pointer)³                  ³       ³            ³
+       ³                      ³  ÚÄÄÄÄÄÄÄÄÄÄÄÄ¿<ÄÙ       ³            ³
+       ³                      ³  ³ DECODE     ³<ÄÄÄÄÄÄÄÄ>³            ³
+       ³                      ³  ÀÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄ¿       ³            ³
+       ³                      ³                  ³       ³            ³
+       ³                      ³  ÚÄÄÄÄÄÄÄÄÄÄÄÄ¿<ÄÙ       ³ CONTROL    ³
+       ³                     ÚÙ  ³ ADDRESS C. ³<ÄÄÄÄÄÄÄÄ>³            ³
+       ³                ÚÄÄÄÄÅÄÄ>ÀÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄ¿       ³ UNIT       ³
+       ³                ³    À¿                  ³       ³            ³
+ ÚÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÁÄ¿   ÀÄ>ÚÄÄÄÄÄÄÄÄÄÄÄÄ¿<ÄÙ       ³            ³
+ ³ REGISTER FILE          ÃÄÄÄÄÄ>³ EXECUTE    ³<ÄÄÄÄÄÄÄÄ>³            ³
+ ÀÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÙ<ÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄ¿       ³            ³
+                                                 ³       ³            ³
+                                 ÚÄÄÄÄÄÄÄÄÄÄÄÄ¿<ÄÙ       ³            ³
+                                 ³ WRITEBACK  ³<ÄÄÄÄÄÄÄÄ>³            ³
+                                 ÀÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄ¿       ³            ³
+                                                 ³       ÀÄÄÄÄÄÄÄÄÄÄÄÄÙ
+                               MEMORY OUTPUT <ÄÄÄÙ
+                              ("memory store" unit)
+
+If you look the drawing, the control unit needs to communicate
+with all the other units to make 'em work together.
+Usually the "control unit" is scattered in little units that coordinates
+intruction and data flow between adiacent units, but you can think
+at it as a single indipendent unit.
+
+The five execution units are what gives the "raw" cpu power
+but the control unit is what lets you fully utilize 'em.
+
+Let's suppose every unit performs one operation in one step.
+
+With a "cheap" control unit, to execute a complete machine language
+instruction you first enable  FETCH, then you enable DECODE
+and so on until WRITEBACK is completed and the control unit
+enables FETCH again to execute the next instruction.
+
+This is what happens into an "absolutely not pipelined" cpu
+with "one cycle" stages, the fastest instructions takes 5 cycles
+but the control unit is very simple
+(just a circular shift register that enables one unit at a time).
+
+Of course this is the worst case, nobody is so jerk to build
+a cpu like that.
+
+Every cpu stage-execution unit is a stand alone thing, it has its hardware
+and its "temporary registers" so it is capable to operate "alone".
+
+So, IF THE CONTROL UNIT can SINCHRONIZE the operations
+of all the stage-execution units, it can make 'em WORK IN PIPELINE
+(like in a factory, where every worker/robot in a production line
+ a) receives a partially refined product from the previous worker in line
+ b) performs some simple operations to refine the product a little more
+ c) pass the result to the next worker in line
+).
+A cpu with such a control unit is called a pipelined CPU.
+
+If you have to execute in sequence instructions A,B,C,D,E
+on a pipelined processor ....
+
+While the WRITEBACK unit is performing stage 5 of A
+the EXECUTION         unit can perform stage 4 of B
+the ADDRESS CALCULATE unit can perform stage 3 of C
+the DECODE            unit can perform stage 2 of D
+and the FETCH         unit can perform stage 1 of E
+
+So if you start the cpu at instruction A
+it looks like that instruction A takes 5 cycles
+while instructions B,C,D,E (immediately one stage behind) looks like they take
+JUST ONE CYCLE!!!
+
+So if you execute a SEQUENCE of 8 instructions
+on a "not pipelined" processor with a five stage "pipe"
+it takes 40 steps to execute the sequence
+while on a pipelined processor this takes 5+7=12  steps!!!
+( 5 steps for the first instruction to get thru the pipeline
+ then 7 steps for the other instructions immediately "one step" behind)
+And the more instructions are executed in sequence, the more it looks like
+every instruction takes "just" one cycle to execute.
+
+
+This is of course the optimal situation, when the processor pipeline
+is filled and WHEN EVERY INSTRUCTION DOES NOT USE MEMORY/REGISTER OPERANDS
+"still under processing" IN SUCCESSIVE EXECUTION-STAGES!!!!!!
+
+-------------------------------------------------------------------------------
+THINGS A CPU MUST CHECK TO MAKE A PIPELINE WORK CORRECTLY
+
+A pipelined processor control-unit must "check" :
+ A) at stage 1 (FETCH)
+    IF in stage 2..4 there are JUMP instructions
+             [ they change the program counter
+               (the same register used by the fetch unit)
+             ]
+    THEN stage 1 must "wait" until the jump is completed
+         and then "restarts", loading  the memory location pointed by the
+         new program counter value.
+
+    Because the jump opcode must pass thru the decode stage ...
+    ... if the DECODE unit "detects" a jump opcode, it makes the FETCH unit
+    "stops" AT LEAST for two cycles until the jump is performed.
+    This of course means the processor pipeline "wastes" some cpu cycles.
+
+    A 486 handles jumps in a smarter way, when the FETCH unit loads
+    a jump instruction, it goes on assuming the jump WON'T BE TAKEN
+    (it read the instructions following the jump).
+    If the jump is taken, the values in the DECODE 1 and DECODE 2 units
+    are "discarded" and the FETCH unit starts loading from the new
+    program counter value.
+    This explains why on 486 relative jumps (the fastest jumps) takes
+    3 cycles if taken    (two cycles "lost")
+    1 cycle if not taken (no cycles lost)
+
+    A "smarter" control unit can recognize in advance unconditional jumps
+    and start immediately loading opcodes from the new program counter
+    location
+    AND/OR try to "predict" the jump destination of conditional jumps
+    (like the Pentium does).
+
+
+ B) at step 3  (ADDRESS CALCULATION)
+    IF in stage 3 a register needed for address calculation is under processing
+       in stage 4 (EXECUTE)
+    THEN the stage 3 unit generates a "do nothing" control sequence
+         for one cpu cycle.
+
+ C) memory access conflicts
+    These can be caused by lots of different things, they are usually
+    resolved by the memory load/store units.
+
+Told in a short way, in a fully pipelined processor
+when the pipeline is "working on a sequence"
+the first instruction in the sequence takes the full execution time
+while the other instructions takes a shorter time (usually one cycle)
+because they are immediately behind, this means they "look faster"
+(and in fact they are, because the pipeline fully utilizes all the functional
+units it has).
+
+If some instructions "modify" values needed in the previous cpu stages
+the control unit stops the unit needing those values (and the others behind it)
+and inserts "do nothing" codes into the successive units in the processor pipe
+to make things work as expected (this is called a PIPELINE STALL
+or a PIPELINE FLUSH)
+
+This explains why usually a taken jump takes more time than one that's not taken
+(when a jump is performed you must flush the pipeline).
+
+The newer processors includes JUMP PREDICTION UNITS that handles
+jump faster, but the less you jump, the better.
+
+------------------------------------------------------------------------------
+PIPELINING IN INTEL PROCESSORS:
+
+The 386 is a "partially pipelined" processor with some optimizations.
+It checks for jumps ( A check) in a quite slow way
+and most of times can execute every stage in one cycle.
+It cannot perform the address generation check (B check)
+so it must execute stage 3 and 4 in "not pipelined mode".
+This explains why THE FASTEST 386 INSTRUCTIONS TAKE TWO CYCLES
+( stage 3 unit must wait stage 4 to complete before managing
+  the next instructions).
+
+The 486 has an improved EXECUTION unit (stage 4), improved memory access
+AND its control unit can perform the address generation check
+so that it can pipe stage 3 and 4 if there are no
+register/memory conflicts with two successive instructions.
+This explains why lots of 486 instructions take just one cycle
+(if the pipeline is filled and no pipeline stalls are produced).
+What's more, pipeline reloading is improved, so even jumps have less
+impact on execution time.
+It also has a 4Kbyte internal cache that boosts memory access
+and allows big gains from strip-mining optimizations.
+Another nice thing is the BURST READ access that accelerates memory reads
+when it needs to update its internal cache.
+
+PIPELINED,SUPERSCALAR & BRANCH PREDITING CPU: THE PENTIUM
+
+Well, what's beyound a fully pipelined processor like the 486 ?
+There is a 586/Pentium processor, that's SUPER SCALAR (more than one pipeline)
+and BRANCH PREDICTING (it has a specialized unit that annotates the
+position and the result of some og the most recent  jumps, and so
+it can try to "guess" from where the next instruction after the jump execution
+will be loaded, if it guess correcly a pipeline stall is avoided, else
+it stalls)(this helps speeding up the execution of nested loops).
+
+The 586 can execute UP TO TWO integer operations in a single step
+(because it has TWO pipelines, but with some limitations)
+it can BURST READ/WRITE and has TWO indipendent 8k caches
+(Harvard style CPU to cache architecture) this means you can
+strip-mine to the max. if strips fit into the 8Kbyte data cache.
+
+Well, now you know how they work, let's see how to make 'em work to the max.
+
+------------------------------------------------------------------------------
+SPEEDING UP 486/586 CODE.
+------------------------------------------------------------------------------
+
+-------------------------------
+ADDRESS GENERATION STALLS (AGI)
+-------------------------------
+An Address Generation Interlock occurs when a register which is
+currently being used as the base or an index was the destination component 
+of a previous instruction (the stage 3 to 4 pipeline stall i described above)
+
+For example,:
+
+        add edx, 4
+        // AGI, ONE CLOCK STALL
+        mov esi, [edx]
+
+For the 486, AGI's can only occur on adjacent instructions.
+
+On the 586 or Pentium instructions up to 3 locations away can cause an AGI.
+( i.e. an instruction waiting to execute step 4 on pipeline 1
+       may need to wait the result produced by an instruction
+       still executing on pipeline 2)
+
+                pipeline step              pipe1  pipe2
+        addres_calculate/fetch_operand       C      D    |
+        execute                              B      A    |
+                                                         V
+
+      If C needs the results of A, it must stall pipeline 1 for one cycle
+      to wait for A to "exit from" pipeline 2.
+      If C needs the results of D, it must stall pipeline 1 for two cycles
+      to wait for D to "exit from" pipeline 2.
+
+An example of 3 instruction away AGI:
+
+        add esi, 4
+        pop ebx
+        dec ebx
+        mov edx, [esi]
+
+Takes 4 clocks on a 486.  On a 586, the move command must wait for the 
+add command, thus AGI stalling for one clock.  The code above then 
+would run in three clock cycles on a 586.
+
+Remember that even instructions that read or write implicitly to registers
+cause AGI stalls:
+
+    mov esp,ebp
+    pop ebp.
+
+    is executed as...
+
+    mov esp,ebp
+    [agi]          ; pop uses the esp as a pointer
+    pop ebp
+
+----------------------------
+INSTRUCTION DECODING STALLS:
+----------------------------
+
+When decoding an instruction with an IMMEDIATE VALUE
+AND
+either an  INDEX OFFSET or an IMMEDIATE DISPLACEMENT
+486's have a one clock penalty. (586's do not)
+
+        Example:
+
+                mov  spam, 248
+                mov dword ptr [esp+4], 1
+
+This happens because the decode stage of the pipeline can read and decode
+ONE "immediate" value at a time
+while an immediate value and an immediate offset are TWO immediate values.
+The 586 instead has not such problems (when decoding) (execution is different)
+
+---------------------------------
+REGISTER ACCESS CPU STALLS:
+---------------------------------
+
+486's have a 1 clock penalty when modifying the lower word of a DWORD register
+that's used immediately after it, 586's do not.
+        Example:
+                mov al,0
+                mov [ebp], eax
+                (a one clock penalty on 486, no penalty on a 586)
+
+
+-------------------------------
+CODE ALIGNMENT
+-------------------------------
+
+To speed up the instructions, alignment of code should be on the
+beginning of cache boundaries.
+(32 bytes on 586, 16 bytes on 486)
+
+Thus, start your routine on the start of the cache page.
+This way, when someone calls the routine, the processor
+will just have to load a cache line to get the first sequence to feed
+into the pipeline, and while they are executing it will have
+enough time to load the other cache lines needed.
+
+This will speed up the processing  of all the instructions within that page.
+The effect of this speed up on the 586 is not a dramatic as is it is on the 486
+because the 586 has bigger caches and faster access to memory
+so a cache line load/store has less impact on cpu.
+
+------------------------------
+DATA ALIGNMENT
+------------------------------
+
+Misaligned access in the data cache causes an extra 3 cycles on both the 
+486 and 586.
+
+Ways to speed up data:
+For DWORD data, alignment should be on a 4-byte boundary.
+For WORD data, alignment should be on a 2 byte boundary for the 486, 
+and simply within the 4-byte page for the 586.
+For 8 byte data (64 bits), data should be aligned on a 8-byte boundary
+so it is possible to use BURST READS (and burst writes too, on a Pentium).
+
+And yes, on many applications with tight inner loops, these things do 
+accumulate to make a noticeable speed-up.
+
+-------------------------------------------------------------------------------
+SPEEDING UP REGISTER AND OPERAND USAGE
+-------------------------------------------------------------------------------
+
+Use the EAX as much as possible.
+Many instructions are 1 byte shorter when using EAX.
+That's less code you have to move around and slightly less internal processing.
+Use the DS register as much as possible for roughly the same reason,
+In the case of several references being made to a variable addressed with a 
+displacement, load the displacement into a register.
+
+Try to use the ESP register to reference the stack in lower levels of your 
+subroutines (faster than push/pop things and leaves EBP free for other
+uses)
+
+
+-------------------------------------------------------------------------------
+HANDY INFO ON SPEEDING UP INTEGER INSTRUCTIONS
+-------------------------------------------------------------------------------
+
+1. Avoid using complex instructions like LEAVE, ENTER, LOOP, string 
+   instructions etc  Simpler instructions will get the job done faster.
+   Simpler instructions have been getting faster with every new processor
+   that has come along.
+
+2. With 8-bit operands, do your best to use the byte opcodes, rather than 
+   using the 32 bit instructions  with sign and zero extended modes.
+   Internal sign extension is expensive, and speed increases can be found by
+   simplifying the process as much as possible.
+
+3.  LEA's generally increase the chance of AGI's.  However, LEA's can be
+    advantageous because:
+    *  In many cases an LEA instruction may be used to replace constant
+       multiply instructions. (a sequence of LEA, add and shift for example)
+    *  LEA may be used as a three/four operand addition instruction.
+       LEA ECX, [EAX+EBX*4+ARRAY_NAME]
+    *  Can be advantageous to avoid copying a register when both operands to
+       an ADD are being used after the ADD as LEA need not overwrite its
+       operands.
+
+    The general rule is that the "generic"
+
+    LEA A,[B+C*INDEX+DISPLACEMENT]
+
+        where A can be a register or a memory location and B,C are registers
+        and INDEX=1,2,4,8
+        and DISPLACEMENT = 0 ... 4*1024*1024*1024
+                           or (if performing signed int operations)
+                           -2*1024*1024*1024 ... + (2*1024*1024*1024 -1 )
+
+    replaces the "generic" worst-case sequence
+
+    MOV X,C    ; X is a "dummy" register
+    MOV A,B
+    MUL X,INDEX    ;actually  SHL X, (log2(INDEX))
+    ADD A,DISPLACEMENT
+    ADD A,X
+
+    So using LEA you can actually "pack"  up to FIVE instructions into one
+    Even counting a "worst case" of TWO OR THREE AGIs caused by the LEA
+    this is very fast compared to "normal" code.
+    What's more, cpu registers are precious, and using LEA
+    you don't need a dummy "X" register to preserve the value of B and C.
+
+4. Zero-Extension with short ints terror tales
+
+  The MOVZX  takes four cycles to execute due to due zero-extension
+  wobblies. A better way to load a byte into a register is by:
+     xor eax,eax
+     mov al,memory
+ 
+  As the xor just clears the top parts of EAX, the xor may be placed on the
+  OUTSIDE of a loop that uses just byte values.
+  The 586 shows greater response to such actions.
+
+  It is recommended that 16 bit data be accessed with the MOVSX and
+  MOVZX if you cannot place the XOR on the outside of the loop.
+
+  N.B. Do the "replacement" only for movsx/zx inside loops.
+
+5. When comparing a value in a register with 0, use the TEST command.
+  
+  TEST operands by ANDing the operands together without spending any
+  internal time worrying about a destination register.
+  Use test when comparing the result of a boolean AND command with an
+  immediate constant for equality or inequality if the register is EAX.
+  You can also use it for zero testing.
+  (i.e. test ebx,ebx  sets the zero flag if ebx is zero)
+
+6. Address Calculations
+
+  Pull address calculations into load and store instructions.  Memory
+  reference instructions have 4 operands: a relocatable time segment base, a
+  base register, a scaled index register and a displacement.  Often several
+  integer instructions can be eliminated by fully using the operands of
+  memory addresses.  (more on this later)
+
+7.  INTEGER DIVIDE
+  In most cases, an Integer Divide is preceded by a CDQ instruction.
+  This is as  divide instructions use EDX:EAX as  the dividend and CDQ sets
+  up EDX.
+  It is better to copy EAX into EDX, then arithmetic-right-shift EDX 31 places
+  to sign extend.
+  The copy/shift instructions take the same number of clocks as CDQ,
+  however, on 586's allows two other instructions to execute at the same
+  time.  If you know the value is a positive, use XOR EDX,EDX.
+
+8. INTEGER MULTIPLY
+  The integer multiply by an immediate can usually be replaced with a faster
+  and simpler series of shifts, subs, adds and lea's.
+  As a rule of thumb when 6 or fewer bits are set in the binary representation
+  of the constant, it is better to look at other ways of multiplying and not use
+  INTEGER MULTIPLY. (the thumb value is 8 on a 586)
+  A simple way to do it is to shift and add for each bit set, or use LEA.
+
+  Here the LEA instruction comes in as major cpu booster, for example:
+      LEA ECX,[EDX*2]       ; multiply EDX by 2 and store result into ECX
+      LEA ECX,[EDX+EDX*2]   ; multiply EDX by 3 and store result into ECX
+      LEA ECX,[EDX*4]       ; multiply EDX by 4 and store result into ECX
+      LEA ECX,[EDX+EDX*4]   ; multiply EDX by 5 and store result into ECX
+      LEA ECX,[EDX*8]       ; multiply EDX by 8 and store result into ECX
+      LEA ECX,[EDX+EDX*9]   ; multiply EDX by 9 and store result into ECX
+
+  And you can combine leas too!!!!
+      lea ecx,[edx+edx*2]   ;
+      lea ecx,[ecx+ecx*8]   ;  ecx <--  edx*27
+  (of course, if you can, put three instructions between the two LEA
+   so even on Pentiums, no AGIs will be produced).
+
+9. Clearing Registers
+  Using   XOR reg,reg is fast but sets up conditions codes.
+  A slightly slower way to do it of course is to mov reg,0
+  which preserves condition codes.
+
+10. Avoid ENTER, instead, try something like:
+  PUSH EBP
+  mov ebp, esp
+  sub esp, BYTE_COUNT
+
+11. JUMP INSTRUCTIONS
+  Jump instruction come in two forms, one real near that jumps between -127
+  and 128 of the current location, and a 32 bit version that does a full jump.
+  The short form is quite a bit faster, however unfortunately many compilers
+  put long jumps where short jumps would suffice.
+  To ensure that short jumps can be used (when you know it is possible),
+  explicitly specify the destination as being byte length
+  (i.e use jmp short instead of plain jmp, if you can)
+
+12. Task Switching
+  Task Switching is evil.  It is slow,  real slow.  Avoid task switching too
+  often, as more and more of your time will be spent in processing the task
+  switch.
+  For faster task switching, perform you task switching in software.  This
+  allows a smaller processor state to be saved and restored.  Anything that
+  shaves time off  75+ clock cycles isn't all that bad in my book.
+
+13.  Minimize segment register loads and the use of far pointers as dearly
+  much as you can.  If you are doing a lot of processing on a small piece of
+  data far away, it might be faster just to copy the data to nearby and work
+  on it there (by the way, this is a good reason to use flat protected mode).
+
+...and....
+
+14. THINK ABOUT WHAT YOU WANT TO DO
+  All the other optimisations of Unrolling Loops, moving the invariant data
+  etc still apply.  That, however, is more an algorithmic problem for you, but
+  still keep it firmly in mind.
+
+_______________________________________________________________________________
+586 Specific Optimizations
+-------------------------------------------------------------------------------
+
+The 586Pent has a five stage pipeline structure.
+However, the pipeline is split into two different pipelines, known 
+as Pipeline U and Pipeline V.   This allows two instructions to be
+executed in parallel and thus presents the opportunity of 
+executing two/instuctions per clock.
+The U pipeline is very much like the 486 pipeline, in that it can handle
+the entire set of instructions.  Pipeline V on the other hand can
+handle only "simple" instructions.
+The fast parts of the U and V pipelines are possible as much of the 
+functions are hardwired not microcoded.
+
+Anyway, I've blurted on about that for a bit, but what you want to know
+is "How to I get two instructions running in one clock/cycle?"
+
+Lament no further, here are the criteria:
+
+  1. Both instructions must be simple (see below)
+  2. There must not be a read-after-write or write-after-read
+      register/flag dependencies between them.
+  3. Neither can have a displacement and an immediate
+  4. Instructions with prefixes can only occurr in the U-pipe
+     (except for branches on condition jz,jc, etc.etc.)
+
+The following are considered "simple" instructions,
+the ALU means any ALU command (ADD etc):
+
+ 1. Mov reg, reg/mem/immed
+ 2. mov mem, reg/imm
+ 3. ALU reg, reg/mem/immed
+ 4. ALU mem, reg/immed
+ 5. inc reg/mem
+ 6. dec reg/mem
+ 7. push reg/mem
+ 8. pop reg
+ 9. nop
+ 10. lea reg/mem
+ 11. Jmp/ Call / Jcc near
+
+N.B Remember only the U pipe can perform SHIFTS/ROTATIONS
+    so "couple" every shift/rol with a simple instruction
+    before and after to be sure every pipeline is filled.
+
+Note, however, than while both pipelines can perform ALU
+instructions concurrently, this is not the case when
+one ALU instruction requires the output of the
+other pipeline ALU instruction.
+Example:  ALU instruction in pipe U and
+          performing ADC in pipe V.
+
+There are two exceptions to this rule:
+1) In the case of a compare/branch combination.
+2) With push/pop combinations (because of optimized stack access)
+
+--------------------------
+Branch Prediction
+-------------------------
+
+Another nice optimisation with the 586 hardware is that whenever there is 
+a possibility of a jump, for example, Jg, the 586 can automatically
+start "reading ahead" code from the jump location just in case the the
+Jump is accepted.  Remember the CODE alignment thing above?  Well,
+it couldn't hurt your grandmother to align the labels on the code pages.
+
+------------------------------------------
+Amazing new 586 Optimizations and speedups
+------------------------------------------
+
+The 586 has a lot of really nice optimizations and kick-ass
+features in addition to what I've mentioned above, unfortunately,
+this information is proprietary and will only be given
+to people who sign non-disclosure agreements and shell out a
+ $$ or two...  Bummer...
+(Meethinks, 586 clone-makers won't be too happy about that... :-) )
+Compiler/OS makers will probably be the purchasers.
+Quite a few of these optimisations won't work on anything less than
+a 586, so don't sweat too much about it.  Hey, just write
+for 386/486/586 and you'll be ok.
+
+Hovewer, i found a nice article on July 1994 Byte about some
+"secret weapons of Pentium coders"....
+
+============================================================================
+PENTIUM'S PROFILING REGISTERS:
+
+Pentiums have a set of 64bit "machine specific registers" (MSR)
+that are accessed by way of the RDMSR (read MSR) and WRMSR (write MSR)
+instructions.
+
+THESE ARE PROTECTED MODE, RING 0 INSTRUCTIONS (CPU LEVEL 0)
+( can work in a 386Powered programs only if executing under VCPI
+  XMS or "no V86 manager"
+  or if you find a way to "toggle" DPMI from ring 3 to ring 0)
+(I think they can work even if you boot ms-dos in real mode
+ and use the proper instruction prefixes needed to execute
+ 32bit instructions in real mode).
+
+-----------------------------------------------------------
+RDMSR   Read MSR
+        Copies the MSR register indexed by ECX
+        into the 64bit pair  EDX:EAX
+
+        RDMSR macro
+                db 0Fh,032h
+        endm
+-----------------------------------------------------------
+WRMSR   Write MSR
+        Copies into the MSR register indexed by ECX
+        the value contained into the 64bit pair  EDX:EAX
+
+        Macro to insert it into code if your assembler
+        does not support Pentiums:
+
+        WRMSR macro
+                db 0Fh,030h
+        endm
+-----------------------------------------------------------
+
+
+Intel Pentium user manuals, documents only MSR 0, 1 and 0Eh
+and states that MSR 3, 0Fh and above 13h are reserved and illegal.
+
+So, what's left? And what's useful to you ?
+
+MSR 10h is the counter of CPU CYCLES since last power-up.
+That value can also be read with the RDTSC (Read time stamp counter)
+instruction)
+RDTSC is 0Fh,031h in bytes and must be executed while in ring 0 too.
+
+MSR 10h is the most precise timer available on the Pentium
+because it "ticks" at the CPU frequency.
+
+Then comes MSR 11h,12h and 13h there you will find the hot stuff
+
+The lower 32bits of MSR 11h are actually two INDEXES
+INTO THE CPU PROFILING REGISTERS!!!!
+
+The profiling registers are CPU EVENT TIMERS AND COUNTERS
+they can keep track of what's going on inside and outside
+your super-duper processor, they can detect nearly everything the CPU does.
+
+The first 16bits of MSR11h selects
+the profiling register accessible thru MSR 12h.
+The second 16bits of MSR11h selects
+the profiling register accessible thru MSR 13h.
+
+Here comes the format of the "profiling register indexes":
+bit 0..5 : type of the profiling register to access
+bit    6 : Set if you want to monitor the events in cpu ring 0,1,2 (system)
+bit    7 : Set if you want to monitor the events in cpu ring 3 (user level)
+bit    8 : 0 = access count-of-hardware-events
+           1 = access count-of-total-cpu-cycles used to process the cumulated
+               events.
+           (i'm not sure of this, maybe 0 means count time and 1 count events)
+bit 9..15: UNKNOWN, DO NOT MODIFY
+
+
+
+Profiling registers types:
+INDEX  NAME
+0       data write
+1       data read
+2       data TLB miss (translation look-aside buffer)
+3       data read miss
+4       data write miss
+5       write (hit) to M or E state lines
+6       data cache lines written back
+7       data cache snoops
+8       data cache snoop hits
+9       memory accesses in both pipes
+0Ah     bank conflict
+0Bh     misaligned data memory reference
+0Ch     code read
+0Dh     code TLB miss
+0Eh     code cache miss
+0Fh     segment load
+10h     ????
+11h     ????
+12h     branches
+13h     BTB hits  (Branch Target Buffer)
+14h     taken branch OR BTB hit
+15h     pipeline flushes
+16h     instructions executed
+17h     instructions executed in V-pipe
+18h     bus utilization (clocks)
+19h     pipeline stalled by write backup
+1Ah     pipeline stalled by data memory write
+1Bh     pipeline stalled by write to E or M line
+1Ch     locked bus cycles
+1Dh     i/o read or write cycles
+1Eh     non cacheable memory references
+1Fh     AGI (Address Generation Interlock)
+20h     ????
+21h     ????
+22h     FPU operations
+23h     breakpoint 0 match
+24h     breakpoint 1 match
+25h     breakpoint 2 match
+26h     breakpoint 3 match
+27h     hardware interrupts
+28h     data read or data write
+29h     data read miss or data write miss
+
+So if you want to profile things:
+0) Set properly the environment of the test
+   (cache empty, cache filled with all the routine code, etc. etc.)
+1) Set MSR 11h to the two counters you want to read
+2) Read MSR 12h,13h to get the initial values,
+3) Execute the code you want to profile
+4) Read the final values of MSR 12h,13h
+   (without setting MSR 11h again this time).
+5) Calculate the difference between the initial and final values.
+
+This way if you are not sure how to optimize things
+you can actually test how they work and what's going on.
+
+USING THE PROFILING REGISTER YOU CAN "TEST ON THE ROAD"
+YOUR CODE DOWN TO THE LAST CPU CYCLE!!!!!
+
+-------------------------------------------------------------------------------
+386 Optimization
+-------------------------------------------------------------------------------
+
+Well, nobody buys a 386 now, right?
+But still lots of people has one....
+So if you wanna be 386 friendly remember .....
+
+
+--------------------------
+DECODE-AFTER-JUMP OVERHEAD
+--------------------------
+
+When a jump is performed, a 386 spends some extra time decoding
+the next instruction to execute and flushing the pipeline.
+
+THE FIRST INSTRUCTION requires exactly ONE EXTRA CPU CYCLE
+for every COMPONENT ( prefixes, opcode, mod/rm , sib ,offset, immediate value )
+of the instruction.  Notice i said COMPONENT!!!
+An 8bit displacement or a 32bit one, count always as an 1 extra cycle.
+
+So, in 32bit mode (where no prefixes are needed for 32bit instructions):
+
+        loopme: inc esi              ; opcode
+                mov [edi+1234h],eax  ; opcode, mod/rm , immediate offset
+                dec ecx              ; opcode
+                jne short loopme     ; opcode short_displacement
+
+IS FASTER THAN:
+
+        loopme: mov [edi+1234h],eax
+                inc esi
+                dec ecx
+                jne short loopme
+
+Because placing first the three component mov instruction
+adds 2 cycles to the instruction execution time, weird, uh?
+But if you remember this thing, you can boost 386 code a lot.
+
+By the way, remember that "pipeline overhead" is not so obvious to calculate.
+        Look at this:
+        add eax,ebx   ; opcode, mod/rm
+        add eax,1234h ; opcode, immediate_value
+        stosd         ; opcode    <--- these "slow" instruction pipes-in faster
+        pop eax       ; opcode    <--- so if you can, put 'em first
+
+------------------
+SHORT INSTRUCTIONS
+------------------
+
+Short instructions are loaded and decoded faster than longer ones
+and since 386 has no internal cache and less memory access bandwidth
+than a plain 486, this helps a lot.
+
+Well that's all for a 386.
+
+-------------------------------------------------------------------------------
+CACHE OPTIMIZATION TECHNIQUES  (THEY CAN WORK ON ANY CPU!!!!!!!!!!!!)
+-------------------------------------------------------------------------------
+
+Usually "code optimization" is cpu-based, but there more things
+up in the sky and down on earth than just a cpu... the cache for example!
+
+Well, the difference between a cache hit and a cache miss
+means lots of cpu cycles lost, so better hit the cached locations to the max.
+
+386 usually have and external 64k ... 128k cache (mine has none, sigh! :( )
+486 have a 4k internal cache and a 64k...512k (usually 256k) second level cache
+Pentiums have an Harvard 8k code + 8k data cache
+plus a 256k..1Mbyte second level cache.
+
+Use "short" loops so there is more probability that the code to execute
+will reside fully into the cache.
+
+Then remember you can count on an external cache of at least 64k
+(usually 128k..256k for a 486).
+
+So, if you have to process big arrays or big bitmaps with multiple passages
+do not "scan" all the array for every pass, use a "strip by strip"
+strategy instead so every "strip" fully fits into the cache
+and is ready for the second and third pass without cache misses.
+
+This technique is called STRIP-MINING, you can include into your program
+a routine that checks the optimal "strip size" trying a multi-pass test
+on 64k,128k,256k,512k strips and "complete array"
+and then sets the optimal "strip size" to use
+when perfoming "strip-mining" routines.
+
+On a Pentium you can use 8k "strips" so your "strip mined" routines
+will work with the full speed of the internal data cache
+(remember the internal cache works at full cpu speed while
+ the secondary cache may be runnin at half that).
+
+The advantage of strip mining is caused by the fact that
+the additional jumping/looping needed to process arrays in "strips"
+of adiacent memory locations that can fit together into the cache
+is A LOT LESS than the time caused by a single cache miss.
+
+-------------------------------------------------------------------------------
+NOT SO OBVIOUS OPTIMIZATIONS
+-------------------------------------------------------------------------------
+
+----------------------
+COMPLEX INSTRUCTIONS
+----------------------
+Intel says complex instruction are evil on 486 and up, but there are
+exceptions... expecially if want to make things run smooth on 386 too.
+
+STRING instructions are FASTER on 386, expecially if they are the first
+in a loop.
+
+If you have to move data in 32bit chunks you'd better use REP MOVSD if you can
+because it alone replaces this "simple instructions only"
+super-optimized sequence:
+
+        rep_loop:
+                mov eax,[esi]
+                add esi,4      ; or -4
+                mov [edi],eax
+                add edi,4      ; or -4
+                dec ecx
+                jne rep_loop
+
+REP MOVSD takes  2+7*n cycles on a 386 or 486
+
+While the "optimized" sequence uses EAX
+and takes [(2+4+2+2+2+2+7)*n - 4 ] = [21*n - 4] cycles on a 386
+      and [  (1+1+1+1+1+3)*n - 2 ] = [ 8*n - 2] cycles on a 486
+
+Cache-line aligning the "optimized" code on a Pentium
+i think it takes  [ 3*n ]  cycles.
+So if 486s are your base system don't throw away REP MOVSD
+
+Also remember that REP MOVSD take 2 bytes instead of 13 bytes
+does not need to use EAX (one more register free for other things)
+and it does not use the Pentium's BTB (Branch Target Buffer)
+so you can be sure it does not miss and the outer loops
+with entries in the BTB can be one level deeper.
+
+What's more, the AMD K5 automatically splits a complex instruction
+into an optimized sequence of simple instructions
+and issues them to fully utilize the four execution units it has.
+Guess what it means for poor old movsd :)
+
+<Intel bashing ON>
+Heck! I think those Intel engineers lost a big thing when they
+decided to not improve MOVS/LODS/STOS. A "blitter" unit directly
+controlled by string instructions (with "fetch ahead","bufferize"
+and "auto align" capabilities) could be a great thing for us.
+
+Think about this: a REP MOVSB/W/D "translated" to
+a "head" byte move (to align things)
+a "central" qword move (burst read/burst writes)
+and a "tail" byte move (to align things).
+And all this without trashing the processor data cache!!!!
+Can you immagine the boost your code may get?
+Heck! Sun engineers ADDED "blitter" support in their new 64bit sparc cpus
+because they seen their software moving data a lot, why Intel ones did not?
+
+On a Pentium you can get the optimal 2-cycle memory to memory MOV
+by way of pipelining, but this cannot take advantage of the fact
+that when performing REP MOVS the processor KNOWS AHEAD how many locations
+will be moved (read: on a "smarter" cpu this can help optimize to the
+max the processor-to-memory bandwidth and avoid caching overhead)
+nor it can take advantage of the full power of burst read/writes
+neither it can take advantage of the fact that WHILE THE STRING MOVE
+IS GOING ON, the processor pipelines can execute OTHER instructions after
+the MOVS and "not dealing" with the memory range "under transfert"
+or with ECX,ESI,EDI and Direction Flag.
+I hope they will take note of this for P7.
+
+<Intel bashing OFF>
+
+-------------------------------------------------------------
+THE ADDRESSING MODE ADVANTAGE
+-------------------------------------------------------------
+Don't be fooled by the current Riscy trend, be cooler than the rest.
+Some Intel "complex addressing" modes are really powerful
+if you just have enough creativity.
+Lets suppose you need to add together data from "four"
+streams of data....
+
+A riscy (risc-like) way to do this could be...
+                              ; 486 timings when looping
+      riscy_way:
+               mov eax,[esi]  ; 1
+               add esi,4      ; 1
+               add eax,[edx]  ; 2
+               add edx,4      ; 1
+               add eax,[ebx]  ; 2
+               add ebx,4      ; 1
+               add eax,[ecx]  ; 2
+               add ecx,4      ; 1
+               mov [edi],eax  ; 1
+               add edi,4      ; 1
+               dec ebp        ; 1
+               jne riscy_way  ; 3
+                              ; loop cycles = 17
+
+Now lets see the "intelly" way! :)
+Let's suppose the "counter" EBP won't exceed 2^31 -1
+we can do the following ...
+
+               ; move pointers ahead ...
+               lea esi,[esi+ebp*4]
+               lea edx,[edx+ebp*4]
+               lea ebx,[ebx+ebp*4]
+               lea ecx,[ecx+ebp*4]
+               lea edi,[edi+ebp*4]
+               neg ebp ; negate increment
+               ; then you can fully use the address unit ALU
+
+                                    ; 486 timing when looping
+    intelly_way:
+               mov eax,[esi+ebp*4]  ; 1
+               add eax,[edx+ebp*4]  ; 2
+               add eax,[ebx+ebp*4]  ; 2
+               add eax,[ecx+ebp*4]  ; 2
+               mov [edi+ebp*4],eax  ; 1
+               inc ebp              ; 1
+               jnz intelly_way      ; 3
+                                    ; loop cycles = 12
+               
+
+On a Pentium, "riscy" and "intelly" runs at nearly the same speed
+BUT ON A 486, the "riscy" way runs 30% slower than "intelly" !!!!
+
+This means that using the "riscy" code
+your 486 will look like a slow cow compared to a Pentium
+while using the "intelly" code your 486 will look good enough
+( not to mention this helps to make the difference between
+  "needs a Pentium" and "this flies on 486 too!!").
+
+-------------------------------------------------------------
+32bit ACCESS SPEAKS FOR ITSELF, just remember to fully use it
+-------------------------------------------------------------
+
+Everywhere you can, use 32bit instructions
+and if you can, align data on 32bit.
+
+For example, let's say you have to manipulate lots of strings,
+if you align them on dword boundaries (including string lenght)
+with null byte paddings, you can boost processing time MORE THAN 8 TIMES!!!!
+
+The same thing applies to manipulating 8bit bitmaps and "software" sound mixing.
+
+Into 386mixer coded a routine that mixed simultaneously 4 sound channels
+running only on internal register and mixing up to 4 samples at a time
+from the 4 channels (look at the "intelly" example above).
+
+If you need speed, you can even tollerate small calculation errors
+or reduced precision
+and manipulate successive 8,16bit values in a single 32bit instruction.
+
+Let's say you have and array of unsigned words and you need to multiply them
+for a constant, say 45, how can you do that ?
+If you know the values won't overflow the 16 bit they use
+(if they overflow you will have to choose another method), you can do the
+following:
+           mov ecx,count
+           mov esi,start_address
+     handle_two_words:
+           mov eax,[esi] ; load two words at a time
+           ; an AGI happens, but i can't eliminate it
+           lea eax,[eax+eax*4]  ; multiply by 5
+           add esi,4  ; increment pointer, avoid 486 AGI
+                      ; reduce by 1 the Pentium AGIs
+           lea eax,[eax+eax*8]  ; then multiply by 9
+           dec ecx  ; decrement counter & keep Pentium at full power
+           mov [esi],eax   ;
+           jne handle_two_words
+
+And if you have very big arrays, you can even unroll two or three times
+the loop to further speed up this code.
+
+------------------
+SELF COMPILED CODE
+------------------
+
+Sometimes you need to execute lots of times the same "jump filled"
+instruction sequence, and you know ahead what jumps will be taken
+and what won't.
+What's worse if there are lots of conditional jumps (Jcc) "in sequence"
+they may be enough to overflow the capability of branch-prediction units!!!
+
+So, what can you do?
+My answer to this is a SELF-COMPILER!!!
+A small finite state machine that instead of crunching data directly
+IT GENERATES SUPER-SPECIALIZED ROUTINES that will crunch the data in the
+fastest way the code generator knows.
+
+I've done a thing like that for the _PageFLip1 routine in 386video.asm.
+At mode initialization a code generator generates
+all the 256 blit-skip sequences the _PageFLip1 routines may need
+when copying "modified" pixels on screen.
+
+This way a call is performed only after 32 blitted pixels, instead of jumping
+every 2..4 pixels (or every pixels in the worst case situations).
+
+By the way, this is NOT self-modifying code
+this is an "integrated code compiler".
+
+------------------------------------------------------------------------------
+I hope this information has been helpful for you.
+Now make some coffee, brush your teeth and phone up your girlfriend and 
+go and see a movie.   This document will be here when you get back, and I 
+imagine there is only so much of this you can take in one day.... :-)  :-)  :-)
+
+Live long and code well...
+
+Regards,
+
+   Michael Kunstelj.
+
+Regards from me too,
+
+   Lorenzo Micheletto
+

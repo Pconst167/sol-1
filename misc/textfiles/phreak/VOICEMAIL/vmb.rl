@@ -1,0 +1,124 @@
+                      R e n e g a d e   L e g i o n
+                    T e c h n i c a l   R e p o r t s
+
+
+                         Technical Report #3
+
+                                ....
+                                ........
+                                 .........
+                                 ...    ....
+                                 ... ....
+                                 .....
+                                 ....
+                                 ....
+                                 ... ...
+                                 ...   ...
+                                 ..      ...
+                                           ...
+
+                                February 1991
+
+
+RL HQ - 617.623.7151
+
+VMB Hacking
+-----------
+
+Written By:  The Knight
+
+
+
+Ok, Here's the deal. VMB Hacking Is not a HUGE deal and there really isn't
+a great deal of 'hidden info' that isn't common sense. But, If you are out
+there trying to hack a box and can't, follow through the VERY logical and
+simple steps and make sure they are matching up.
+
+
+Step 1:
+
+Finding a VMB System
+
+There are many ways you can find a VMB system, for instance, on a BBS when
+someone says 'Here are some systems' usually thats what they're referring
+to. Also, Try setting up your scanner and listening for 'Welcome to XX
+company, Enter extension #' or something similar to that. Then you have
+found a VMB system.
+
+
+Step 2:
+
+Finding a Box
+
+This is the part where most IDIOTS fuck up. You can NOT just take ANY box.
+You must make sure that no one is using it. There are several ways to do
+this. One EASY way is when you hack it, check the date on the latest
+messages, if they are OVER a month old, then I'd say your safe to use them.
+Also, watch in case there is just like _2_ messages in there from the last
+4 months that those messages could be messages sent to ALL the boxes, see if
+they sound personal. If they DON'T, then grab the box.
+
+Let's say there's a box you REALLY want bad and someone's using it regularly,
+try doing this: Go in twice a day (make SURE you DON'T change the greeting
+etc.) and erase all the messages. He will complain and will eventually move
+out of the box. Then there is a good chance of you having that box. It's
+happned to me.
+
+
+Step 3:
+
+Hacking the VMB
+
+This is the most SIMPLE part of all. MY general method is as follows:
+
+Find a box, let's say box 260. It's empty and I want it (obviously).
+First, try passcode '000', if that doesn't work, try passcode '260',
+just make very general guesses that's ALL. Some of the MOST Common passcodes
+are:
+
+3 digit boxes:
+000
+123
+111
+222
+333
+444
+555
+666
+777
+888
+999
+box # (say it's box 260, passcode: 260)
+321
+
+4 digit boxes:
+
+1234
+0000
+1111
+2222
+3333
+4444
+5555
+6666
+7777
+8888
+9999
+box # (Say its box 1200, try passcode: 1200)
+
+
+The Key: REALLY try ALL of those. I knew one system with a passcode of
+         '5555' and NO ONE could hack it. And I did. So don't give up.
+         UNLESS you've exhausted all of those possibilities. Then forget
+         it.
+
+That's it really. The most simple thing to do. Just remember not to
+give up before you should and also try 3 digit passcodes on 4 digit
+boxes. Also, once you get in for added security, a lot of these boxes
+allow more digits for passcodes, so make a 5 digit passcode. Or if you
+thing its worth it, try like '00000' so that's really about all.
+
+Have fun and don't stop.
+
+
+

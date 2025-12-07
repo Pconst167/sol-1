@@ -1,0 +1,238 @@
+                          L0pht Security Advisory
+
+   
+           Release date: February 18, 1999
+            Application: Microsoft Windows NT 4.0
+               Severity: any local user can gain administator privileges
+                         and/or take full control over the system
+        	  
+                 Author: dildog@l0pht.com
+                    URL: http://www.L0pht.com/advisories.html
+
+---
+Overview :
+---
+
+	Microsoft Windows NT 4.0 implements a system-wide cache of
+file-mapping objects for the purpose of loading system dynamic link
+libraries (DLLs) as quickly as possible. These cache objects, located in
+the system's internal object namespace, are created with permissions such
+that the 'Everyone' group has full control over them. Hence, it is
+possible to delete these cache objects and replace them with others that
+point to different DLLs. 
+
+	When processes are created, the loader maps/loads the loading
+executable's imported DLLs into the process space. If there is a DLL cache
+object available, it is simply mapped into the process space, rather than
+going to the disk. Hence, there is an exploitable condition, when a
+low-privilege user replaces a DLL in the cache with a trojan DLL, followed
+by a high-privelege account launching a process. The high priveleged
+process will map in the trojan DLL and execute code on behalf of the low
+privelege use r. 
+
+--- 
+Affected systems:
+---
+
+	Windows NT 4.0 Server SP4
+	Windows NT 4.0 Workstation SP4
+        Other service packs are likely to be vulnerable, but the exploit has
+        not been tested on them, neither has the fix presented below.
+
+---
+Description :
+---
+
+	The Windows NT object namespace is the place where the kernel
+keeps the names of mutexes, semaphores, filemapping objects, and other
+kernel objects. It is organized hierarchically, like a directory
+structure. Amongst the directories are: 
+	
+	\Device
+	\BaseNamedObjects
+	\Driver
+	\KnownDlls
+	...
+	
+	The NT object namespace is browsable with a tool called 'WinObj
+2.0' from System Internals (their website is http://www.sysinternals.com).
+You may wish to look around this namespace and browse the default
+permissions of objects. It is quiet entertaining, really.
+
+	The "\Knowndlls" directory contains a list of DLLs in the
+c:\winnt\system32 directory, like: 
+
+	\KnownDlls\COMCTL32.dll
+	\KnownDlls\MPR.dll
+	\KnownDlls\advapi32.dll
+	\KnownDlls\kernel32.dll
+	..
+
+	All of these objects are created at boot time, and are 'permanent
+shared objects'. Normally, users can not create permanent shared objects
+(it's an advanced user right, and it is normally not assigned to any
+group, even Administrators). But the system pr eloads this cache for you.
+Permanent shared objects differ from regular shared objects only in the
+fact that they have a flag set, and an incremented reference count, such
+that if you create one, and then terminate the creating process or close
+all handle s to the object, it does not disappear from the object space. 
+
+	To exploit the poor permissions on this cache, one first needs to
+delete one of the shared objects by name, in order to later replace it. So
+we make a call to the NTDLL.DLL native function "OpenSection()", getting a
+handle to the object. Then we call the
+
+ NTOSKRNL.EXE native function "ZwMakeTemporaryObject()" which removes the
+'permanent' flag and decrements the reference counter from the object. Now
+we just call NTDLL.DLL:NtClose() on the handle and it is destroyed. 
+
+	To create a section, one calls NTDLL.DLL:CreateSection(), which is
+undocumented. There are other calls one needs to make in order to set up
+the object and open the KnownDlls directory, but they are trivial and will
+not be discussed here. Feel free to bro wse the source code presented at
+the end of this advisory to see what you need to do though. Anyway, you
+create a section (aka file-mapping) object that points to a trojan DLL. A
+good candidate for DLL trojan is KERNEL32.DLL, since it is loaded by
+pretty much every executable you're going to run.
+ 
+	Note that any DLL cache objects you create as a user can not be
+'permanent', hence, when you log out, the cache object _will_ disappear.
+So how can we get a higher privelege process to run while we're logged in?
+There are many ways. We can wait for an 'A t' job to go off, or we can set
+up the DLL hack as an 'At' job that goes off when someone else is logged
+in. But more reliable is this: 
+	
+	When a new Windows NT subsystem is started, it creates a subsystem
+process to handle various system details. Examples of these processes are
+LSASS.EXE and PSXSS.EXE. The PSXSS.EXE is the POSIX subsystem. But since
+no one ever really uses the POSIX subsys tem under NT. So, chances are, it
+won't be loaded into memory yet. Once it is, though, it's loaded until the
+machine reboots. If it loaded, reboot the machine, and it won't be :P. 
+
+	So, we launch our DLL cache hack, and then run a POSIX subsystem
+command, thus launching PSXSS.EXE (which runs as 'NT AUTHORITY\SYSTEM',
+the system account), and running our DLL with local administrator
+privileges. Incidentally, other subsystems have the
+
+ same effect, such as the OS/2 subsystem (the only other one that probably
+isn't started yet). 
+
+--- 
+Workarounds/Fixes:
+---
+	
+	I developed a patch for this security problem in the form of a
+Win32 Service program that can be installed by the Administrator of the
+system. It sets itself to run every time the system is started, and before
+the user has the opportunity to start a program, it adjusts the
+permissions of the DLL cache to something much safer. The source code for
+t his service is also provided, along with a compiled version. Links to
+the programs can be found at http://www.l0pht.com/advisories.html. 
+
+	One can verify the validity of the patch by downloading the WinObj
+v2.0 tool from System Internals (www.sysinternals.com) and inspecting the
+permissions of the KnownDlls directory, and the section objects within it. 
+
+	Microsoft has been sent a copy of this advisory, and I would
+expect a hotfix from them at some point in the near future. 
+
+---
+Example :
+---
+
+	I wrote up a trojan to test exploitability, and it was a simple
+'forwarder' DLL that had the same exported names as KERNEL32.DLL, but a
+different 'DllMain()' function, to be called when the DLL is loaded. The
+function calls in my trojan, simply forward o ff to the real KERNEL32.DLL
+calls located in a copy of the kernel that you make in 'REALKERN.DLL' in
+the c:\temp directory. 
+
+	To try out this vulnerability, obtain an account as a
+low-privilege guest user (referred to as 'Dick') and do the following: 
+
+	1. Log in as Dick at the console.
+	2. Start up two "cmd.exe" shells. Do the following in one of them.
+	3. Copy c:\winnt\system32\kernel32.dll to c:\temp\realkern.dll
+(The egg dll is hard coded to use the c:\temp directory to find this file.
+If you can't put it in c:\temp, then modify the source '.def' file to
+point to a different location and recompile eggdll.dll)
+	4. Copy the provided hackdll.exe and eggdll.dll to c:\temp
+	5. Ensure that there is no file named c:\lockout. If there is,
+delete it. The exploit uses this file as a lockfile. 
+	5. Delete the KERNEL32.DLL file-mapping object from the system cache:
+           c:\> cd\temp
+           c:\temp> hackdll -d kernel32.dll
+	6. Insert the new file-mapping object with:
+           c:\temp> hackdll -a kernel32.dll c:\temp\eggdll.dll
+           Don't hit a key in this window after hitting enter.
+	7. Now move to the other cmd.exe window that you started.
+	8. Run a POSIX subsystem command. A good way to start it is:
+	   c:\temp> posix /c calc
+	   (if you have calculator installed. If not, pick some other program)
+	9. Now the EGGDLL.DLL will prompt you with a few message boxes:
+           Say no to the "User is DOMAIN\DICK, Spawn Shell?" box.
+	   Say no to the "User is \[garbage], Spawn Shell?" box.
+           Say YES to the "User is NT AUTHORITY\SYSTEM, Spawn Shell?" box.
+ 	   Say YES to the "Winsta0" window station message box.
+           Say YES to the "Desktop" window desktop message box.
+	   You will now see a "System Console" command.com shell open up.
+           (saying yes to the next 'winlogon' box will give you something
+            funny when you log out, btw :P)
+	10. Now go back to your first cmd.exe window and hit a key to
+            unpoison the DLL cache.
+	11. In the System Console window, run the User Manager program,
+            and modify Dick's account
+            (or anyone else's for that matter) to your hearts content.
+            (NT Server) c:\winnt\system32> usrmgr
+            (NT Workstation) c:\winnt\system32> musrmgr
+
+---
+Source and Compiled Code:
+---
+
+	Exploit code can be downloaded from L0pht's website at
+http://www.l0pht.com/advisories.html. It is available in compiled form,
+and in pure source form as two zipfiles. The L0pht patch for this advisory
+is also available in both source form and compiled f orm from the same
+URL. 
+
+
+dildog@l0pht.com
+---------------
+For more L0pht (that's L - zero - P - H - T) advisories check out:
+http://www.l0pht.com/advisories.html
+---------------
+
+----------------------------------------------------------------------------
+
+Date: Fri, 19 Feb 1999 11:23:44 +0000
+From: Paul Ashton <paul@ARGO.DEMON.CO.UK>
+To: BUGTRAQ@netspace.org
+Subject: Re: L0pht Security Advisory: Windows NT
+
+Dildog <dildog@L0PHT.COM> writes:
+>                           L0pht Security Advisory
+
+> ---
+> Workarounds/Fixes:
+> ---
+>
+>       I developed a patch for this security problem in the form of a
+> Win32 Service program that can be installed by the Administrator of the
+> system. It sets itself to run every time the system is started, and before
+> the user has the opportunity to start a program, it adjusts the
+> permissions of the DLL cache to something much safer.
+
+Alternatively, you can set
+HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\ProtectionMode=1
+and reboot.
+
+
+Paul
+
+
+
+
+
+
+

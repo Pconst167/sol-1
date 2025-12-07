@@ -1,0 +1,56 @@
+>     Hi.  Does anyone remember the old version for sendmail that had the
+> wizard bug?  A lot of the books that have come out recently make passing
+> references to it, but none ever describe what it did.  So, did anyone
+> ever take advantage of this in years gone by, and if so, how?
+> Thanks.
+> --Dave
+> 
+> Note:  To anyone who thinks that this is just a request for a hack to make it
+>        easier to break into something, keep in mind that this bug was 
+>        removed from sendmail years ago (so please, no "Find out yourself, 
+>        LAMER!" replies).  Thanks.
+
+Indeed.  It was fixed well before the Internet Worm hit.
+
+Anyway -- the intended behavior of wizard mode was that if you supplied
+the right password, some other non-standard SMTP commands were enabled,
+notably one to give you a shell.  The hashed password -- one-way
+encrypted exactly as per /etc/passwd -- was stored in the sendmail
+configuration file.  But there was this bug; to explain it, I need to
+discuss some arcana relating to sendmail and the C compiler.
+
+In order to save the expense of reading and parsing the configuration
+file each time, sendmail has what's known as a ``frozen configuration
+file''.  The concept is fine; the implementation isn't.  To freeze the
+configuration file, sendmail just wrote out to disk the entire dynamic
+memory area (used by malloc) and the `bss' area -- the area that took
+up no space in the executable file, but was initialized to all zeros by
+the UNIX kernel when the program was executed.  The bss area held all
+variables that were not given explicit initial values by the C source.
+Naturally, when delivering mail, sendmail just read these whole chunks
+back in, in two giant reads.  It was therefore necessary to store all
+configuration file information in the bss or malloc areas, which
+demanded a fair amount of care in coding.
+
+The wizard mode password was stored in malloc'ed memory, so it was
+frozen properly.  But the pointer to it was explicitly set to NULL in
+the source:
+
+	char    *wiz = NULL;
+
+That meant that it was in the initialized data area, *not* the bss.
+And it was therefore *not* saved with the frozen configuration.  So --
+when the configuration file is parsed and frozen, the password is read,
+and written out.  The next time sendmail is run, though, the pointer
+will be reset to NULL.  (The password is present, of course, but
+there's no way to find it.)  And the code stupidly believed in the
+concept of no password for the back door.
+
+One more point is worth noting -- during testing, sendmail did the
+right thing with wizard mode.  That is, it did check the password --
+because if you didn't happen to do the wizard mode test with a frozen
+configuration file -- and most testing would not be done that way,
+since you have to refreeze after each compilation -- the pointer would
+be correct.
+
+		--Steve Bellovin

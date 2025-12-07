@@ -1,0 +1,4776 @@
+e! The
+following program will work, no stack increase or other problems. Note that
+v:without the sleep() only the first ctrl-e will be recognized. Guess the
+F$Sleep must reset things somehow.
+
+ #include <stdio.h>
+ #include <setjmp.h>
+ int iflag;
+ jmp_buf jmpbuffer;
+ icept(signal)
+ int signal;
+ {
+   iflag=signal;
+   printf("Signal %d processed, stack %x\n",signal,freemem());
+   if(signal==3) exit(0);   /* exit for ctrl-c */
+   else longjmp(jmpbuffer,0); /* restart for ctrl-e */
+ }
+ main()
+ {
+   setjmp(jmpbuffer); i]   intercept(icept);
+   printf("Program restarted, stack %x\n",freemem());
+   for(;;){
+    if(iflag){
+      printf("The signal flag was set in icept()\n");
+      iflag=0;
+      sleep(2); /* NEEDED!!! */
+    }
+   }
+ }
+
+ continued... {/ex post
+
+reply 12166
+ ...continued
+
+So, I'm back to where I started. I have a technique I've used under Level II,
+and it works fine (maybe??) under OSK. It all seems to be a bit too simple, but
+maybe we were making it too hard.
+
+The thing that I failed to see is that there was nothing special about going to
+the end of the intercept routine. All it does is a RTS. I assume that when {the
+interpupt is done OSK sets that stack up with the point in the program as the
+return address and then jumps to the intercept routine. But there is no
+difference between going to the end of the intercept routine and doing a return
+there than there is going to any other function... And since the setjmp() saves
+all the data and address registers and longjmp() just restores them, using this
+combo maintains the stack integrity.
+
+Now, I'm still confused my MW's refusal to permit this technique. After all, it
+_appears_ to work!
+
+There are 2 Replies.
+
+#: 12180 S12/OS9/68000 (OSK)
+    11-Sep-91  09:47:44
+Sb: #12171-#Intercepts
+Fm: Mark Wuest 74030,332
+To: Bob van der Poel 76510,2203 (X)
+
+Bob,
+ I have one process (a daemon) that gets a signal every night at midnight, does
+an fclose() and fopen() on a log file, and returns. Since the file is a log
+file, I figure we can risk missing a signal while we're switching (especially
+since we shouldn't be getting any other signals!). It has run flawlessly for
+over a year now in several places.
+ I know this is going to sound funny, but I would try to talk you out of the
+longjmp() you are doing and replace it with chain(), using the argv, argc, and
+envp you were passes in main(). This will close() all your files (the system
+will do it for you) and be more assuring of stacks, etc, being in kosher shape.
+Call me paranoid, but at best your code is not going to be easily portable to
+Unix (where your would replace chain() with a fork(), exec(), "am I the parent"
+decision, and exit()).
+ Just food for thought. OTOH, if it ain't broke, don't fix it might apply here,
+too.
+ Mark
+
+There is 1 Reply.
+
+#: 12183 S12/OS9/68000 (OSK)
+    11-Sep-91  19:08:16
+Sb: #12180-#Intercepts
+Fm: Pete Lyall 76703,4230
+To: Mark Wuest 74030,332 (X)
+
+Mark -
+
+Just a purist's thought.... while chain is less overhead than the creation of a
+new process (for other readers: since chain effectively inherits the calling
+process's resources, and they don't need to be reallocated by the system), it
+is still more overhead that just revectoring the flow of the program.
+
+I hear what you're saying ... used to be an old RS-DOS BASIC technique to make
+sure that string space, FOR stacks, and other goblins were properly in check,
+but it's still... ahh.... voodoo (grin).
+
+Pete
+
+There is 1 Reply.
+
+#: 12209 S12/OS9/68000 (OSK)
+    12-Sep-91  08:14:10
+Sb: #12183-Intercepts
+Fm: Mark Wuest 74030,332
+To: Pete Lyall 76703,4230 (X)
+
+Yeah, to be even *more* close to unix, you would os9exec() and then exit().
+Then, to port to unix would only require changing the os9exec() to the good old
+fork()-and-exec() all unix types have grown to know and love <g>. I find it
+weird that they (actually we - I work for AT&T!) didn't do the unix exec like
+OS9's. You almost *never* see a fork() in a unix program without an exec()
+right on its heels.
+ Mark
+
+#: 12220 S12/OS9/68000 (OSK)
+    12-Sep-91  23:52:01
+Sb: #12171-#Intercepts
+Fm: Kim Kempf 71161,3221
+To: Bob van der Poel 76510,2203 (X)
+
+>Now, I'm still confused my MW's refusal to permit this technique.  After
+ 
+[RE: longjmp from an intercept routine]
+ 
+Things might look OK, but your stack is overflowing.  The signals are
+delivered to the process on an alternate stack that is specific to the
+process, but different from the stack the process is using in user mode.
+You *must* call F$RTE after the intercept routine to pop the stack and
+allow the next signal to be delivered.  If you are executing
+in an intercept routine and another signal is delivered, it won't be
+processed until the intercept completes.  If you longjmp() out of it
+the F$RTE never gets called.  If you intend to clean up things and exit,
+that's not too bad, but I've yet to run into a situation that couldn't
+be reorganized to set a global exit flag to cause the program to exit.
+ 
+The warnings by MW about I/O are historical because signals in the past
+(before V1.3?) were not queued:  if the process was in the intercept
+handler, the signal being sent was discarded.  Now they are queued and
+you're obligated to process them promptly or things start to get wasted.
+C language I/O (read printf()) use static memory for output buffers which
+may get stomped on if they are running and a signal interrupts it.  Even
+worst, malloc() has this problem (yikes!).  The safest signal handlers
+(in UNIX, too) just set global flags and return.  A fully ANSI-comformant
+program is restricted to this anyway.  Hope this helps.
+
+There are 2 Replies.
+
+#: 12231 S12/OS9/68000 (OSK)
+    13-Sep-91  08:58:57
+Sb: #12220-Intercepts
+Fm: Mark Wuest 74030,332
+To: Kim Kempf 71161,3221 (X)
+
+Kim,
+
+ Just out of curiosity, I ran Bob's sample code under srcdbg, and the usp
+stayed the same. Are you saying there is *another* stack (even other than the
+system stack) that is getting marfed? I was honestly surprised that the usp
+stayed ok.
+ Mark
+
+#: 12237 S12/OS9/68000 (OSK)
+    13-Sep-91  21:23:39
+Sb: #12220-#Intercepts
+Fm: Bob van der Poel 76510,2203
+To: Kim Kempf 71161,3221 (X)
+
+Kim, thanks for the details on intercept routines. I'll be interested to read
+your reply to Mark's query (yet another stack?). But I still don't understand
+something: just when does the F$RTE get called? Surely the C compiler is not
+intelligent to create my intercept function differently from any other
+function--and they all end the same by doing a RTS. Oh, does the intercept
+routine itself set up the stack so that the RTS branches to the F$RTE and from
+there back to the program?
+
+Yes, you are correct in that it is possible to rewrite a program to check
+global flags.... but the question which has to come up is--in how many
+different places should one check? And there is always the possibility that
+(especially during development!) that a minor loop might be infinite and the
+only way out of the *$*%**$# thing is to hit ABORT. If the intercept just sets
+a flag, hitting ABORT is not going to be all the helpful. Well, I guess it
+could set a global flag, and have a panic flag too which causes a exit via the
+intercept if a certain number of ABORTs have been done... but for termination I
+think that doing a cleanup from the intercpet and then an exit is the cleanest.
+
+The longjmp() technique is pretty sleasy. But, again, it is a nice way to
+restart to a known point (esp. in games, etc.). Again, the checking of global
+flags in who knows how many places can get pretty tedious. Plus, it slows down
+the response time...
+
+There are 2 Replies.
+
+#: 12253 S12/OS9/68000 (OSK)
+    15-Sep-91  11:17:02
+Sb: #12237-#Intercepts
+Fm: Robert Heller 71450,3432
+To: Bob van der Poel 76510,2203 (X)
+
+The "other stack" is probably not an A7-type stack (USP/SSP), but the signal
+queue/process state info in your process's descriptor.  This is what the F$RTE
+"pops".  It is not so much a stack but your process's state - in intercept vs.
+not in intercept.  When your intercept routine is called, you get called with a
+stack frame above your current USP (i.e. the kernel pushes stuff (its user-mode
+return address, the signal number, etc) onto your stack.
+
+A longjump will restore the USP/registers/PC to the state at the setjump, but
+does nothing about your process's state info in its process descriptor.
+
+VMS (as well as UNIX and OS9) has a simular problem with I/O in Control-C
+handlers.  We have this big system (LLVS), written in a combination of C and
+VAXLIsp.  A Control-C handler is provided to allow users to abort an task. The
+way it work is there is a ^C handler that just sets a global flag and another
+function that is called at periodic times from the main program which checks
+the ^C flag.  I've found this method of handling ^C's to be the safest (and
+most portable) way to go.  Almost any program has one or more major loops -
+adding one line of code (check_control_c();) is usually easy.  The control c
+checking function checks the global flag, and if set, does the cleanup and
+exits.
+
+                        Robert
+
+There is 1 Reply.
+
+#: 12254 S12/OS9/68000 (OSK)
+    15-Sep-91  16:44:22
+Sb: #12253-Intercepts
+Fm: James Jones 76257,562
+To: Robert Heller 71450,3432 (X)
+
+Agreed--long, long ago when I ported a ed-like line editor to OS-9 from CP/M, I
+decided to go that route, in large part because just doing a longjmp,
+attractive as it may seem, also wouldn't let me guarantee that the editor's
+internal data structures were consistent.  Some stuff just can't be interrupted
+in some places.
+
+#: 12258 S12/OS9/68000 (OSK)
+    15-Sep-91  21:58:22
+Sb: #12237-#Intercepts
+Fm: Kim Kempf 71161,3221
+To: Bob van der Poel 76510,2203 (X)
+
+OSK uses 3 stacks at any one time: the user stack (usp), the system stack
+(ssp), and an interrupt stack.  The user and system stack are one per
+process.  When an interrupt occurs, OSK moves the stack to the special irq
+stack and runs from there until all the irqs return.
+ 
+The C compiler (actually C library) is tricky enough to see that F$Rte gets
+called when you return from your signal handler.  And don't call me Surely.
+When you call intercept() the C library stashes your function away and calls
+F$SSig (or something like that) to call it's own routine on a signal.  Your
+routine is called and when it returns, the wrapper routine returns via
+F$RTE.  Thus, your signal handler is wrapped by the C library's handler.
+Trace the code in your signal handler (asm level) and see for yourself.
+ 
+These days, signals in OSK are a lot more reliable than they used to be.
+You can be more robust in signal handlers now.  My point is that you should
+realize how the signal/intercept works and set your program up in the best
+way.  longjmp() sucks any time of the month and will really do nasty things
+when used to jump out of a signal handler.  signal handlers that clean up
+and die work the best.  The signal facility was not really designed to be
+an event dispatch routine, but if you can get it to work, hey that's OS-9
+for ya...
+
+There is 1 Reply.
+
+#: 12275 S12/OS9/68000 (OSK)
+    17-Sep-91  21:11:54
+Sb: #12258-#Intercepts
+Fm: Bob van der Poel 76510,2203
+To: Kim Kempf 71161,3221
+
+Kim,
+
+Thanks for the details. It is making more sense all the time.
+
+Re your comment "don't call me Surely" -- I don't understand?
+
+It is too bad that OSK does not have a routine which could do a ctrl-c
+dispatch. I can think of lots of applications -- some serious, others fun. For
+example(s):
+
+1. It'd be nice to have a ctrl-c menu pop up in an application which would
+permit some kind of sub-task in an overlay window (calc, calendar, etc.).
+
+2. If a game (like pacman?) is being done then ctrl-c would be great for a menu
+which would change colors, pause, restart, etc.
+
+We could go on. But the key is that these applications need IMMEDIATE response
+-- not the kind of thing which happens when flags are checked from loops. I
+don't see why it should be a problem either. Could a function be written which
+pulls the interput stuff of the stack and then does something like a longjmp()
+to a previously set point in the program. Guess that the routine would just
+have to change the return point from the intercept from the program location to
+the restart point?
+
+There are 2 Replies.
+
+#: 12276 S12/OS9/68000 (OSK)
+    17-Sep-91  22:20:57
+Sb: #12275-#Intercepts
+Fm: Kevin Darling 76703,4227
+To: Bob van der Poel 76510,2203 (X)
+
+Bob - re: "don't call me Surely (Shirley)".
+
+HEHE.  Haven't you ever seen the "Airplane" comedy movies?  When someone would
+say "Surely, you can't mean that!", the stock answer was "Yes, I do. And don't
+call me Shirley!"
+
+You had asked Kim: "Surely the C compiler is smart enough... " or something
+like that, you see.
+
+GRIN
+
+There is 1 Reply.
+
+#: 12279 S12/OS9/68000 (OSK)
+    18-Sep-91  21:07:35
+Sb: #12276-Intercepts
+Fm: Bob van der Poel 76510,2203
+To: Kevin Darling 76703,4227 (X)
+
+Oh, I get it! But it's been sooooo long since I saw "Airplane" that it wasn't
+really at the top of my gray cells.
+
+#: 12277 S12/OS9/68000 (OSK)
+    18-Sep-91  07:25:28
+Sb: #12275-#Intercepts
+Fm: Mark Wuest 74030,332
+To: Bob van der Poel 76510,2203 (X)
+
+Bob,
+ I hope Kim pops in with a more definitive answer, but the most important thing
+to remember is the *reason* MW says to make signal handlers very short. There
+is really only one - you risk missing signals. eg: You type ctrl-c, and while
+your signal handler is out doing something, you type ctrl-c two *more* times.
+When your program finishes what it was doing with the first ctrl-c, it will
+only get one more signal, missing one of the ctrl-c's you typed.
+ Programs under OS9 do what you are describing all the time, because the
+programmer knows he doesn't care if he misses a signal at that point. The
+*important* thing is to be *aware* of how it works. It's not a bug (or a
+"feature" <g>), it's just the way it is. Almost all versions of Unix do the
+same thing, BTW.
+ Good luck!
+ Mark
+
+There is 1 Reply.
+
+#: 12280 S12/OS9/68000 (OSK)
+    18-Sep-91  21:07:53
+Sb: #12277-#Intercepts
+Fm: Bob van der Poel 76510,2203
+To: Mark Wuest 74030,332 (X)
+
+I think the only remaining problem comes with combining longjmp() and
+intercepts(). Seems that according to Kim, unless one actually leaves the
+user's intercept trap function things will remain stacked until the program
+terminates. If this is true, then things will run fine for a while--and then
+the whole thing will end with some kind of stack (or queue) overflow. I'm not
+ever sure in my trick of doing a sleep() in the sample code I uploaded a while
+ago actually cleans the queue (or stack). I think it just re-enables the
+intercepts? I have no problem with missing interupts in this situation. Matter
+of fact, I'm not even writing a program which needs this techique right now
+-but I have used it in the past under 6809, and it might be the route I'd
+choose (if I have confidence in things) if I do a port. Yeah, I know it won't
+port to Unix that way, but since I don't have a Unix box I don't really care.
+
+BTW, I hope that someone is capturing this thread. You and Kim and others have
+made this a most interesting and useful topic!
+
+There is 1 Reply.
+
+#: 12285 S12/OS9/68000 (OSK)
+    19-Sep-91  07:53:30
+Sb: #12280-Intercepts
+Fm: Mark Wuest 74030,332
+To: Bob van der Poel 76510,2203 (X)
+
+Bob,
+ I think there is one thing that neither Kim nor I made very clear. You should
+not do the longjmp() out of the signal trap. You must return() from it so the
+kernel can clean up, unless you exit() or chain() in which case there will be
+nothing to clean up.
+ I guess to summarize:
+ "Bob, this is your conscience speaking. Take that longjmp() out the the signal
+trap and re-start the process instead. Please, before it's too late...."
+
+ <g>
+ Mark
+
+#: 12172 S10/OS9/6809 (CoCo)
+    10-Sep-91  22:21:47
+Sb: #12169-#mod help
+Fm: Erich Schulman 75140,3175
+To: Everett Chimbidis 76370,1366 (X)
+
+I reviewed docs for os9p3 so I'll be better prepared.  Let me know if you are
+upgrading EZGen or if you want to go on now.  Do you have 128K?  If so, that's
+why you have a lot of trouble with MultiVue.  You have upon bootup, at most,
+56K free.  Possibly even 40K depending on the boot file's contents. When I had
+1228K, I had 40K free for OS-9.  Even with 56K, you just have too little to get
+much done, esp. with something like MV in RAM.  There are other advantages to
+512K both in and out of MV so if you have 128K, I'd suggest you upgrade soon. 
+It will make a big difference.  And since you do have MV (I was going to ask
+later on too! :-) ), you might want to install some of MV's modules in your
+boot file along with os9p3.  They will work and can be quite helpful.  Some
+applications require the windint module whether you're using MV or not.  Right
+now, you might want to put MV's fstat command in your usual commands directory,
+then do fstat /d0/sys/stdfonts (or any other file you want to check).  I think
+you'll find fstat to be a helpful MV thing you can always use in OS-9.  But it
+does use 16K I believe. I did get your email; I'll examine it in detail later
+on.  But I'd say we're about ready to get down to work.
+
+There is 1 Reply.
+
+#: 12174 S10/OS9/6809 (CoCo)
+    10-Sep-91  23:39:59
+Sb: #12172-#mod help
+Fm: Everett Chimbidis 76370,1366
+To: Erich Schulman 75140,3175 (X)
+
+I do have a 512 k computer and have mv do you need to see fstat on some of my
+files? I am ready to go on now !! No time to waste! OK?
+
+
+
+There is 1 Reply.
+
+#: 12195 S10/OS9/6809 (CoCo)
+    11-Sep-91  22:55:53
+Sb: #12174-mod help
+Fm: Erich Schulman 75140,3175
+To: Everett Chimbidis 76370,1366 (X)
+
+No, I don't need fstat on anything you have.  I just wanted to make sure you
+were aware that you can use fstat any time you're using OS-9, and IMHO it's a
+helpful command.  Since you do have 512K, do you also have RAMdisk software? 
+Using a RAMdisk will make changing your boot file both faster and a little
+easier (esp. if you have a one-drive system).
+
+#: 12173 S10/OS9/6809 (CoCo)
+    10-Sep-91  22:23:21
+Sb: #12170-#mod help
+Fm: Erich Schulman 75140,3175
+To: Everett Chimbidis 76370,1366 (X)
+
+I didn't get kutil on cis so I'm not sure if you can download it here or not. 
+I'll see if I can find it and if I can't I'll upload it.
+
+There is 1 Reply.
+
+#: 12175 S10/OS9/6809 (CoCo)
+    10-Sep-91  23:41:28
+Sb: #12173-#mod help
+Fm: Everett Chimbidis 76370,1366
+To: Erich Schulman 75140,3175 (X)
+
+OK I can't wait to get the file!!
+
+Also will reupload you a list in Email ok?
+
+
+
+There is 1 Reply.
+
+#: 12196 S10/OS9/6809 (CoCo)
+    11-Sep-91  22:59:37
+Sb: #12175-#mod help
+Fm: Erich Schulman 75140,3175
+To: Everett Chimbidis 76370,1366 (X)
+
+kutil doesn't seem to be available for download on CIS.  I will upload it to
+Library section 9 (Utilities) soon.  That way everyone can download it and try
+it out.  You will =not= need kutil to install os9p3, but it would still be a
+good program to have.
+
+There is 1 Reply.
+
+#: 12200 S10/OS9/6809 (CoCo)
+    12-Sep-91  00:39:20
+Sb: #12196-#mod help
+Fm: Everett Chimbidis 76370,1366
+To: Erich Schulman 75140,3175 (X)
+
+Do I need any other programs to show you my boot?
+
+There is 1 Reply.
+
+#: 12201 S10/OS9/6809 (CoCo)
+    12-Sep-91  00:52:28
+Sb: #12200-#mod help
+Fm: Erich Schulman 75140,3175
+To: Everett Chimbidis 76370,1366 (X)
+
+Not really.  Ident is sufficient, though a listing of EZGen might be good to
+have as well.  I believe your email's have enough info.
+
+There is 1 Reply.
+
+#: 12213 S10/OS9/6809 (CoCo)
+    12-Sep-91  20:34:23
+Sb: #12201-#mod help
+Fm: Everett Chimbidis 76370,1366
+To: Erich Schulman 75140,3175 (X)
+
+When will you have the bootlist done?
+
+
+
+There is 1 Reply.
+
+#: 12218 S10/OS9/6809 (CoCo)
+    12-Sep-91  22:57:30
+Sb: #12213-mod help
+Fm: Erich Schulman 75140,3175
+To: Everett Chimbidis 76370,1366 (X)
+
+We'll be ready soon.  Check your Email.
+
+#: 12177 S11/OS9/6809 (Non-CoCo)
+    11-Sep-91  07:54:57
+Sb: #80/40 tracks
+Fm: Steve Wegert 76703,4255
+To: Kev 76703,4227 (X)
+
+Kev,
+
+Blame Mark for this one ... he said you had all the answers!  :-)
+
+
+I have a heap of 80 track 5.25 floppies in CoCo format, that I need to get to
+40 track DSDD 5.25 format. (I don't have a 5.25 80 track drive).
+
+Barry (who only has 80 track drives) has offered to convert the disk for me.
+He'll be using his new TC70 to accomlish this task.
+
+First question:
+
+Can an 80 track drive be set up to read/write to a 40 track diskette?
+
+If so ... what values need to be dmoded?
+
+Steve
+
+There is 1 Reply.
+
+#: 12179 S11/OS9/6809 (Non-CoCo)
+    11-Sep-91  09:23:11
+Sb: #12177-#80/40 tracks
+Fm: Kevin Darling 76703,4227
+To: Steve Wegert 76703,4255 (X)
+
+Steve,
+
+Woof <tm-Pete>.  An 80tk drive can certainly read a 40tk disk... nothing
+special needs to be done to do that.  The driver figures it out when it reads
+LSN 0.
+
+Writing can also be done, tho I'd backup the resulting disks on the 40tk drive
+to make sure you have a good strong copy.  I'd also format the disks on the
+40tk drive.  This is from my own experience;  others may have other views :-)
+
+We'll soon find out.  Grin. - kev
+
+There is 1 Reply.
+
+#: 12184 S11/OS9/6809 (Non-CoCo)
+    11-Sep-91  19:10:40
+Sb: #12179-#80/40 tracks
+Fm: Pete Lyall 76703,4230
+To: Kevin Darling 76703,4227 (X)
+
+For reasons I'll happily explain on demand, you really don't want to write on a
+40 tracker while in your 80 track drive. It may appear fine, until you stick it
+back in a 40 tracker....
+
+Pete
+
+There are 2 Replies.
+
+#: 12187 S11/OS9/6809 (Non-CoCo)
+    11-Sep-91  20:39:11
+Sb: #12184-#80/40 tracks
+Fm: Steve Wegert 76703,4255
+To: Pete Lyall 76703,4230 (X)
+
+Soooooooooo ...
+
+What I'm hearing is I can't get there from here?
+
+Am I doomed to adding an 80 track drive to my setup?
+
+Steve
+
+There are 2 Replies.
+
+#: 12189 S11/OS9/6809 (Non-CoCo)
+    11-Sep-91  20:54:42
+Sb: #12187-#80/40 tracks
+Fm: James Jones 76257,562
+To: Steve Wegert 76703,4255 (X)
+
+You can read and write 40 track disks on an 80 track drive...MOST of the time.
+
+What you DO NOT want to do is write on a 40 track disk that's been written on
+with a 40 track drive with an 80 track disk.  Say what?!
+
+I'll be clear this time. :-)  Consider this (as REM would say): you format a
+40-track disk on a 40-track drive.  Formatting it requires writing on it... at
+least writing E5E5E5E5...all over it, and a allocation bitmap, and LSN 0, and a
+mostly empty root directory.
+
+OK, you take this disk over to an 80-track drive.  It reads it just fine... and
+then you write on it.  The 80-track drive has a read/write head half as wide as
+a 40-track drive--makes sense, right?  So, the 80-track drive is really only
+writing, where it writes, on half the space the 40-track drive wrote on. 
+Everything is hunky-dory...
+
+..until you bring the disk back to a 40-track drive and try to read it.  In the
+spots the 80-track drive wrote on, it's half the old stuff that the 40track
+drive wrote and half the new stuff that the 80-track drive wrote.  The 40-track
+drive gets heavily confused, and it's read error time.
+
+So, the rule is this: if an 80-track drive EVER writes on a 40-track disk, the
+ONLY drives that can write on it are 80-track drives.  If that's inconvenient
+or won't work for what you want to do, you'll need both kinds of disk for
+writing purposes.
+
+There is 1 Reply.
+
+#: 12223 S11/OS9/6809 (Non-CoCo)
+    13-Sep-91  07:13:26
+Sb: #12189-80/40 tracks
+Fm: Steve Wegert 76703,4255
+To: James Jones 76257,562 (X)
+
+Ok ... sounds as if I need to do some hardware shopping.
+
+
+<mutter>
+
+
+Owell ... I accepted this hobby, black hole and all!  :-)
+
+Steve
+
+#: 12199 S11/OS9/6809 (Non-CoCo)
+    12-Sep-91  00:13:03
+Sb: #12187-#80/40 tracks
+Fm: Pete Lyall 76703,4230
+To: Steve Wegert 76703,4255 (X)
+
+Steve,
+
+Eh? You'll need an 80 tracker to read 80's and 40's. A 40 tracker is
+only good for 40's (and 35's, of course).
+
+Reason why? Well, in order to get 80 tracks in the same space as 40,
+they had to cut down both the intertrack gap size and the track width,
+so an 80 track head cuts a narrower swath (magnetically). Imagine
+that this is a 40 track 'data' track:
+
+    4040404040404040404040404040404040404040
+    4040404040404040404040404040404040404040
+    4040404040404040404040404040404040404040
+
+And this is an 80 tracker's data:
+
+    8080808080808080808080808080808080808080
+
+If you wrote on a diskette that had been perviously treated (written;
+formatted) by a 40 tracker, you'd get this:
+
+
+    404040404040404040404040404040404040404040
+    808080808080808080808080808080808080808080
+    404040404040404040404040404040404040404040
+
+In other words, the 80 track narrow data track would be imposed upon
+the existing wider 40 track path. You're okay if you only read this
+with the narrower 80 track head, which will reject the side garbage
+that's leftover from the 40 track data. HOWEVER, if you reinsert this
+in a 40 track drive and try to read it, the wider 40 track head MAY
+see both the new 80 track written data and the older, corrupt, 40 track
+data... it's really a hairy issue of luck and (mis)alignment if it works.
+In the process, it may render the disk unreadable by anything but the
+80 track drive.
+
+While some of this was simplified for the sake of explanation, this
+is basically the problem.
+
+Pete
+
+There is 1 Reply.
+
+#: 12224 S11/OS9/6809 (Non-CoCo)
+    13-Sep-91  07:17:33
+Sb: #12199-#80/40 tracks
+Fm: Steve Wegert 76703,4255
+To: Pete Lyall 76703,4230 (X)
+
+As the little red headed girl would say, "Gotit dude!"
+
+I'll be scouting around from an 80 tracker. Mayhaps we have something laying
+around the equipment room at the office I cn borrow for the task.
+
+Thank god I have a /d1 descriptor already in my boot that I could dmode up to
+the proper parameters. My system has been struck with the a terminal case of
+the BLOB. No way, no how can I come up with a different bootfile that what I
+currently have.\
+
+Can OSK be too far off in my future?
+
+
+Thanks for the explanation (you too James!).
+
+Steve
+
+There are 2 Replies.
+
+#: 12232 S11/OS9/6809 (Non-CoCo)
+    13-Sep-91  10:49:09
+Sb: #12224-80/40 tracks
+Fm: Pete Lyall 76703,4230
+To: Steve Wegert 76703,4255 (X)
+
+De nada, dude.
+
+Pete
+
+#: 12242 S11/OS9/6809 (Non-CoCo)
+    14-Sep-91  08:21:41
+Sb: #12224-80/40 tracks
+Fm: Robert A. Hengstebeck 76417,2751
+To: Steve Wegert 76703,4255 (X)
+
+I put in an 80 track disk drive, in my system years ago it seems.  And it
+wouldn't work.  I found out after taking it to Ron Schmidts of L R Techs fame,
+that it was really a 1.2 meg drive.  Fortunately, I was able to trade it for a
+720K drive, and everybody was happy.  So the word for the wise is
+.....etc.
+
+#: 12190 S11/OS9/6809 (Non-CoCo)
+    11-Sep-91  21:10:13
+Sb: #12184-80/40 tracks
+Fm: Kevin Darling 76703,4227
+To: Pete Lyall 76703,4230 (X)
+
+Ooops. You're right. He should probably format the disk in the 80tk drive, yes?
+
+I mean, if this is the only way to get copies over.  Be better if someone had
+both kinds of drives, of cuss.
+
+#: 12178 S1/General Interest
+    11-Sep-91  08:29:47
+Sb: OS9p3
+Fm: Paul Hanke 73467,403
+To: anyone
+
+What is OS9p3 I've seen mentioned lately?    -ph-
+
+#: 12181 S1/General Interest
+    11-Sep-91  18:02:01
+Sb: #12152-#gshell+
+Fm: Bob Santy 76417,714
+To: Paul Hanke 73467,403 (X)
+
+Paul:
+
+What does IDENT say about the original gshell BEFORE running IPatch?
+
+IPatch opens the second argument (assumed to be the original module) for input
+and does not modify it.  I would guess that the original is somehow corrupted. 
+Offset 2 in the module header is the most significant byte of the module size. 
+A size of $FF.. would make for a pretty large module.
+
+Bob
+
+
+
+There is 1 Reply.
+
+#: 12182 S1/General Interest
+    11-Sep-91  18:10:19
+Sb: #12181-#gshell+
+Fm: Bob Santy 76417,714
+To: Bob Santy 76417,714 (X)
+
+Paul:
+
+I just noticed that the output file was named "gshell+".  The "+" is not a
+legal OS9 file name character and may be the problem.  IPatch probably opened
+"gshell" for output as well.  Try another (legal) name.
+
+Bob
+
+There are 2 Replies.
+
+#: 12185 S1/General Interest
+    11-Sep-91  19:19:33
+Sb: #12182-gshell+
+Fm: Paul Hanke 73467,403
+To: Bob Santy 76417,714 (X)
+
+Ok, will try it later.   -ph-
+
+#: 12191 S1/General Interest
+    11-Sep-91  21:43:31
+Sb: #12182-gshell+
+Fm: Paul Hanke 73467,403
+To: Bob Santy 76417,714 (X)
+
+Yep, that did it. That also explains why I was able to successfully upgrade
+gshell some time ago - just used a filename without the '+'  as whimsically as
+I used it this time.  Thanks.   -ph- 
+
+#: 12186 S12/OS9/68000 (OSK)
+    11-Sep-91  20:05:08
+Sb: #$1000 doorstop
+Fm: Jim Peasley 72726,1153
+To: Mark Griffith 76070,41 (X)
+
+Mark;
+ 
+  Looks like you are my only hope of getting my MM/1 fixed in the near
+future.
+  My Power Supply started making noises like the fan rubbing on 8/21,
+less than 2 weeks after I received it.  I left Paul a note on 8/22
+(which he still hasn't read) and finally got through to him on 8/30.
+He was going to call me back that afternoon, but never did.  I still
+don't know what must be done to resolve the situation.
+ 
+  In desperation, I swapped the PS in this '386 clone that I'm using now
+with the MM/1's, and the fan wouldn't even run.  Yes, the outputs are
+the same!  Replacing the original PS, even though the fan? runs noisily,
+the MM/1 will boot, but the screen is only faintly glowing - no readable
+output, but it IS blue.
+ 
+  Q.  Is the MM/1 PS a 'special animal' that requires a very small load?
+  Q.  Are there any measurement points on the system board that I can
+      check with a VOM?
+  Q.  In the event I need to send it in, should I sent the whole setup,
+      or just the system board & PS?
+  Q.  Why won't this '386 PS work with the MM/1?
+  Q.  Where's PAUL???
+ 
+  I'm not *real* happy with my $1000 doorstop at this point!
+ 
+  Thanks,
+      ...Jim
+ 
+ 
+
+There are 2 Replies.
+
+#: 12203 S12/OS9/68000 (OSK)
+    12-Sep-91  04:05:06
+Sb: #12186-#$1000 doorstop
+Fm: Scott t. Griepentrog 72427,335
+To: Jim Peasley 72726,1153 (X)
+
+Assumming you have only one board, and one (or two) floppies, the power
+requirements of your system are *very* small.  The 386 power supply, while
+completely compatible (the MM1 PS is a standard PC design), needs a little bit
+more load before it will fire up.  This can be solved easily by any method that
+puts more load on the power supply.  If you have a 'spare' hard drive sitting
+around (say something that doesn't work even, but spins), that would be ideal
+to use as a load.  Other alternatives include using a large wattage resistor,
+probably somewhere around 50 ohm (I 'm gessing here - don't take my word!),
+connected between +12 and ground. Since the MM1 and these newer 3-1/2" drives
+use so little if any current from 12 volts, this is most likely the only
+voltage you'll need to load. If that still doesn't work though, try putting a
+load on 5 volts too. Obviously, a spare hard drive makes for the simplest test.
+Let me know how you fare.
+
+StG
+
+There is 1 Reply.
+
+#: 12211 S12/OS9/68000 (OSK)
+    12-Sep-91  09:06:54
+Sb: #12203-#$1000 doorstop
+Fm: Jim Peasley 72726,1153
+To: Scott t. Griepentrog 72427,335 (X)
+
+Scott;
+
+  Thanks,  I hadn't thought of spinning up a HD - no I/O board yet. I've got a
+spare IDE that I'll hook up as a load this evening and let you know.
+
+  Do you carry advertising in the OSK'er?  Not subscribing to RAINBOW any
+longer, I'm kinda in the dark about new software offerings for OS-9. I think
+that I've got your address around here somewhere, but why don't you post it
+again, along with sub. rates.
+
+  Thanks,
+     ...Jim
+
+
+
+
+There is 1 Reply.
+
+#: 12212 S12/OS9/68000 (OSK)
+    12-Sep-91  10:51:39
+Sb: #12211-$1000 doorstop
+Fm: Scott t. Griepentrog 72427,335
+To: Jim Peasley 72726,1153 (X)
+
+Yes, we carry advertising in the OSK'er.  Several outfits that are either
+selling OSK hardware or software.  And, we still support 6809 OS9 too!
+
+Subscriptions are $12 in the U.S.  For more info, call me at (317) 668-8878.
+The OSKer SMAILbox is P.O. Box 24285, Speedway IN 46224.
+
+p.s. the rates are going up shortly...
+
+StG
+
+#: 12208 S12/OS9/68000 (OSK)
+    12-Sep-91  05:02:01
+Sb: #12186-#$1000 doorstop
+Fm: Mark Griffith 76070,41
+To: Jim Peasley 72726,1153 (X)
+
+Jim,
+
+  Q.  Is the MM/1 PS a 'special animal' that requires a very small load?
+
+No, not really.  A new PS from some of the catalogs goes for around $80.
+
+  Q.  Are there any measurement points on the system board that I can
+      check with a VOM?
+
+Pin 1 on the backplane is ground, pins 61 and 62 or 5 volts and 63 and 64 12
+volts.  You should get these readings there.
+
+  Q.  In the event I need to send it in, should I sent the whole setup,
+      or just the system board & PS?
+
+Well, if you can't find Paul, the best thing to do would get a new PS and then
+get Paul to repay you for it since it is under warrenty.  Any store that sells
+PC parts and supplies will be able to help you if you bring the old PS in with
+you.
+
+If the MM/1 still doesn't work after that, then send it to me by itself.
+
+  Q.  Why won't this '386 PS work with the MM/1?
+
+Probably not enough current draw to get it going. The MM/1 is a very very low
+draw machine.
+
+  Q.  Where's PAUL???
+
+Don't feel bad about not getting Paul.  I haven't been able to talk to him in a
+couple weeks now (grin).  He is very very busy.
+
+Mark
+
+There are 2 Replies.
+
+#: 12210 S12/OS9/68000 (OSK)
+    12-Sep-91  09:06:29
+Sb: #12208-$1000 doorstop
+Fm: Jim Peasley 72726,1153
+To: Mark Griffith 76070,41 (X)
+
+Mark;
+
+  Thanks for the prompt reply.  StG suggested loading the PS with a HD which
+I'll try this evening.  Failing that, I'll make some voltage measurements and
+let you know what I find.
+
+  It's good to see you (back) on CIS... I get the OS-9 and COCO list feeds at
+work, but don't have reply capability and it's really frustrating to not be
+able to jump into some of the discussions.  :-(
+
+  A non-related question while I've got you: While my MM/1 WAS working,  I
+tried using it for communication, but when CTRL<T>ransmitting ready-to-go
+messages, each time the MM/1 / STERM combination would totally thrash my
+message.  At first I thought it was the phone cord, as I had the machine set up
+away from it's normal phone jack,  but the same phone line/modem/modem cable
+works just fine with PROCOMM and the PC.
+  Could this be related to the PS problems do you think?
+
+  Thanks,
+      ...Jim
+
+
+
+
+#: 12221 S12/OS9/68000 (OSK)
+    13-Sep-91  00:46:57
+Sb: #12208-#$1000 doorstop
+Fm: Jim Peasley 72726,1153
+To: Mark Griffith 76070,41 (X)
+
+Mark;
+
+  With a replacement PS and a HD + 2 floppies as a load, the MM/1 will boot
+O.K. and it'll respond to the keyboard when I do a 'dir', but the screen is
+just barely glowing a deep blue.  My startup creates a 2nd window that's black
+on white, but F2'ing to /w2, there's no change in the screen.   Unplugging the
+HD causes the PS to switch out, and there is no output.
+
+  Looks like maybe the video circuit took a hike, no?  The CM-8 works O.K. on
+the CoCo, so that's also not a possibility.
+
+  What next?  I eagerly await your reply!  ;-)
+
+..Jim
+
+
+
+There are 2 Replies.
+
+#: 12222 S12/OS9/68000 (OSK)
+    13-Sep-91  05:05:16
+Sb: #12221-#$1000 doorstop
+Fm: Mark Griffith 76070,41
+To: Jim Peasley 72726,1153 (X)
+
+Jim,
+
+Guess the next step is to send your board in to me.  No need to send the case
+and PS.  Haven't seen a problem like this one before so it will be a learning
+experience.  My address is:
+
+Mark Griffith 953 W. Wisconsin Ave. DeLand FL 32720
+
+(904) 736-1535
+
+Mark
+
+There is 1 Reply.
+
+#: 12238 S12/OS9/68000 (OSK)
+    13-Sep-91  22:08:46
+Sb: #12222-$1000 doorstop
+Fm: Jim Peasley 72726,1153
+To: Mark Griffith 76070,41 (X)
+
+Mark;
+
+  O.K. - the board is on it's way to you in the A.M.
+
+I left a message for Paul this morning, but I guess he's busy with the
+convention and couldn't reply.
+
+  Will be real interested to find out what the problem is/was.
+
+Thanks,
+  ...Jim
+
+
+
+#: 12234 S12/OS9/68000 (OSK)
+    13-Sep-91  17:51:47
+Sb: #12221-#$1000 doorstop
+Fm: John R. Wainwright 72517,676
+To: Jim Peasley 72726,1153 (X)
+
+Hey Jim, you already looked REAL CLOSE at your MM/1 - CM8 cable (or adaptor)
+right?  One of my best tricks is to create a new problem by knocking something
+loose while I am fixing the original problem.  (Just a thought).
+
+JohnW
+
+There is 1 Reply.
+
+#: 12239 S12/OS9/68000 (OSK)
+    13-Sep-91  22:09:07
+Sb: #12234-#$1000 doorstop
+Fm: Jim Peasley 72726,1153
+To: John R. Wainwright 72517,676 (X)
+
+John;
+
+  Yep, first thing I did was to pull the board and examine it with a 10X loupe
+for extraneous parts/filings/broken traces/etc.   Figgered that _I_ screwed
+something up!
+
+  The CM-8 works fine with the CoCo, so that's not it either...  I had to make
+my own cable/adapter and at least I'm qualified with a soldering iron!
+         :-)
+  I cut the plug off the CM-8 and connected a DB9 to the cable, then made a 10
+pin IDC header plug to DB9 male cable that I keep plugged into CoCo. That way I
+don't have to keep picking the doggone thing up to plug/unplug the video cable.
+
+..Jim
+
+There is 1 Reply.
+
+#: 12240 S12/OS9/68000 (OSK)
+    13-Sep-91  23:11:09
+Sb: #12239-#$1000 doorstop
+Fm: Randy Wilson 71561,756
+To: Jim Peasley 72726,1153 (X)
+
+Jim,
+ 
+   Check out your MM/1 <-> CM8 cable *real* good. I got myself in trouble
+hooking up my Maggie. Ya see, the MM/1 and CoCo are pin for pin on the connect.
+But, when viewed from the ribbon cable's point the pins are:
+ 
+ 1 2 3 4 5 6 7 8 9  for a DIP header
+ 
+          and
+ 
+ 1 9 2 8 3 7 4 6 5  for a DB9
+ 
+   I orignally used a crimp-on DB9, and the video output was a strange blue
+with no vertical of horz hold. Occasionally I'd see text. That's how I knew the
+syncs where "gone". I hand made my own cable, rather than modifying the CoCo's
+and everythings been cool since. (except, of course, the brain-dead serial port)
+
+Randy
+
+There is 1 Reply.
+
+#: 12245 S12/OS9/68000 (OSK)
+    14-Sep-91  09:32:34
+Sb: #12240-$1000 doorstop
+Fm: Jim Peasley 72726,1153
+To: Randy Wilson 71561,756 (X)
+
+Randy;
+
+  The setup worked for a while, then all of a sudden 'went south'... so I don't
+think that's it.  Thanks for the thought, tho!
+
+..Jim
+
+#: 12188 S10/OS9/6809 (CoCo)
+    11-Sep-91  20:53:16
+Sb: #UMUSE for MM1
+Fm: Bert Schneider 70244,427
+To: Lee Veal 74726,1752 (X)
+
+Hey Mike, need any other beta testers for UMUSE for the MM1?  I'd be glad to
+help out!  Please let me know! Bert
+
+There is 1 Reply.
+
+#: 12197 S10/OS9/6809 (CoCo)
+    11-Sep-91  23:15:40
+Sb: #12188-#UMUSE for MM1
+Fm: Lee Veal 74726,1752
+To: Bert Schneider 70244,427 (X)
+
+I think you've got the wrong person.
+
+M' name's Lee, not Mike...
+
+..but Mike might want your help, but you'd better ask him for sure.
+
+;-)
+
+Lee
+
+There is 1 Reply.
+
+#: 12270 S10/OS9/6809 (CoCo)
+    16-Sep-91  22:14:18
+Sb: #12197-UMUSE for MM1
+Fm: Bert Schneider 70244,427
+To: Lee Veal 74726,1752 (X)
+
+Sorry!  I guess I hit the wrong button when I was reading messages!!!!
+
+#: 12192 S7/Telecommunications
+    11-Sep-91  21:58:01
+Sb: #12111-#sterm 1.5
+Fm: Rick Ulland 70540,3305
+To: Steve Wegert 76703,4255 (X)
+
+Steve-
+ I almost hate to bring this up again,but-I just can't get STERM to from MV.
+I've used all of those patches and made a nice AIF with -l /m1 on the parameter
+line.For my trouble, I get a pink screen with a white overlay and a dead block
+cursor.I can click on an AIF I made for shell, and start it from the command
+line in the new shell,so what could I possibly be doing to the STERM AIF? Know
+MV can handle it, it does! just not from gshell directly. Any thought you may
+have would be app.
+ -Rick
+
+There is 1 Reply.
+
+#: 12225 S7/Telecommunications
+    13-Sep-91  07:22:12
+Sb: #12192-sterm 1.5
+Fm: Steve Wegert 76703,4255
+To: Rick Ulland 70540,3305
+
+Hmmm .. lessee if I can bring up my sterm AIF file ...
+
+
+
+sterm
+-f -l /t5
+ICONS/icon.stm
+#40
+2
+80
+24
+0
+1
+
+Works for me.
+
+Your /m1 device is activated in your env.file, jes?
+
+Steve
+
+#: 12193 S7/Telecommunications
+    11-Sep-91  22:03:07
+Sb: #12128-sterm 1.5
+Fm: Rick Ulland 70540,3305
+To: Steve Wegert 76703,4255 (X)
+
+Paul-
+ Deldir does that when it can't find Attr.It needs to change (delete) the d
+attribute to delete the directory itself.Load attr or keep it handy in cmds,
+which is sometimes hard to do if ya merge files like I do- I could always find
+attr, deldir couldn't!
+ -Rick
+
+#: 12194 S10/OS9/6809 (CoCo)
+    11-Sep-91  22:13:13
+Sb: #Lines/Put/etc
+Fm: Brother Jeremy, CSJW 76477,142
+To: Kevin Darling, 76703,4227 (X)
+
+Dear Kevin
+
+Based on advice which you gave to George Hendrickson in MSG 9952, I tried the
+following code:
+
+PROCEDURE TestNewLine
+
+(* usage: RUN NewLine(path,a,b,c,d)
+
+DIM path,a,b,c,d:INTEGER
+
+path=1
+
+RUN gfx2("CLEAR")
+
+RUN NewLine(path,10,25,10,75)
+
+
+PROCEDURE NewLine
+
+(* usage: RUN New(path,etc)
+
+Param path,a,b,c,d:INTEGER
+
+DIM esc(10):BYTE
+
+esc(1)=$1B
+
+esc(2)=$44
+
+esc(3)=a/256
+
+esc(4)=land(a,$FF)
+
+esc(5)=b/256
+
+esc(6)=land(b,$FF)
+
+esc(7)=c/256
+
+esc(8)=land(c,$FF)
+
+esc(9)=d/256
+
+esc(10)=land(d,$FF)
+
+PUT #path,esc
+
+It worked, sort of. Instead of getting a staight line, I got a diagonal. I
+figured out that the calling program had to have all the values in hex. When I
+changed it, the program worked. Is there any way around this. I would like to
+be able to call NewLine with the same parameters as I would in calling the gfx2
+Line command. Is there a short piece of code which could convert the decimal to
+hex prior to being processed by newline?
+
+This is all still sort of new to me, so please forgive my asking what should be
+obvious.
+
+As ever, Br. Jeremy, CSJW
+
+
+
+There is 1 Reply.
+
+#: 12202 S10/OS9/6809 (CoCo)
+    12-Sep-91  03:27:09
+Sb: #12194-#Lines/Put/etc
+Fm: Kevin Darling 76703,4227
+To: Brother Jeremy, CSJW 76477,142 (X)
+
+Jeremy - one key is, you first must send a "move-to" escape code ($1b 40 x y)
+with the first coordinate, and then the "line-to" code ($1b 44 x y).
+
+PROCEDURE TestNewLine
+(* usage: RUN NewLine(path,a,b,c,d)
+DIM path,a,b,c,d:INTEGER
+INPUT "line x1,y1,x2,y2 ",a,b,c,d
+path=1
+RUN gfx2("CLEAR")
+PRINT  \ PRINT  \ PRINT  \ PRINT 
+RUN NewLine(path,a,b,c,d)
+END 
+
+PROCEDURE NewLine
+(* usage: RUN New(path,etc)
+PARAM path:INTEGER
+PARAM a,b,c,d:INTEGER
+TYPE line_esc=esc1,esc2:BYTE; x,y:INTEGER
+DIM code:line_esc
+code.esc1=$1B
+ 
+code.esc2=$40
+code.x=a
+code.y=b
+PUT #path,code \ (* send move-to a,b
+ 
+code.esc2=$44
+code.x=c
+code.y=d
+PUT #path,code \ (* send line-to c,d
+END 
+
+PS: I got a little fancy on the TYPE/DIM stuff... only to make using
+the coordinate a little easier/faster, perhaps.  - kevin
+
+There is 1 Reply.
+
+#: 12215 S10/OS9/6809 (CoCo)
+    12-Sep-91  21:01:15
+Sb: #12202-Lines/Put/etc
+Fm: Brother Jeremy, CSJW 76477,142
+To: Kevin Darling 76703,4227 (X)
+
+Thank you Kevin. I will probably have more questions after I have had a chance
+to play with this --Br. Jeremy, CSJW.
+
+#: 12198 S1/General Interest
+    12-Sep-91  00:01:48
+Sb: #xym or xfr?
+Fm: James Jones 76257,562
+To: All
+
+I'm going through stuff trying to transfer things from my CoCo to my MM/1, and
+in the process (a rather hairy one; I think I'll go to some trouble to avoid
+having to do anything with the source of rz and sz; a shame, because the
+versions I have appear to have comm paths wired into them for some reason), I
+found something interesting.  I have two programs that, apart from some
+character string constants, are identical.  The programs in question are "xfr"
+and "xym."
+
+Somebody appears to have changed the banner, including the author's name, and
+distributed the program; a rather tacky thing to do IMHO.  Anyone out there
+know for sure who really wrote this program?  I've kept the one that had
+"protocol" spelled correctly in the banner, but that's just my personal bias. 
+I'd really rather keep the version that correctly attributes the authorship.
+
+There is 1 Reply.
+
+#: 12204 S1/General Interest
+    12-Sep-91  04:10:45
+Sb: #12198-#xym or xfr?
+Fm: Scott t. Griepentrog 72427,335
+To: James Jones 76257,562 (X)
+
+Actually, I've been looking for the author of the "xym" program for some time. 
+At one time, it was considered the only x/y modem transfer that functioned
+correctly under StG Net.  I did not know of the existance of a duplicate "xfr"
+program - who is the author stated on it?  Maybe that was the original copy. 
+Unfortunately, I can only add to the confusion...
+
+StG
+
+There is 1 Reply.
+
+#: 12207 S1/General Interest
+    12-Sep-91  04:28:15
+Sb: #12204-#xym or xfr?
+Fm: James Jones 76257,562
+To: Scott t. Griepentrog 72427,335 (X)
+
+Oops...that's the version I tossed.  (Guess I was too quick...hang on a
+minute...aha!  It says "Bob Thomas" where the other says "Jim Hollier.")
+
+There is 1 Reply.
+
+#: 12226 S1/General Interest
+    13-Sep-91  07:26:20
+Sb: #12207-#xym or xfr?
+Fm: Steve Wegert 76703,4255
+To: James Jones 76257,562 (X)
+
+JJ,
+
+The version I scarffed from Pete's box years ago is:
+
+   XModem & YModem Protocal File Server
+          (c)  copyright  1988
+         Written by Bob Thomas
+
+
+SYNTAX:  xfr opt1 opt2 filename
+         where opt1 = x   for xmodem
+                    = y   for ymodem
+         where opt2 = r   for uploading
+                      s   for downloading
+     where filename = any legal OS9 filename
+
+ example:  xfr x s testfile
+           xfr y r testfile
+
+
+Help?
+
+Steve
+
+There is 1 Reply.
+
+#: 12227 S1/General Interest
+    13-Sep-91  07:30:09
+Sb: #12226-#xym or xfr?
+Fm: James Jones 76257,562
+To: Steve Wegert 76703,4255 (X)
+
+Yup!  Thanks.  Kind of depressing to think that somebody would mung a program
+to insert his name instead of the original programmer's, eh?
+
+There are 3 Replies.
+
+#: 12229 S1/General Interest
+    13-Sep-91  07:35:08
+Sb: #12227-xym or xfr?
+Fm: Steve Wegert 76703,4255
+To: James Jones 76257,562 (X)
+
+Perhaps 'low-down' is a better description ....
+
+Steve
+
+#: 12235 S1/General Interest
+    13-Sep-91  20:37:46
+Sb: #12227-xym or xfr?
+Fm: Scott t. Griepentrog 72427,335
+To: James Jones 76257,562 (X)
+
+That's probably why I was never able to find that Hollier guy.
+
+StG
+
+#: 12257 S1/General Interest
+    15-Sep-91  21:28:36
+Sb: #12227-#xym or xfr?
+Fm: Bob van der Poel 76510,2203
+To: James Jones 76257,562 (X)
+
+James (and others...), I've been following this and other threads on using
+various com programs to transfer files between the coco and the mm1 -- I don't
+get it! Why not just get a disk drive which is compatible with the coco and the
+mm1 and exchange disks. I stuck a 80 track drive in my mm1 the day I got it and
+have been flipping disks back and forth ever since. It's just a matter of
+setting up a descriptor. For coco disks you have to set typ=20, soffs=1,
+sct=12, tos=12, cyl=50. The rest stays the same as for a HD mm1 disk.
+
+The only problem I've had with the mm1 disk driver is that it will not format a
+standard format (track 0 single density) and it will not double step for a 40
+track disk in an 80 track drive. BTW, it will read/write single density--I hope
+someone is working on this.
+
+Hope this helps.
+
+There is 1 Reply.
+
+#: 12264 S1/General Interest
+    16-Sep-91  03:11:49
+Sb: #12257-xym or xfr?
+Fm: James Jones 76257,562
+To: Bob van der Poel 76510,2203 (X)
+
+That is probably the fastest way to do it.  (Nudge Paul Ward inclusive-or Carl
+Kreider about the 40-track disk in 80-track drive, etc.)
+
+#: 12205 S12/OS9/68000 (OSK)
+    12-Sep-91  04:17:14
+Sb: #OSK standards
+Fm: Ed Gresick 76576,3312
+To: Robert A. Larson 75126,723 (X)
+
+
+ Bob,
+
+ I appreciate your response and input.
+
+ Are you on DELPHI?  If so, could you upload 'oskstand.doc' there.  If not,
+ may I do so?  The discussions re standards are going on there.  I'm trying
+ to keep people on the other boards/nets informed so, I'd like to upload
+ your file to Fidonet.
+
+ My comments -
+
+ I agree with you re TERMCAP.  One point - to the best of my knowledge,
+ TERMCAP does not address graphics.  Extensions could be added but this
+ would be ill-advised since the dominate users of TERMCAP come from the
+ mainframe and UNIX communities.  They could decide to add their own
+ extension creating possible conflicts.  Therefore, graphics, mouses (or
+ mice), etc. data should probably go into a separate environmental file.
+
+ Re S-ISHARE.  Never thought of that.  Has possibilities but I think every-
+ one will have to agree to that.  So far as I've seen, most programmers
+ are using some sort of lock file.  I do see one problem - how would you
+ know what the pid is of the process controlling the port so you could
+ remove it for outgoing calls?
+
+ Printers present the same problem terminals do.  I heard that someone
+ has already written a PRINTERCAP file.  Needs looking into.
+
+ On OSK, 'xmode' can get and set type and baud rate already without
+ deinizing so I assume you can do the same thing with getstat/setstat calls.
+
+ I think that writing a bi-directional driver to handle both incoming and
+ outgoing calls 'simultaneously' as you suggest would be a bear.  Could be
+ done but I'm not sure it's necessary.  I already use a common port for
+ both incoming and outgoing calls on my CoCo.  My set-up does require a
+ lock file.
+
+ (Continued in part 2)
+
+There are 4 Replies.
+
+#: 12206 S12/OS9/68000 (OSK)
+    12-Sep-91  04:18:21
+Sb: #12205-OSK standards
+Fm: Ed Gresick 76576,3312
+To: Ed Gresick 76576,3312 (X)
+
+
+ (Continued from part 1)
+
+ Briefly, it works like this.  (I run tsmon on my modem port (m0).)  First I
+ set the modem for auto-answer with the command 'echo "ATS0=1"'.  Then I
+ use Brett Wyncoop's 'enable' to set up the port.  'Enable' activates tsmon,
+ gets the pid for tsmon, sets up a lock file for port m0 and places
+ tsmon's pid in the lock file.  This is the normal state for my system.
+ If I want to use the modem for an outcalling call (or disable the modem
+ for other reasons), I use Brett's 'disable'.  'Disable' reads the lock
+ file for that port, gets the pid, kills the process and removes the lock
+ file.  I follow this with the command 'echo "ATS0=0"' to turn off
+ auto-answer.  Actually, I use two script files, 'start_m0' and 'end_m0',
+ to activate and deactivate the port.  'Start_m0' is also in my 'startup'
+ file.  I run UUCP and Kermit for both incoming and outgoing calls and Sterm.
+ Most outgoing UUCP and Kermit calls are handled by 'cron' so you can see the
+ process operates unattended.  I've had the system running this way for
+ almost two years now.  If I ever get a version of UUCP that will work under
+ OSK, I'll install it on my SYSTEM IV.  But I doubt I'll put it on line.  I
+ use the CoCo only for unattended communications (file transfers, mail, etc.)
+ so I'm not worried about security.
+
+ How does Suno use two logical devices?  Seems to me that under OS9 and
+ task switching, the two devices would get confused - the wrong one getting
+ information.  I'm assuming you have tsmon running to one and doing an
+ outgoing call from the other.
+
+ Ed Gresick - DELMAR CO
+
+#: 12364 S12/OS9/68000 (OSK)
+    21-Sep-91  20:44:15
+Sb: #12205-OSK standards
+Fm: Robert A. Larson 75126,723
+To: Ed Gresick 76576,3312 (X)
+
+No, I'm not on delphi.  Go ahead and upload my responce there if you like. 
+Please note that I answer my mail faster on the StG network (blarson@zog)
+(zog's cavern bbs is at (818)761-4721) and the Internet
+(blarson@abode.ttank.com and (this one appears to be loosing mail)
+blarson@usc.edu) than I do here on compuserve.
+
+Graphics: For more than box drawing, I think the only real standard is X.  The
+osk community may need to develop its own standard, this is not something every
+programmer should have to reinvent.
+
+Xmode can be used to set the type and baud rate.  Unfortunatly, on both osk
+systems I have used, this does not take effect until the device is closed and
+deinized.  If your systems don't have this problem, that is good, but be aware
+that your compeditors systems do have this problem and they need to fix it.
+
+It looks like I've only been using the S_ISHARE since 1986, obviously to new an
+idea to have caught on yet :-)  (That's the date on the oldest instance of this
+I could easily locate -- of course any test versions are long gone.)
+
+You'll probably find my name on any versions of kermit you are using on an os9
+system, (although the 68k assebly version wasn't mine) and I've been using osk
+since version 1.2.  Although my name isn't as familiar as some others, please
+don't treat me like a newcommer.  I don't have one of your systems because I
+didn't here of you until long after I had my QT20x.  Do you have a system that
+competes with it?
+
+The uucp version I am working on seems to be working ok for file transfers with
+all the unix versions I have tested against, so it should be released
+reasonably soon (by the end of the year :-) unless uuxqt is as much of a mess
+as the file transfer part was.  (I don't want to get into the problems I've had
+with this port right now.)
+
+(continued)
+
+
+
+#: 12365 S12/OS9/68000 (OSK)
+    21-Sep-91  20:45:27
+Sb: #12205-OSK standards
+Fm: Robert A. Larson 75126,723
+To: Ed Gresick 76576,3312 (X)
+
+
+Every program using a different lock file in a different manner is exactly what
+I want to avoid.  The unix lock file structure requires an atomic link
+operation that osk does not supply.  Since this area will have to be recoded
+when porting any unix program, I think using the S_ISHARE mechinism is simpler,
+more elegent, and more reliable than any kind of lock file.  It is already in
+use in at least two communications programs.
+
+There seems to be two approches to the bi-directional modem problem: (a)
+modifying the device driver to look like to separate devices (b) modifying
+tsmon, login, and all programs that might ever have to access the modem.  (a)
+looks much simpler to me.
+
+The device driver approach does not have to worry about race conditions because
+it runs in system state.  The answer side open may be done at any time, a read
+call will wait for both carrier detect and originate flag not being set.  Upon
+detecting carrier, a flag is set indicating that the device is in use in answer
+mode which is cleared only when carrier detect drops.  An attempt to open the
+originate side when the answer flag is set will return an error that the device
+is busy.  Opening the originate device will set the originate flag indicating
+that the device is in use in orignate mode. This flag will be cleared when the
+originate side is closed.  The two flags are used to determine where the I/O is
+routed.  Tsmon is normally left running all the time on the answer side.
+
+The lock file/kill process approch seems to have problems with timing holes and
+an excess of complexity.  Problems in communications programs will cause the
+port not to be reenabled for incoming calls. You did not describe how the
+disable program determines that the line is not currently in use for an
+incoming call.  (I do not want to hang up on a caller just because it is time
+to try a uucp transfer.) I leave Ckermit running all the time, just set the
+line and fork a subshell when I'm not using it for communications, how can you
+handle this?.  Osk tsmon handles multiple lines, how should I tell it not to
+
+#: 12366 S12/OS9/68000 (OSK)
+    21-Sep-91  20:51:22
+Sb: #12205-OSK standards
+Fm: Robert A. Larson 75126,723
+To: Ed Gresick 76576,3312 (X)
+
+(even more continued.  Stupid message length limit) use one line but keep
+tworking on the rest?  Or do you expect me to run a separate tsmon process for
+every modem?  (Besides the one that handles all the terminals, of course.)
+
+#: 12214 S7/Telecommunications
+    12-Sep-91  20:39:11
+Sb: #sterm 1.2 transfers
+Fm: Erich Schulman 75140,3175
+To: ALL
+
+I have been using sterm 1.2 with some real success now.  But its only binary
+protocol of CIS B is quite restrictive:  where can you use it BUT on CIS.  I
+have obtained a program called xydown which will allow file transfers in Xmodem
+or Ymodem.  Xydown must be called from a terminal program; it is not a
+stand-alone program.  I tried to use the Shell option in sterm to run xydown
+when I wanted to download a file.  After the disk drive finished spinning, I
+saw the message "Sterm back online".  The host (which was a local BBS) timed
+out with no bytes transferred.  Is there a bug with sterm's Shell option, or
+perhaps is it restricted  somehow as to how it may be used?  Also, as long as
+sterm supports receiving in CIS B, does it also support sending in that
+protocol?
+
+There are 2 Replies.
+
+#: 12216 S7/Telecommunications
+    12-Sep-91  21:43:19
+Sb: #12214-#sterm 1.2 transfers
+Fm: Wayne Day 76703,376
+To: Erich Schulman 75140,3175 (X)
+
+Uh, Erich.... STerm was designed SPECIFICALLY FOR OS-9 users ON COMPUSERVE!
+
+That's why it only supports the CIS Quick-B Protocol!
+
+And yes, STerm supports B Protocol transmissions as well!
+
+As far as running xydown as a shell process, it sounds as if something told
+STerm that the xydown shelled process had quit, which sounds suspiciously like
+something that xydown would have to do itself.
+
+Wayne
+
+There is 1 Reply.
+
+#: 12219 S7/Telecommunications
+    12-Sep-91  23:02:33
+Sb: #12216-#sterm 1.2 transfers
+Fm: Erich Schulman 75140,3175
+To: Wayne Day 76703,376 (X)
+
+Considering the opening screen of sterm, I could easily notice its CIS
+orientation.  But it is the only OS-9 terminal program I have.  Recently I
+found that a local BBS has a 180K GIF file I wanted to get.  I do have
+double-sided 40track drive, but my DECB double-sided utility clashes with
+Ultimaterm 4.1 so I have no choice but to use OS-9.  And if sterm is my only
+OS-9 terminal program....
+
+There is 1 Reply.
+
+#: 12228 S7/Telecommunications
+    13-Sep-91  07:33:32
+Sb: #12219-#sterm 1.2 transfers
+Fm: Steve Wegert 76703,4255
+To: Erich Schulman 75140,3175 (X)
+
+Erich,
+
+Now that you've mastered the ins and outs of the basic version of Sterm ... why
+not upgrade to the current 1.5 version. It supports xmodem (esc x) and makes it
+handier to user elsewhere.
+
+It's in the telcom library.
+
+Steve
+
+There is 1 Reply.
+
+#: 12233 S7/Telecommunications
+    13-Sep-91  11:12:22
+Sb: #12228-#sterm 1.2 transfers
+Fm: Erich Schulman 75140,3175
+To: Steve Wegert 76703,4255 (X)
+
+Actually I had downloaded sterm 1.5 before but couldn't make it work.  I
+suspect that the problem was Xmodem padding.  It took a lot of work to get your
+emailed copy of the dEd module to work, all caused by Xmodem padding. I was
+beginning to suspect that dEd didn't work on Level II.  But now that I do have
+it working properly (indicated by a successful pad strip) I can now see about
+fixing up sterm 1.5.  I just hope my previous efforts to make it work didn't
+cause a necessity to redownload.  BTW, I actually do have (sort of) Xmodem
+capabilities under OS-9.  That's with DeskMate 3.  But I have found DeskMate 3
+to be awkward on a one-drive system.  And I think MultiVue is a much better
+package anyway.  At least I got that DM3 for only $5.
+
+There is 1 Reply.
+
+#: 12243 S7/Telecommunications
+    14-Sep-91  09:09:35
+Sb: #12233-#sterm 1.2 transfers
+Fm: Steve Wegert 76703,4255
+To: Erich Schulman 75140,3175 (X)
+
+Erich, keep up posted.
+
+I think your troubles with 1.5 early on may just have been getting used to it'
+quirkiness .... and perhaps the padding etc. Give it another shot. It's
+straight forward. Just get the supportting files in the proper subdirectories,
+ad fire it up with a new syntax:
+
+Sterm -f -l /t2
+
+Note the second option for modem line.
+
+
+Steve
+
+
+
+There is 1 Reply.
+
+#: 12259 S7/Telecommunications
+    16-Sep-91  00:10:01
+Sb: #12243-sterm 1.2 transfers
+Fm: Erich Schulman 75140,3175
+To: Steve Wegert 76703,4255 (X)
+
+What I have decided to do is download the complete archive rather than just the
+executable.  I think the docs will help and I have never had a prob with
+padding after extracting.  Not that padding is much of a prob for me anymore. 
+Before I had never gotten the thing to go; ident always gave me a Module header
+is incorrect!  I have found elsewhere a command that will patch in memory only
+os9p1 to turn the CRC checking on or off.  That may be of some use for when
+padding becomes moot and I still have that message in ident.  I have yet to
+extract its archive so all I now know is what the uploader's description says.
+
+#: 12348 S7/Telecommunications
+    20-Sep-91  21:01:25
+Sb: #12214-#sterm 1.2 transfers
+Fm: Bill Dickhaus 70325,523
+To: Erich Schulman 75140,3175 (X)
+
+Erich,
+
+It sounds like something else is not quite right. I use xydown all the time,
+with Sterm, to download from Delphi. I've downloaded huge files with very few
+problems. Make sure you are in a valid data directory (I use Sterm's ESC/D),
+and then use ESC/S to fire up xydown. Xydown uses the current port settings in
+the device descriptor, so if using an earlier version of Sterm, and you use
+ESC/B, the Sterm baud rate settings are not carried forward to xydown. Also
+xydown defaults to T2, if you are using a different port, you need to use the
+-t option of of xydown.
+
+Bill
+
+There is 1 Reply.
+
+#: 12355 S7/Telecommunications
+    21-Sep-91  01:37:06
+Sb: #12348-sterm 1.2 transfers
+Fm: Erich Schulman 75140,3175
+To: Bill Dickhaus 70325,523 (X)
+
+I was always trying to use xydown from /t2.  Before trying to do any
+downloading with sterm, I always set up a RAMdisk and then use esc-d to set the
+directory to /r0.  I was calling xydown via esc-s.  I also gave the full
+pathlist to xydown just to be sure it would be found right away.  As I now have
+the newest sterm, I can now use xmodem directly. Actually, for most of my OS-9
+downloads, I don't even use sterm.  If I can fix it so that I never have more
+than 21 Grans on the disk (whether I put 1 file or 21 files on the disk), I
+download under DECB using Ultimaterm then transfer the files to OS-9 via
+DOSOR9.  Otherwise, I go ahead and use sterm.  When doing the downloads, I try
+to fill the disk and then break up the files into 21-Gran groups for DOSOR9ing
+later while I'm offline.
+
+#: 12217 S7/Telecommunications
+    12-Sep-91  21:53:38
+Sb: #12093-#Sterm 1.5
+Fm: Bob Palmer 74646,2156
+To: Rick Ulland 70540,3305
+
+Started out to make a reply last night at 2400 baud and something went west on
+the TC70 and I lost track of what was happening.  Trying tonight at 2400 baud
+the login stopped at a line  beginning with I.  Logged off and came back at 300
+baud (different phone number) and stopped at exactly the same point. Repeated
+CR's to no avail until I suddenly thought of the possibility that I had
+generated an XOFF (why ?) and sent a control S immediately started again so now
+will try at 2400 again another time to see if symptoms are the same.  Why the
+TC70 would send XOFF at 300 baud with no buffer open heaven only knows Fun
+stuff when tour new toy is self assembled and you have 7 thumbs. Bob P.
+
+There is 1 Reply.
+
+#: 12347 S7/Telecommunications
+    20-Sep-91  21:01:15
+Sb: #12217-#Sterm 1.5
+Fm: Bill Dickhaus 70325,523
+To: Bob Palmer 74646,2156 (X)
+
+Bob,
+
+That line beginning with "I", sounds suspiciusly like the CIS "inquire" command
+sent to CIS specific terminal emulation programs. You might check your options
+(GO DEFAULT) and make sure you have inquiry turned off.
+
+You might also want to double check all the options in the device descriptor
+for your modem port. In most vanilla OS9 systems I've seen, the "modem" port
+comes configured more for a terminal, than for a modem, including xon/xoff.
+Some newer serial drivers support xon/xoff in both directions, automatically
+handling buffer overflow conditions, etc.
+
+Bill
+
+There are 2 Replies.
+
+#: 12412 S7/Telecommunications
+    26-Sep-91  21:13:25
+Sb: #12347-Sterm 1.5
+Fm: Bob Palmer 74646,2156
+To: Bill Dickhaus 70325,523
+
+the message turns out to be basically the - All Rights Reserved - line
+followedby a linefeed and then I - hang.  Good suggestion about the terminal
+setting - I shall go away and putter about in DEFAULT. Mind you STERM runs
+perfectly with all of the other services and it can hardly be an overflow
+condition when it happens at 2400 and 300 baud.  My XON XOFF speculation was
+wrong - just sitting and waiting or hitting CR will eventually bring it up. 
+Your INQUIRE suggestion is good - just cannot imagine how it would suddenly
+have gotten turned on? Bob Palmer
+
+#: 12413 S7/Telecommunications
+    26-Sep-91  22:01:55
+Sb: #12347-Sterm 1.5
+Fm: Bob Palmer 74646,2156
+To: Bill Dickhaus 70325,523
+
+YOU ARE RIGHT!!! Thank you so kindly - that is precisely what my setting had
+become - wait for inquire was ON.  Dad ratted !@#$!@!# Solves the mystery of
+the week - month actually.  And to think that I even walked through that
+section last week to change my screen size to match the tc70 (no I did not
+screw it up then - it was already bad |-0 Thanks for the thought though. Bob
+Palmer
+
+#: 12230 S1/General Interest
+    13-Sep-91  08:26:55
+Sb: #QNX for PC
+Fm: Robert Hines 76137,1362
+To: all
+
+I'm looking for general information on the QNX operating system on the PC
+platform.  Any suggestions on where to look will be greatly appreciated.
+
+Thanks
+
+There is 1 Reply.
+
+#: 12236 S1/General Interest
+    13-Sep-91  21:13:47
+Sb: #12230-QNX for PC
+Fm: Kevin Darling 76703,4227
+To: Robert Hines 76137,1362
+
+That's a good question.  I looked around a bit, and couldn't find any specific
+place for QNX support.
+
+What I'd do is this: post your question in DDJFORUM, CLMFORUM and CONSULT.
+
+I've seen, once in a while, QNX users pop up... especially in the first two.
+
+Luck! - kevin
+
+#: 12241 S7/Telecommunications
+    14-Sep-91  00:45:29
+Sb: #rz/sz options?
+Fm: James Jones 76257,562
+To: All
+
+Well...I decided to go ahead and try zmodem.  The documentation for zmodem is
+just as legible as the source code.  Any advice on what options, redirection,
+or sacrifice of serial mice during the full moon are needed to cause rz and sz
+to use a particular device to send or receive files over would be appreciated.
+
+There is 1 Reply.
+
+#: 12244 S7/Telecommunications
+    14-Sep-91  09:18:03
+Sb: #12241-#rz/sz options?
+Fm: Steve Wegert 76703,4255
+To: James Jones 76257,562 (X)
+
+JJ,
+
+The version I run is pretty quirky too ... (two quirky's in one day! Sheesh!)
+
+What I do is fire up the sz process on the remote. Escape back to a shell here
+locally, and do 'rz -m /t5 '  (no quotes, of course). (The SZ side may need a
+-b option to force it into binary mode)
+
+I've noticed it's timing sensitive, so I escape back to shell very quickly,
+before the remote spits anyting back at me. I also issue the local command as
+quickly as I can, else I time out.\
+
+
+Now for my weird question. It just so happens with the version of sz/rz I'm
+running, I can't get the -h option to work when calling the file from disk.
+
+Load the moodule to memory, and the -h option works as expected. Ideas?
+
+Steve
+
+There is 1 Reply.
+
+#: 12246 S7/Telecommunications
+    14-Sep-91  10:07:55
+Sb: #12244-#rz/sz options?
+Fm: James Jones 76257,562
+To: Steve Wegert 76703,4255 (X)
+
+My guess would be that the author is peeking at argv[0] to decide how to
+behave, a common Unix-oid behavior for programs that serve multiple (presumably
+related) purposes, since there you'll see the file linked under multiple names,
+and there's no module name.
+
+I'll give your method a shot; thanks for the advice.
+
+There is 1 Reply.
+
+#: 12248 S7/Telecommunications
+    14-Sep-91  12:03:18
+Sb: #12246-#rz/sz options?
+Fm: John R. Wainwright 72517,676
+To: James Jones 76257,562 (X)
+
+James, I am a LONG way from "Expert" at this, but I did get the MM/1 to compile
+rz from the source in "ZMODEM.AR" in lib 12 here. (it grouched some warnings
+about return() returning nothing in non-void functions, but otherwise OK).  Got
+it to work by requesting zmodem download (with STERM) then calling rz with the
+STERM shell option - had to redrict stdin and stdout to the port to make it
+work (rz <>/t0) but it DID work.  Still playing and learning.
+
+JohnW
+
+There are 2 Replies.
+
+#: 12250 S7/Telecommunications
+    14-Sep-91  18:18:52
+Sb: #12248-rz/sz options?
+Fm: James Jones 76257,562
+To: John R. Wainwright 72517,676 (X)
+
+Thanks for the pointer!  I grabbed a copy of rz/sz stuff from, um, elsewhere,
+and unfortunately I find it impossible to resist the temptation to reformat the
+code, get rid of the spaghetti control flow, and so forth.  I really should
+resist, of course, because I want to actually get stuff transferred someday.
+
+#: 12262 S7/Telecommunications
+    16-Sep-91  00:25:02
+Sb: #12248-#rz/sz options?
+Fm: Bob Palmer 74646,2156
+To: John R. Wainwright 72517,676 (X)
+
+Interesting - I have been using RZ and SZ form STERM on my TC70 in exactly the
+same way.  Possible difference - I swap STERM to a shell and just type RZ to
+receive.  No need to pick a device as it seems to default to /t1 (the other
+serial port on a TC70.  To use SZ I type SZ followed by the -x or -y option if
+I want to use xmodem or ymodem and the filename(s) to go in zmodem or ymodem. 
+Seems pretty robust.  To be honest offhand I "think" I just used the .exe from
+the DL here and never bothered to recompile from source but it has been a while
+and I have been having so much fun compiling C programs quickly rather than
+painfully as was the case on the COCO that I could be wrong.  Current struggle
+is to compile the ARC.C which has some 68020 code which I do not yet
+understand.
+
+
+
+There is 1 Reply.
+
+#: 12269 S7/Telecommunications
+    16-Sep-91  21:16:20
+Sb: #12262-#rz/sz options?
+Fm: John R. Wainwright 72517,676
+To: Bob Palmer 74646,2156 (X)
+
+The source that I started with has device "/t3" in it.  I changed that to /t0
+for the MM/1, but it puts everything on the console unless I tell it otherwise.
+The source is written to compile on many different machines and is FULL of
+conditional #ifdef #ifndef type stuff, I haven't figured out how to direct it
+to my "/t0" port yet - I'll get it sooner or later (probably later).
+
+There is 1 Reply.
+
+#: 12282 S7/Telecommunications
+    19-Sep-91  00:09:52
+Sb: #12269-#rz/sz options?
+Fm: Bob Palmer 74646,2156
+To: John R. Wainwright 72517,676 (X)
+
+the mm1 uses serial port /t0 ???  That would be rather an unusual standard. 
+Not impossible but would that not be more likely to be /t? then it would go
+along with /p.  Where did your source come from? Somehow I have not yet gotten
+around to downloading the source from the DL here and getting version 1.5 up on
+the coco III as well.  Inertia is an extremely powerful force around here.  Oh
+well - I get a hard drive and you MM1 guys get graphics - standoff.
+
+Bob Palmer
+
+There are 2 Replies.
+
+#: 12284 S7/Telecommunications
+    19-Sep-91  04:41:31
+Sb: #12282-#rz/sz options?
+Fm: James Jones 76257,562
+To: Bob Palmer 74646,2156 (X)
+
+Eh?  I've had my I/O board for at least a month.  I'm looking forward to the
+new drivers, but even with the current ones, I get along quite reasonably with
+one of those Quantum low profile 105 Mbyte SCSI hard drives.
+
+There is 1 Reply.
+
+#: 12349 S7/Telecommunications
+    20-Sep-91  21:01:33
+Sb: #12284-#rz/sz options?
+Fm: Bill Dickhaus 70325,523
+To: James Jones 76257,562 (X)
+
+You're apparently one of the _very_ lucky ones. I haven't heard one little peep
+out if IMS since I got my MM/1. I was hoping they would send out the I/O boards
+in the same order as the MM/1 kits, but apparently they aren't. I guess I ought
+to make a little more noise in their direction, I'm ready to start some _real_
+work, having just one floppy drive takes me back to OS9 LI days on my CoCo1
+with one 35 track drive!
+
+Bill
+
+There are 2 Replies.
+
+#: 12354 S7/Telecommunications
+    20-Sep-91  22:44:06
+Sb: #12349-rz/sz options?
+Fm: James Jones 76257,562
+To: Bill Dickhaus 70325,523 (X)
+
+I dunno if it's *that* bad--1.2 Mbytes beats the heck out of 140 Kbytes. :-)
+
+#: 12358 S7/Telecommunications
+    21-Sep-91  09:58:47
+Sb: #12349-rz/sz options?
+Fm: Steve Wegert 76703,4255
+To: Bill Dickhaus 70325,523 (X)
+
+Bill,
+
+I was talking to Paul just a couple of days ago. You may not have heard
+anything from Paul ... but he did ask about you, and if you were going to
+Atlanta.
+
+Might be time to start getting vocal ...
+
+Steve
+
+#: 12289 S7/Telecommunications
+    19-Sep-91  20:46:01
+Sb: #12282-rz/sz options?
+Fm: John R. Wainwright 72517,676
+To: Bob Palmer 74646,2156 (X)
+
+Yep, its /t0.  If I understand the (kinda preliminary) docs right, /t0 is the
+"built in" serial port on the 68070 chip.  Until I get some more hardware, it's
+the only port I have. The Rz/Sz souruce I am playing with comes from
+"ZMODEM.AR" in Lib 12 here.
+
+John Wainwright
+
+#: 12251 S1/General Interest
+    14-Sep-91  21:56:17
+Sb: The Rescue
+Fm: Paul Hanke 73467,403
+To: All
+
+Not having the author of The Rescue on-line any longer has prompted me to find
+my own solution of completing all 25 levels. It can be done by a bit of
+finagaling.
+The problem seemed to be that there are too many locks or not enough keys to
+complete level 23.  My solution was to repeat a level which supplies one extra
+key. I re-named level1.tank to lvl1.orig and copied level5.tank to level1.tank.
+(It randomly leaves you with an extra key or not). Anyhow, with 3 keys I was
+able to complete level 23 but could not advance to L24, there being no 'escape
+hatch'  so I must conclude there are 2 bugs to L23.
+The practical solution is to copy any other favorite level to
+level23.tank (if it doesn't also set you up with too few keys) and then you
+should be able to go a full 25 rounds.  (The game then repeats to level 1,
+etc.)    -ph- 
+
+#: 12252 S10/OS9/6809 (CoCo)
+    15-Sep-91  01:14:16
+Sb: #11912-#basic09
+Fm: David Breeding 72330,2051
+To: Paul Hanke 73467,403 (X)
+
+Saw your questions about gs.stype.  I wrote a program  (subroutine) for use
+with b-09, similar to gfx2.  It's name is "gfx3.ar". I didn't upload it myself,
+but seems like I saw it somewhere in the library.  At least it had the same
+name.  Grab it and give it a look-see.  If you can't it, you might leave me a
+msg or as I don't get online too often, you may give me a call at 502-866-6185.
+I'm getting such lousy reception that I din't know if it was right or not.  The
+# is 50232 try again- 502-866-6185.  I'm usually available between 8pm and 10pm
+central time.
+  Good luck.  (Not sure what this msg will look like, with all my garbage.
+
+There is 1 Reply.
+
+#: 12255 S10/OS9/6809 (CoCo)
+    15-Sep-91  17:49:24
+Sb: #12252-basic09
+Fm: Paul Hanke 73467,403
+To: David Breeding 72330,2051
+
+Just grabbed gfx3.ar from the coco6809 library and will peek inside sometime
+later this evening.  Thanx.    -ph- 
+
+#: 12260 S9/Utilities
+    16-Sep-91  00:19:17
+Sb: A New Disk Module?
+Fm: Erich Schulman 75140,3175
+To: ALL
+
+As I still have only one physical disk drive, I have to frequently type chd
+/d0; chx /d0/cmds.  Since there seems to be no way that I can define ctrl-1 or
+some other thing as a keyboard macro, is there any downloadable module that
+will allow me to just type newdisk (or nd), and preferably a module that will
+not rely on RunB.  I would load it upon startup or maybe even merge it into
+/d0/cmds/shell.  These alternatives would be easier and more accurate (for
+typing correctly the first time) that what I have to do now.  BTW, the reason I
+want to avoid having to rely on RunB is because even with 512K I still have to
+RAMcram a lot.  Mostly because of my 256K RAMdisk that I (almost) can't do
+without.
+
+#: 12261 S3/Languages
+    16-Sep-91  00:22:10
+Sb: #Basic-09 + RunB vs. C
+Fm: Erich Schulman 75140,3175
+To: ALL
+
+Why is it that compiled/PACKed Basic09 programs rely on RunB for execution but
+compiled C and Pascal programs seem to be able to stand on their own? Is there
+any way to "reduce" Basic-09 I-code to even closer to true assembler-generated
+code?
+
+There is 1 Reply.
+
+#: 12263 S3/Languages
+    16-Sep-91  02:49:06
+Sb: #12261-#Basic-09 + RunB vs. C
+Fm: Kevin Darling 76703,4227
+To: Erich Schulman 75140,3175 (X)
+
+Packed basic09 programs aren't compiled, you see... but crunched down to a
+tokenized form (more or less).  To save space on systems, RunB is used to
+execute the info.
+
+68K systems are the same, and even go further... the math and I/O functions of
+C and other compiled languages are usually handled by shared modules. All of
+this, of course, helps save room.
+
+I'm not sure if any company has ever done a basic09-compatible compiler, altho
+I believe there have been other such Basic(s).  Anyone know for sure?
+
+There is 1 Reply.
+
+#: 12265 S3/Languages
+    16-Sep-91  03:16:42
+Sb: #12263-#Basic-09 + RunB vs. C
+Fm: James Jones 76257,562
+To: Kevin Darling 76703,4227 (X)
+
+Shudder--you said the T-word (tokenized).  I-code is like Pascal P-code, in a
+way; it's code for an abstract machine.  If one really wanted to, one could
+create a chip that ran it directly, as someone did for P-code.
+
+(Of course, one could claim that the tokenized form of generic Microsoft BASIC
+is code for an abstract machine, too, but the transformation done to get from
+what one types to that form is pretty trivial, and the abstract machine would
+be quite ugly and inefficient.)
+
+There is 1 Reply.
+
+#: 12266 S3/Languages
+    16-Sep-91  20:53:42
+Sb: #12265-#Basic-09 + RunB vs. C
+Fm: SCOTT HOWELL 70270,641
+To: James Jones 76257,562 (X)
+
+You have mentioned a term frequenlty used but rarely defined. What is an
+abstract machine anyway!!
+
+There is 1 Reply.
+
+#: 12273 S3/Languages
+    17-Sep-91  06:50:58
+Sb: #12266-#Basic-09 + RunB vs. C
+Fm: James Jones 76257,562
+To: SCOTT HOWELL 70270,641 (X)
+
+An abstract or virtual machine is one that doesn't exist on silicon (or gallium
+arsenide if you have the bucks, or whatever--any physical implementation).
+
+Suppose nobody had ever actually made a 6809.  One could still write an
+assembler for it, or compilers that generate 6809 instructions, but to run any
+of the resulting programs would require an interpreter (maybe emulator is the
+right term).
+
+There is 1 Reply.
+
+#: 12288 S3/Languages
+    19-Sep-91  13:59:49
+Sb: #12273-Basic-09 + RunB vs. C
+Fm: SCOTT HOWELL 70270,641
+To: James Jones 76257,562 (X)
+
+good explanation,thanks.
+exit
+
+#: 12267 S7/Telecommunications
+    16-Sep-91  21:01:39
+Sb: #12073-#Aterm for the TC70 ??
+Fm: Colin J. Smith 73777,1360
+To: Jim Sutemeier 70673,1754 (X)
+
+I am using it now on my MM/1.  The only thing I had to change (I think) was the
+device driver line in Aterm.ctl.
+
+This is what my Aterm.ctl looks like:
+
+                          <<<  ATerm Control File  >>>
+
+   Descriptions     Sequence code       Informations related to the codes
+ ================  ===============  ===========================================
+ Clear Screen      $021B45          For Vt-52 Video
+ Cursor On         $021B65          For Vt-52 Video
+ Cursor Off        $021B66          For Vt-52 Video
+ Reverse On        $021B70          For Vt-52 Video
+ Reverse Off       $021B71          For Vt-52 Video
+ Printer Init.     $021B15          (CR=CR) : For TANDY DMP-105 printer
+ Modem prefix      @04ATDT          "ATDT" Command Prefix.  (Hayes Compatible)
+ Modem suffix      $010D            "[CR]"  "   "  Suffix.    " "    "    "
+ Device Driver     @05sc68070       Device driver identification. (Ser. Path)
+ Pipe Buffer Size  $0400004000      Internal representation of $4000 (32 Bits)
+ Printer Processor @10/R0/ATerm.Print&  Name of the script file to Print
+ "   "             $00               "  "  "  "   "
+ "   "             $00               "  "  "  "   "
+ "   "             $00               "  "  "  "   "
+ "   "             $00               "  "  "  "   "
+ "   "             $00               "  "  "  "   "
+ "   "             $00               "  "  "  "   "
+ "   "             $00               "  "  "  "   "
+
+etc.
+
+Hope this helps!
+
+  --Colin
+
+There is 1 Reply.
+
+#: 12408 S7/Telecommunications
+    26-Sep-91  09:50:49
+Sb: #12267-Aterm for the TC70 ??
+Fm: Jim Sutemeier 70673,1754
+To: Colin J. Smith 73777,1360 (X)
+
+Thanks for your report....think I know now what I dood wrong.... think I named
+the device descriptor /t1    (dumb.....I know.... <g>)  Will try out what
+you've reported....
+
+jim
+
+
+
+#: 12268 S12/OS9/68000 (OSK)
+    16-Sep-91  21:05:42
+Sb: #Good OSK terminal prog
+Fm: Colin J. Smith 73777,1360
+To: All
+
+Top on my OSK (MM/1) wish list:
+
+A TERMINAL PROGRAM THAT SUPPORTS ANSI GRAPHICS!
+
+Does somebody have one in the works?  I would almost kill for one.
+
+  --Colin
+
+There is 1 Reply.
+
+#: 12272 S12/OS9/68000 (OSK)
+    17-Sep-91  06:44:54
+Sb: #12268-Good OSK terminal prog
+Fm: James Jones 76257,562
+To: Colin J. Smith 73777,1360 (X)
+
+Well...I sat down one day and wrote the outline of the FSM that one would need
+to translate most of the PClonish approximation of X3.67-197? to the
+corresponding stuff for the CoCo or MM/1...one would have to finesse some
+things (the MM/1 won't do blinking, but the CoCo will, and if one switched to
+PClone mode, one might have to do something like move the cursor to a
+particular position in case there is an immediate request to save the cursor
+position for later restoration without first doing something that will put it
+in a known position).  What I did was the obvious part, though, and it would
+take rather more work to turn it into something usable.  Any volunteers?
+
+#: 12274 S7/Telecommunications
+    17-Sep-91  19:04:47
+Sb: UUCP nodes
+Fm: Hugo Bueno 71211,3662
+To: ALL
+
+Hello all.  I recently lost my UUCP feed from my friend Bob Billson. I'm now
+suffering Internet Coco list withdrawal.  I would like to find myself a new
+feed.  Unfortunately, I don't know how. Would it be possible for any UUCP'ers
+out there to find information on UUCP sites close to me?
+
+I assume the following is needed:
+
+   State, City: Fanwood, NJ
+   Zip:         07023
+   Area Code:   First preference-908, second preference-201
+
+Any help is greatly appreciated.
+
+Hugo
+
+
+
+#: 12278 S15/Hot Topics
+    18-Sep-91  19:12:55
+Sb: Mac/OS-9
+Fm: sam 70731,3703
+To: hot topics
+
+Check out OS-9/680xx for the Macintosh.  A full implementation of OS-9/680xx
+built on the Macintosh hardware platform.  All Macs are supported from the + to
+the IIfx, including the Mac portable.  Multiple shell windows and mac toolbox
+support from Mac/OS-9 programs.  Multifinder/System 6/System 7 compatible.
+
+If you are looking for a portable OS-9 computer, or want to do your OS-9
+development on a Mac (using Mac editors and other tools,) consider OS-9 for the
+Macintosh.
+
+Ultrascience Wheeling, IL 708.808.9060
+
+#: 12281 S10/OS9/6809 (CoCo)
+    18-Sep-91  21:30:39
+Sb: #Easy HD Backups
+Fm: Art Doyle 71565,262
+To: Kevin Darling
+
+Whew!
+
+Finally managed to transfer that old Tandy HD system onto the eliminator. After
+several close calls, I ended up losing only one file. Had to use 40trk ds
+floppies to transfer - lots of em. My doggone arm hurts.
+
+Now what are the chances that we'll EVER see a resonably priced, easy to use
+backup system?
+
+Opinions?
+
+Art
+
+P.S. Is this project also on the back burner like my CD ROM request [grin]?
+
+There is 1 Reply.
+
+#: 12283 S10/OS9/6809 (CoCo)
+    19-Sep-91  02:23:17
+Sb: #12281-Easy HD Backups
+Fm: Kevin Darling 76703,4227
+To: Art Doyle 71565,262 (X)
+
+Hmmm.  I think a couple of people have tape backup units on their coco now; but
+not sold commercially (or maybe they are? dunno).  I'm pretty sure that Chris
+Burke and/or Roger Krupski had one set up for themselves.
+
+Mostly, I'd guess that people are waiting for the SCSI tape units to become
+much cheaper.  Got me... I still use dsave :-)
+
+#: 12286 S1/General Interest
+    19-Sep-91  11:40:16
+Sb: #RSDOS TO OS9
+Fm: Paul Hanke 73467,403
+To: anyone
+
+  Several people have asked about transferring files from rsdos to os9 using
+the utility DOSOR9.BAS,  with the main concern being the size of file
+allowable.  As written, that seemed to be about 32k or 64k bytes.   I suggested
+that a way to increase that to just under
+100 k bytes is to add the following line:
+
+2326 IF NN>32767 THEN NN=NN-32768:GOTO 2326  'PGH 09/09/90
+
+  Now I'm wondering why there is still an upper limit to the transfer.  If the
+size is over 100k or so, OS9 replies with a  'file too fragmented' error.  This
+appears to be due to OS9's inability to keep track of where the file is if
+OS9's f.a.t. needs more than 1 sector (I'm guessing mostly at this).  Since OS9
+prefers to have files written to contiguous sectors, a lengthy RSDOS conversion
+might appear to be fragmented even tho to RSDOS it is not, ie:
+  RSDOS can use granules 32 to 68 consecutively; so far so good.  If a file
+needs more room, then the order becomes 30-31, 28-29, 26-27,  etc.  instead of
+0 - 31.  All this presumably because of the directory track being #17, right in
+the middle of the disk.  So my reasoning is that the second half of a very long
+rsdos file might appear too fragmented to OS9.  If this is the case, perhpas a
+patch to rsdos to store files from granule 0 - 31 would allow DOSOR9 to
+transfer a file up to 68 granules long since OS9 wouldn't have to keep track of
+many non-contiguous sectors/granules.
+  But I don't know that much about how OS9 keeps track of files.   
+Clarification please?      -ph- 
+
+There are 2 Replies.
+
+#: 12287 S1/General Interest
+    19-Sep-91  12:40:07
+Sb: #12286-#RSDOS TO OS9
+Fm: Erich Schulman 75140,3175
+To: Paul Hanke 73467,403 (X)
+
+A full 68 Granules cannot be DOSOR9'ed since you need to take Track 0 out of
+service for OS-9's use.  I don't believe a simple patch will fix the problems
+you described but I suppose one could _carefully_ use DSKI$ and DSKO$ to
+physically move the files around to a more "acceptable" form and then to
+manaully update DECB's FAT.  Despite the "fix" you described, I have never
+successfully used DOSOR9 with more than 21 Granules used per disk.  I have
+already decided to just get GCS File Transfer Utilities and complementary
+SDISK-3 so I can handle any size DECB file (up to 68 Grans anyway) as well as
+MS-DOS disks.  Not to mention having something better than trscopy to transfer
+OS-9--->DECB.  For a file that's not too big, I've found the best way to do
+that is to upload it to my PER area on sterm and download it on Ultimaterm. 
+(Or sometimes, just redownload from the Lib or the BBS).  Trscopy will usually
+manage to huff and puff its way through transfers to OS-9 but I still have a
+lot of trouble with making it do the opposite.
+
+There are 2 Replies.
+
+#: 12291 S1/General Interest
+    19-Sep-91  21:57:55
+Sb: #12287-#RSDOS TO OS9
+Fm: Paul Hanke 73467,403
+To: Erich Schulman 75140,3175 (X)
+
+I guess you're right about patching rsdos; forgot about track 0 for OS9.  But
+that might not otherwise been a solution either; dunno.
+
+As for dosor9, you should have the version updated for files larger than 32k. 
+This should work for files up to about 62-64k.  My fix works only on this one. 
+Check your version for the following lines:
+
+-------
+300 GOTO 9900
+----
+------
+2300 ' binary string output
+2320 N$="":FOR I=1 TO NS
+2324 NN=NUM
+2325 IF NUM>32767 THEN NN=NUM-32768  'fix for files >32k
+2326 IF NN>32767 THEN NN=NN=32768-GOTO2326 'fix for >64k PGH 09/09/90 2330
+N$=CHR$(NN AND 255)+N$
+2340 NUM=INT(NUM/256)
+2350 NEXT I:RETURN
+9900 PCLEAR 1:CLS:CLEAR 2000:GOTO 500
+
+
+  If your version matches this version and it still doesn't work,  make sure
+your large file is the only one copied onto a newly formatted disk and try
+again.  If it still doesn't work, I can send you a complete copy of mine for
+comparison.  You are the first person to say whether  my version has worked or
+not, other than myself,  altho some have said to have tried it; so I have no
+new stats to recite.
+  I've just converted a file of 44 grans using this modified dosor9!
+  -ph-  
+
+There are 2 Replies.
+
+#: 12294 S1/General Interest
+    19-Sep-91  23:27:26
+Sb: #12291-#RSDOS TO OS9
+Fm: Erich Schulman 75140,3175
+To: Paul Hanke 73467,403 (X)
+
+My version does have the lines you listed.  I'll have to go back and try
+something with a large file as the only one on a disk.
+
+There is 1 Reply.
+
+#: 12310 S1/General Interest
+    20-Sep-91  08:27:24
+Sb: #12294-RSDOS TO OS9
+Fm: Paul Hanke 73467,403
+To: Erich Schulman 75140,3175 (X)
+
+You might check out the suggestions offered by others on this thread,   namely
+using PCDOS & RSDOS to convert your files.  I did some checking with an decb
+program called ZAPZ.BAS-  this allows you to look at individual sectors
+including those on an OS9 disk (yep). What was most interesting was the way
+DOSOR9's f.a.t. is constructed- not at all similar to the way OS9 does it in a
+pure OS9 environment. (I don't even understand why it works at all.)
+
+If you check lines 807, 1190, & 1192  you will see that DOSOR9 imposes its own
+upper limit on file sizes due to the maximum allowable string length of 250
+char.  I don't know enuf about OS9
+and directories to muddle out of this one.  I've been rather delinqent in doing
+OS9 homework; my policy has been to find out only enough to get by with the
+current problem.  As it stands, I too have found other solutions to transfer
+larger files and even used my own upgrade only until a file >100k came along. 
+Now if someone could modify DOSOR9 to produce a 'pure OS9' type directory......
+-ph- 
+
+#: 12307 S1/General Interest
+    20-Sep-91  07:49:01
+Sb: #12291-RSDOS TO OS9
+Fm: Steve Wegert 76703,4255
+To: Paul Hanke 73467,403 (X)
+
+Paul,
+
+You may wish to investigate a suite of files called RSDOS.AR that handles
+reading and writing RSDOS files from inside OS9. It's what I use and havn't run
+across any problems. Should be in the libraries here.
+
+Steve
+
+#: 12352 S1/General Interest
+    20-Sep-91  22:11:26
+Sb: #12287-#RSDOS TO OS9
+Fm: Paul Hanke 73467,403
+To: Erich Schulman 75140,3175 (X)
+
+I've used sterm to download files to a ramdisk directly.  This will work even
+tho the proper speed-up patches to OS9 modules haven't been done. I used the
+send ahead protocol with a 2400 baud modem resulting in a net baud rate of
+1400+  which I understand is rather slow compared to that gained by adding the
+proper patches (irq hack, too,  probably.)  You also lose proper screen display
+somewhat by not upgrading; but it works.  Change Sterm's data directory to /r0.
+-ph- 
+
+There is 1 Reply.
+
+#: 12356 S1/General Interest
+    21-Sep-91  01:47:13
+Sb: #12352-RSDOS TO OS9
+Fm: Erich Schulman 75140,3175
+To: Paul Hanke 73467,403 (X)
+
+That's what I do.  I used to have sterm (1.2) download directly to floppy disk,
+but back then I was using sterm only on the DC Modem Pak.  As you might
+imagine, the speed of file transfers was not appreciably reduced. I still, as a
+rule, make my downloads for both DECB and OS-9 under DECB. I use a 2400bps
+modem under DECB and it works just fine.  But I once before started a thread
+about having probs under OS-9 which were diagnosed as need of IRQ hack.  I
+found back then that I lost only a few characters here and there on the display
+at 1200 baud tho file transfers appeared completely reliable.  At 2400, I had a
+lot of character loss but downloads did OK.  What I did for that was take
+careful note of the Lib section and exact filename.  Since I've been on CIS so
+many times, I know my way around well enough that I could lose a lot of
+characters and still know where I was.  So what I'd do is log on then wait for
+my modem's RD light to go out.  I'd GO OS9 and wait for some semblance of
+"Forum !" and a dark RD light, and so on til I was ready to log off.  The
+biggest problem I had was keeping track of my time since I could not depend on
+a usable
+
+Connect time = h:mm message after logoff.
+
+#: 12292 S1/General Interest
+    19-Sep-91  22:23:50
+Sb: #12286-#RSDOS TO OS9
+Fm: Ian Hodgson 72177,1762
+To: Paul Hanke 73467,403 (X)
+
+     I'm puzzled. For years now I've watched people describe their troubles
+using DOSOR9. I used to use it too, with all the problems of maximum file size,
+oddly set up disks (track 0 unused; my files ALWAYS seemed to end up on track
+zero), too much fragmentation, and so on.
+
+     The reason I'm puzzled is that for a long time now I've been using a MUCH
+nicer program, RSDOS (downloaded from RSDOS.AR). RSDOS (and its sister program
+PCDOS), operating under OS9, allows you to read DECB directories, read or write
+DECB files (writing allows a bunch of switches for file type, etc.) and do
+deletes from DECB disks. It doesn't seem to have an upper limit to file size,
+nor does it care about track 0 on the DECB disk.
+
+     So why do I seem to be the only one using it? I'm sure it came from one of
+the libraries here, so take a look. Oh, it requires either SDISK or the patched
+CC3Disk to operate. If you try it I suspect you'll relegate DOSOR9 to a
+suitable archive disk.
+
+There is 1 Reply.
+
+#: 12308 S1/General Interest
+    20-Sep-91  07:50:54
+Sb: #12292-RSDOS TO OS9
+Fm: Steve Wegert 76703,4255
+To: Ian Hodgson 72177,1762 (X)
+
+Ian ... you're not alone !  :-)
+
+I think I used DOSOR9 to nabb my first OS9 terminal program. Then it was RSDOS
+from then on. It's a dandy.
+
+Steve
+
+#: 12290 S1/General Interest
+    19-Sep-91  21:01:02
+Sb: #In Search of Stuff
+Fm: Jay Truesdale 72176,3565
+To: all
+
+I am looking for a couple of items and I'm hoping that someone here can help me
+find:
+
+1) A can of "Diet Jolt."  I read an article a while back that said they were
+going to come out with this.  Regular Jolt I can find, but I need some Diet
+Jolt for a project I'm working on.
+
+2) The manufacturer of the joysticks used in arcade game machines.  I'd like to
+replace my defective joystick mechanism.
+
+Thanks in advance for any help you can provide!
+
+-J
+
+There is 1 Reply.
+
+#: 12300 S1/General Interest
+    20-Sep-91  01:17:54
+Sb: #12290-In Search of Stuff
+Fm: Kevin Darling 76703,4227
+To: Jay Truesdale 72176,3565 (X)
+
+GRIN.  Sorry, I drink the Southern programmer soda:  Dr Pepper! :-)
+
+
+Which arcade game; which kind of joystick?  (I wonder if one of the GAMExx
+forums would know?)
+
+#: 12293 S1/General Interest
+    19-Sep-91  22:34:22
+Sb: #OS/2
+Fm: Art Doyle 71565,262
+To:  76476,464 (X)
+
+Hi Paul,
+
+What do you think of the new OS/2 ? Does it suffer from the meladies you
+described last year?
+
+Art
+
+
+
+There is 1 Reply.
+
+#: 12359 S1/General Interest
+    21-Sep-91  11:22:06
+Sb: #12293-#OS/2
+Fm: Jim Peasley 72726,1153
+To: Art Doyle 71565,262 (X)
+
+Art;
+
+  Saw your note on OS/2.  Assuming you're talking about the V.2.0 release
+(which is in Beta test and due to be released RSN), yep they've managed to get
+almost all the 'bugs' out and make it much more robust.   I've seen video of
+demonstrations put on by the 'blue Ninja' (an IBM VP) that blow most people's
+socks off... kinda ho-hum for us OS-9 types tho, as we've been doing this stuff
+for years on a $200 machine!
+  The interface is very like Windows 3.0, but at this point not quite as
+snazzy.  Windows and DOS apps run unmodified in the DOS box(es) and programs
+written for the 32 bit processor *really* fly!  Looks like this may become the
+next 'standard' and finally replace DOS.  Time will tell. The BIG difference in
+this version is that the developers have been using conferencing and a large
+base of beta testers to get the final release 'just right' -- something
+radically different for Big Blue.
+  For more info, go IBMOS2 and check out the forum.
+
+..Jim
+
+
+
+There is 1 Reply.
+
+#: 12374 S1/General Interest
+    22-Sep-91  14:48:51
+Sb: #12359-OS/2
+Fm: Art Doyle 71565,262
+To: Jim Peasley 72726,1153 (X)
+
+Thanks Jim !
+
+#: 12295 S7/Telecommunications
+    19-Sep-91  23:33:13
+Sb: #sterm 1.2--->1.
+Fm: Erich Schulman 75140,3175
+To:  76703,4255 (X)
+
+I have downloaded the complete sterm 1.5 archive, extracted it, and it all
+works.  I've already done about 450K of Xmodem with it.  Only prob that I did
+have is when I list sterm.manual.  There appear to be formfeed characters in it
+that prevented my reading a few parts.  But obviously not enough to keep me
+from using the program.
+
+There is 1 Reply.
+
+#: 12306 S7/Telecommunications
+    20-Sep-91  07:45:16
+Sb: #12295-#sterm 1.2--->1.
+Fm: Steve Wegert 76703,4255
+To: Erich Schulman 75140,3175 (X)
+
+Erich,
+
+I'm betting the doc file has been formated with mroff for a nice looking
+document when _printed_ .
+
+Grab one of the MORE utilities that can be found in the libraries here to help
+you with managing online documentation. The version I use allows for selective
+positing within the file as well as backing up.
+
+Glad you're up with the current version!
+
+Steve
+
+There is 1 Reply.
+
+#: 12316 S7/Telecommunications
+    20-Sep-91  13:51:19
+Sb: #12306-sterm 1.2--->1.
+Fm: Erich Schulman 75140,3175
+To: Steve Wegert 76703,4255 (X)
+
+Since I have Level II Tools, I do have a Browse which would probably have done
+just as well as MORE.  I usually use list with a paged display since I don't
+have to load anything more into memory.  Though I have 512K total, I've only
+got 392K free on startup, and a big RAMdisk (like 256K) really pares that down.
+And then with Wcopy, Wdel, and Ar also in RAM....  I may print the sterm manual
+some time, but I rightly suspected that just reading it once on the screen
+would be enough for me to get up and running with it.  I've now used a total of
+roughly ten to twelve term programs so not much of anything is new to me
+anymore.
+
+#: 12296 S9/Utilities
+    19-Sep-91  23:37:06
+Sb: #Extracting Big ar file
+Fm: Erich Schulman 75140,3175
+To: ALL
+
+Yesterday I downloaded a 170K ar file.  There is not enough space on a 360K
+disk to hold the ar file and to extract it.  I thought that I could copy the ar
+to a RAMdisk and extract to a physical disk.  I thought that appending >/d0
+would redirect the extraction to a newly formatted disk which I had in /d0. 
+Instead I got a File Already Exists error.  Would Tee be able to handle the
+redirection?  Or is there some other way that I can extract this archive?
+
+There is 1 Reply.
+
+#: 12301 S9/Utilities
+    20-Sep-91  01:19:45
+Sb: #12296-#Extracting Big ar file
+Fm: Kevin Darling 76703,4227
+To: Erich Schulman 75140,3175 (X)
+
+Erich,
+
+To extract a file from your ramdisk to d0, first "chd /d0" so that the output
+will end up there.  Then "ar -x /r0/file.ar" so that Ar extracts from the
+archived file on ramdisk.
+
+Ar always extracts to the current directory.
+
+best - kev
+
+There are 2 Replies.
+
+#: 12315 S9/Utilities
+    20-Sep-91  13:43:50
+Sb: #12301-Extracting Big ar file
+Fm: Erich Schulman 75140,3175
+To: Kevin Darling 76703,4227 (X)
+
+Now why didn't I think of that (g).  Thanks.
+
+#: 12342 S9/Utilities
+    20-Sep-91  18:23:45
+Sb: #12301-Extracting Big ar file
+Fm: Lee Veal 74726,1752
+To: Kevin Darling 76703,4227 (X)
+
+If there's still not enough room on the /d0 drive, could Erich also just
+de-ARchive using specific files from the ARchive file.
+
+ ar -x /r0/file.ar file1.doc file1.bin ... etc?
+
+Having a hard drive has spoiled me on how to solve problems in a floppy-based
+system.
+
+I had somebody ask me some questions about Level 1 the other day, and drew a
+blank.
+
+Lee
+
+#: 12297 S10/OS9/6809 (CoCo)
+    19-Sep-91  23:40:28
+Sb: #Using Nil devices
+Fm: Erich Schulman 75140,3175
+To: ALL
+
+I have never found any documentation for the Nil drivers in Tandy's OS-9
+Development System package.  I have always wondered exactly what they are for,
+and even more so after seeing them in Rainbow's sample boot list. I once tried
+redirecting some text to Nil but got a Media Full error after a few seconds. 
+So what makes these devices useful, and how might one put them to use?
+
+There is 1 Reply.
+
+#: 12302 S10/OS9/6809 (CoCo)
+    20-Sep-91  01:23:10
+Sb: #12297-Using Nil devices
+Fm: Kevin Darling 76703,4227
+To: Erich Schulman 75140,3175 (X)
+
+Sounds like you simply did a "list file >nil" which created a file.
+
+Make sure you put the "/" in front: "list file >/nil"... which should dump the
+output into the great bit bucket in the sky.
+
+It's handy from a script file at times: when you don't want to see error
+messages or standard output names, etc.
+
+#: 12298 S7/Telecommunications
+    19-Sep-91  23:45:16
+Sb: #GO FILE
+Fm: JOERG SATTLER 74016,631
+To: ALL
+
+I cant tell you how much I would like to see a File Finder (OS9FF) similar to
+the  IBMFF or AMAIGAFF sections. Shure would make life somewhat easier at
+times. I am looking for the (optional) GO file module for UUCP.                
+Joerg
+
+There are 2 Replies.
+
+#: 12299 S7/Telecommunications
+    20-Sep-91  00:04:38
+Sb: #12298-#GO FILE
+Fm: Wayne Day 76703,376
+To: JOERG SATTLER 74016,631 (X)
+
+Joerg,
+
+It would be nice, but I don't think the OS-9 activity on CompuServe would be
+enough to support the resources needed to set up the FF program.
+
+Wayne
+
+There is 1 Reply.
+
+#: 12351 S7/Telecommunications
+    20-Sep-91  21:23:03
+Sb: #12299-#GO FILE
+Fm: John R. Wainwright 72517,676
+To: Wayne Day 76703,376 (X)
+
+Hey Wayne!, How about that "browse all libs" thingy I saw in the new stuff
+listing when I logged on the other day - will it be here (is it already here?)
+
+JohnW
+
+There is 1 Reply.
+
+#: 12368 S7/Telecommunications
+    22-Sep-91  01:48:57
+Sb: #12351-GO FILE
+Fm: Wayne Day 76703,376
+To: John R. Wainwright 72517,676 (X)
+
+John,
+
+It's in the final testing stage, now, and should be available in all of the
+forums when it's release for general useage.
+
+Wayne
+
+#: 12309 S7/Telecommunications
+    20-Sep-91  07:58:27
+Sb: #12298-#GO FILE
+Fm: Steve Wegert 76703,4255
+To: JOERG SATTLER 74016,631 (X)
+
+Joerg,
+
+As Wayne mentioned, I doubt we'll see anything like the File Finder utilities,
+however, if you caught mention of the 'Across Library Searching' feature
+announced in this weeks System Wide What's NEW announcement, help is on the
+way.
+
+This new version of the library software will allow users  to span all
+libraries within a specific forum while browsing for files.
+
+It's up and running in a few forums now (see the list in the WN announcement).
+In fact, you can play with it for free in the PRACTICE forum and get a flavor
+while we wait for it to migrate here.
+
+
+Soon .... I hope!
+
+Steve
+
+There is 1 Reply.
+
+#: 12317 S7/Telecommunications
+    20-Sep-91  14:00:27
+Sb: #12309-#GO FILE
+Fm: Erich Schulman 75140,3175
+To: Steve Wegert 76703,4255 (X)
+
+I'd agree that OS-9 activity is not sufficient for a File Finder, but.... Why
+just OS-9?  Perhaps combining this forum, the CoCo Forum, TRS80PRO, and maybe
+some other relevant forum(s) would be enough to justify a file finder.  Or at
+least we could do what IBMAPP also does.  This forum and the CoCo Forum do a
+comprehensive update of their catalog files.  Then each forum can put them in
+their respective sections.  And a combined catalog file can be placed in one
+section.  The file would probably need to be TC3'ed or Ar'ed (as appropriate). 
+I prefer to do most of my looking around offline anyway.
+
+There is 1 Reply.
+
+#: 12357 S7/Telecommunications
+    21-Sep-91  09:41:38
+Sb: #12317-GO FILE
+Fm: Steve Wegert 76703,4255
+To: Erich Schulman 75140,3175 (X)
+
+
+Good point, Erich ....
+
+Perhaps it's time to run a new series of complete catalogs for all the
+libraries.
+
+Steve
+
+#: 12303 S10/OS9/6809 (CoCo)
+    20-Sep-91  03:37:33
+Sb: #A New Copy/Move utility
+Fm: George Hendrickson 71071,2003
+To: all
+
+Anyone have a new copy/move utility that auto senses if the file is being
+copied/moved to another dir/drive? We OS9 users need such a utility! Maybe
+something written in C or ML would be nice! <grin> Anyone good at writing such
+a thing? Any volunteers? <grin> I'd write one but I don't have the C compiler
+and I'm unfamiliar with OS9 ML.. HELP!
+
+There is 1 Reply.
+
+#: 12314 S10/OS9/6809 (CoCo)
+    20-Sep-91  12:59:04
+Sb: #12303-#A New Copy/Move utility
+Fm: Pete Lyall 76703,4230
+To: George Hendrickson 71071,2003 (X)
+
+George -
+
+Have you checked DL9 or DL10 for 'mv'? It appears to do all that you're looking
+for. Also, there's a clone of Unix's 'cp' command.
+
+Pete
+
+There are 2 Replies.
+
+#: 12369 S10/OS9/6809 (CoCo)
+    22-Sep-91  03:25:21
+Sb: #12314-A New Copy/Move utility
+Fm: George Hendrickson 71071,2003
+To: Pete Lyall 76703,4230 (X)
+
+I haven't seen 'mv'...I'll look for it and try it out..I use 'cp' quite a bit.
+It is very useful!
+
+
+
+#: 12370 S10/OS9/6809 (CoCo)
+    22-Sep-91  03:39:36
+Sb: #12314-#A New Copy/Move utility
+Fm: George Hendrickson 71071,2003
+To: Pete Lyall 76703,4230 (X)
+
+I looked for 'mv' but couldn't find it in DL9 or DL10. Any ideas where it could
+be?  Thanks...
+
+
+
+There are 3 Replies.
+
+#: 12371 S10/OS9/6809 (CoCo)
+    22-Sep-91  10:03:51
+Sb: #12370-A New Copy/Move utility
+Fm: Pete Lyall 76703,4230
+To: George Hendrickson 71071,2003 (X)
+
+George -
+
+I believe it was in the UGLIB area..... let me scan..
+
+Pete
+
+#: 12372 S10/OS9/6809 (CoCo)
+    22-Sep-91  10:07:15
+Sb: #12370-#A New Copy/Move utility
+Fm: Pete Lyall 76703,4230
+To: George Hendrickson 71071,2003 (X)
+
+George -
+
+In the file PURGED.TXT, there's a file listed as MV09.AR... I'll wager that's
+it. Ask Mike Ward [76703,2013] to recover it for you.  Also, it appears that
+there's a 68k version as well... may include source if you to move it to a
+6809. Go to DL5 and type: BRO MV*
+
+Pete
+
+There is 1 Reply.
+
+#: 12389 S10/OS9/6809 (CoCo)
+    24-Sep-91  02:47:33
+Sb: #12372-A New Copy/Move utility
+Fm: George Hendrickson 71071,2003
+To: Pete Lyall 76703,4230 (X)
+
+Thanks! I'll ask Mike for the file....
+
+#: 12373 S10/OS9/6809 (CoCo)
+    22-Sep-91  12:57:13
+Sb: #12370-#A New Copy/Move utility
+Fm: Mike Ward 76703,2013
+To: George Hendrickson 71071,2003 (X)
+
+George, I just uploaded MV09.AR to Lib 5. The 68k version is MV68K.AR in the
+same library.
+
+There is 1 Reply.
+
+#: 12390 S10/OS9/6809 (CoCo)
+    24-Sep-91  02:49:30
+Sb: #12373-#A New Copy/Move utility
+Fm: George Hendrickson 71071,2003
+To: Mike Ward 76703,2013 (X)
+
+BOY! That was fast!! I just left Pete Lyall a message saying that I was going
+to leave you a message and next message I read was from
+ you! Now that's what I call service! Thanks! I'll download the files...
+
+There is 1 Reply.
+
+#: 12391 S10/OS9/6809 (CoCo)
+    24-Sep-91  05:38:32
+Sb: #12390-A New Copy/Move utility
+Fm: Mike Ward 76703,2013
+To: George Hendrickson 71071,2003
+
+Anytime George... I hope the files help you out.
+
+
+
+
+#: 12304 S4/MIDI and Music
+    20-Sep-91  03:44:50
+Sb: #11991-#Bad Download
+Fm: George Hendrickson 71071,2003
+To: Jim Sutemeier 70673,1754 (X)
+
+I've been wondering about the TC9. How fast does it run? Will it run RSDOS
+stuff faster than 2mhz and how fast will it run under OS9?
+
+Thanks!
+
+There is 1 Reply.
+
+#: 12409 S4/MIDI and Music
+    26-Sep-91  09:57:53
+Sb: #12304-#Bad Download
+Fm: Jim Sutemeier 70673,1754
+To: George Hendrickson 71071,2003
+
+The TC9 will run the same as the CoCo, George, as it has the 6809 as the
+processor.
+
+However, you CAN add a "Tiger" card to it, and, with the correct drivers, the
+68000 chip in the Tiger card will act as a co-processor handling memory
+management for the TC9.
+
+Should increase speed of most programs run (Frank estimates <conservatively>
+that the TC9 will increase spped from 2 to 3 times the stock 6809 chip.
+
+(Aside from the DOS command, I haven't used RSDOS in almost 10 years now.... so
+am not totally familiar with how RSDOS will be handled by the TC9, but RSDOS
+programs will run AT LEAST as fast as they do now - same processor)
+
+jim
+
+
+
+There is 1 Reply.
+
+#: 12414 S4/MIDI and Music
+    26-Sep-91  23:21:08
+Sb: #12409-#Bad Download
+Fm: James Jones 76257,562
+To: Jim Sutemeier 70673,1754 (X)
+
+Any word on when the correct drivers are expected?
+
+There is 1 Reply.
+
+#: 12423 S4/MIDI and Music
+    27-Sep-91  12:51:54
+Sb: #12414-Bad Download
+Fm: Jim Sutemeier 70673,1754
+To: James Jones 76257,562 (X)
+
+Haven't talked to Frank recently about the drivers, Jim.... will try to find
+out and let you know.
+
+jim Sutemeier
+
+
+
+#: 12324 S4/MIDI and Music
+    20-Sep-91  16:05:00
+Sb: #11991-#Bad Download
+Fm: Paul K. Ward 73477,2004
+To: Jim Sutemeier 70673,1754 (X)
+
+Jim,
+
+I see your point on the CoCo4 being 6809 system -- nothing else will do,
+according to you! Interesting!
+
+Of course, by that same argument, only 8086 systems are PCs. I think you also
+have to consider the element of "family resemblance". Hence, an 80386 UNIX
+system is not as much a PC as an 80386 MS-DOS system is, as most people
+understand "PC". Its the software that makes the 80386 MS-DOS system in the PC
+"family".
+
+Hence, a 6809 system would be a CoCo4 if it is in the "family" of the Color
+Computer -- but a 68000 system would ALSO be a CoCo of sorts (CoCo 5?) if (and
+only if) its software kept its look, feel, and user profile.
+
+Best,
+
+Paul
+
+PS Take care!
+
+
+
+There is 1 Reply.
+
+#: 12410 S4/MIDI and Music
+    26-Sep-91  10:04:38
+Sb: #12324-#Bad Download
+Fm: Jim Sutemeier 70673,1754
+To: Paul K. Ward 73477,2004 (X)
+
+Paul....I do see and understand your point.
+
+But the original PC's came out with one chip, and then IBM moved on to other
+chips as they went along, for more speed, etc., etc.
+
+Tandy, however, started with the 6809, and through two further enhanced
+production models, STAYED with the 6809 processor.
+
+This is why I stipulate that the only true CoCo4 is the Tomcat9 - the TC9 STAYS
+WITH the 6809 processor, following Tandy's lead in using (and continuing to
+use) the 6809.
+
+Most/all existing software CoCo owners use (both RSDOS and OS9 LII) will run on
+the Tomcat9.
+
+This is why I state that the TC9 is the CoCo4.
+
+(Just FYI, though, I moved on to a Tomcat70....I don't even consider it close
+to a CoCo in any way - sure, it runs OS9....but a much more powerful OS9 than
+I'm used to.)
+
+jim
+
+
+
+There is 1 Reply.
+
+#: 12419 S4/MIDI and Music
+    27-Sep-91  08:09:05
+Sb: #12410-#Bad Download
+Fm: Steve Wegert 76703,4255
+To: Jim Sutemeier 70673,1754 (X)
+
+Jim,
+
+I'm curious ... how's the TC70 performing?
+
+A friend of my recently took delivery of one and has had a number of problems
+he's currently trying to get resolved with Frank.
+
+Right at the top of the list is frequent system crashes. He's accustomed to
+having a very stable system up for hundereds of hours. Lately, with the TC70
+he's lucky to see anything older than 38 hours.
+
+Have you been experiencing anything similar?
+
+How about craftsmanship? Any problems with the construction of the system? The
+same system has about 10 serial ports, with only 3 working. Trouble shooting
+seems to indicate the actual board is functional, but the cabling to the 9-pins
+is suspect on the non-working ports.
+
+How about your reset switch? Does it work?  His doesn't.
+
+At this point he's one frustrated pup, while I continue to say, 'isolated
+instance'.
+
+Howaboutit?
+
+Steve
+
+There is 1 Reply.
+
+#: 12424 S4/MIDI and Music
+    27-Sep-91  12:56:17
+Sb: #12419-#Bad Download
+Fm: Jim Sutemeier 70673,1754
+To: Steve Wegert 76703,4255 (X)
+
+Your friends problem does sound like an isolated incident.  I am having no
+problem at all with my TC70 - everything, including the reset button, work just
+fine.
+
+I have NOT, however, tried keeping mine up and working for 38 hours, <YET>, so
+that I cannot comment on reliably.
+
+Once I put my BBS up on the TC70, I'll be able to comment on usage for long
+periods of time.
+
+So far, I am extremely happy with the Tomcat70, making plans to expand it to
+customize my computer the way I want it.
+
+jim Sutemeier SysOp <Plain Rap> BBS 818-894-0012
+
+
+
+There is 1 Reply.
+
+#: 12434 S4/MIDI and Music
+    28-Sep-91  09:23:54
+Sb: #12424-Bad Download
+Fm: Steve Wegert 76703,4255
+To: Jim Sutemeier 70673,1754
+
+With your positive report on the box, Jim, it does help support the 'isolated
+instace' position. And I know Frank will do everything he can to resolve the
+outstanding issues my friend is still having.
+
+I'll keep you posted on how it goes.
+
+Steve
+
+#: 12305 S1/General Interest
+    20-Sep-91  07:12:40
+Sb: #12096-Atlanta 'Fest
+Fm: Eric A. Cottrell  [WIT] 76327,515
+To: Kevin Darling 76703,4227 (X)
+
+Thanks Kev,
+Not much time for the old CoCo. Still lurk around the forum.
+I am going to LA in November so I can not get away. I am going to learn some
+more about orbiting objects.
+73 Eric...
+
+#: 12311 S12/OS9/68000 (OSK)
+    20-Sep-91  12:39:54
+Sb: #intercept
+Fm: Roy Dacus 70721,1113
+To: all
+
+/* sigl.c */
+/* a program to show that you can longjmp() from intercept() */
+/* without the stack growing.  control E to end, control C to test */
+/* part 1 */
+
+#include <stdio.h>
+#include <setjmp.h>
+#define TRUE 1
+#define FALSE 0
+
+int count1;
+int init;
+int jumped;
+int ret;
+jmp_buf env1;
+
+main()
+{
+    int ccheck();
+    count1=0;
+    init=FALSE;
+    intercept(ccheck);
+    pmain();
+}
+
+ccheck(signum)
+int signum;
+{
+    if (signum != 3)
+        exit(signum);
+    if (jumped)
+        return;
+    pmain();
+}
+
+
+There is 1 Reply.
+
+#: 12380 S12/OS9/68000 (OSK)
+    23-Sep-91  08:08:09
+Sb: #12311-intercept
+Fm: Mark Wuest 74030,332
+To: Roy Dacus 70721,1113 (X)
+
+Roy,
+ I'm not sure if you read the entire thread, but Kim Kempf (is he still at
+Microware?) pointed out the existance of another stack that we do not see. I
+thought the same thing you did at first, BTW, even verifying that the usp is
+intact with srcsbg.
+ Mark
+
+#: 12312 S12/OS9/68000 (OSK)
+    20-Sep-91  12:41:32
+Sb: intercept
+Fm: Roy Dacus 70721,1113
+To: all
+
+/* part 2 */
+numpr()
+{
+    int count;
+    long place;
+    count = 0;
+    place = (long)&count;
+    printf("%lu\n",place);
+}
+
+counter()
+{
+    int time1;
+    while(1) {
+        printf("%d\n",count1++);
+        if (count1%24==0)
+            numpr();
+        for (time1=0; time1<5000; time1++);
+    }
+}
+
+
+#: 12313 S12/OS9/68000 (OSK)
+    20-Sep-91  12:43:08
+Sb: intercept
+Fm: Roy Dacus 70721,1113
+To: all
+
+/* part 3 */
+pmain()
+{
+    jumped=TRUE;
+    if (init)
+        longjmp(env1,1);
+    ret=setjmp(env1);
+    if (ret == 0)
+        init=TRUE;
+    count1=count1*10;
+    jumped=FALSE;
+    guts();
+    counter();
+}
+
+/* guts: Give Up Time Slice */
+#asm
+guts: move.l #1,d0
+ os9 F$Sleep
+ clr.l d0
+ clr.l d1
+ rts
+#endasm
+
+
+#: 12318 S15/Hot Topics
+    20-Sep-91  15:44:57
+Sb: #11866-Serial ports?
+Fm: Paul K. Ward 73477,2004
+To: Jim Peasley 72726,1153 (X)
+
+Jim,
+
+We did NOT change! You get TWO serial ports with a Personal System (i.e., sans
+I/O board), and a THIRD with the I/O board.
+
+Your confusion stems from the fact that we have yet to send your second serial
+port for your I/O board. The chips are being purchased for a new batch to go
+out. It is a small printed circuit board that hosts a Motorola serial chip and
+a dual-row header for jumpering various serial signals. Some customers have
+theirs, some do not.
+
+So, you are right!
+
+Paul IMS
+
+#: 12319 S15/Hot Topics
+    20-Sep-91  15:45:45
+Sb: #11897-MM/1 delivery
+Fm: Paul K. Ward 73477,2004
+To: GLEN HATHAWAY 71446,166 (X)
+
+Glen,
+
+I thnk we're all set up now on your order! Thanks for the tip on calling you...
+
+Bst,
+
+Paul IMS
+
+#: 12320 S15/Hot Topics
+    20-Sep-91  15:46:56
+Sb: #11925-Troubles and Woe
+Fm: Paul K. Ward 73477,2004
+To: Jim Peasley 72726,1153 (X)
+
+Jim,
+
+Yours is the second power supply that has crapped out -- looks like a QC
+problem with our supplier. They are warrantied,and you and I have talked about
+the correct procedure. Do let me know what else I can do in the meantime.
+
+Thanks!
+
+Best,
+
+paul IMS
+
+#: 12321 S4/MIDI and Music
+    20-Sep-91  15:49:23
+Sb: #11947-UMUSE3
+Fm: Paul K. Ward 73477,2004
+To: Mike Knudsen 72467,1111
+
+Generally, i think the rainbow reviews will tend to be generous until the
+various companies parameters are better known -- then I think customers and the
+magazine will end up characterizing them by their chief strenghths (with the
+implication that they are intended for discrete audiences, which may or may not
+be true).
+
+Anyway, I think in general, the MIDI stuff on the MM/1 will end up being pretty
+darn exciting.
+
+Paul ims
+
+#: 12326 S15/Hot Topics
+    20-Sep-91  16:14:46
+Sb: #11780-#Help and the MM/1
+Fm: Paul K. Ward 73477,2004
+To: John R. Wainwright 72517,676 (X)
+
+Technical Overview will be for sale at the fest for cheap. A more comprehensive
+Technical Manual is also in the works for 1992 release.
+
+Paul IMS
+
+There is 1 Reply.
+
+#: 12345 S15/Hot Topics
+    20-Sep-91  20:56:23
+Sb: #12326-#Help and the MM/1
+Fm: John R. Wainwright 72517,676
+To: Paul K. Ward 73477,2004 (X)
+
+Thanks,  Paul.
+
+Don't think I'll be able to make it to Atlanta, but I'll find a way to get hold
+of one (technical overview) - could I phone in an order?
+
+John Wainwright
+
+There is 1 Reply.
+
+#: 12384 S15/Hot Topics
+    23-Sep-91  16:00:57
+Sb: #12345-Help and the MM/1
+Fm: Paul K. Ward 73477,2004
+To: John R. Wainwright 72517,676 (X)
+
+John,
+
+You sure can order over the phone. Call at 202 232 4246. I have had a sudden
+increase in phone activity of the last three weeks (the Fall season is here!),
+making it a challenge to keep my phone mail box empty (it holds up to 95
+messages) each day. But do keep trying. Tentative price is $39.95.
+
+Best,
+
+Paul
+
+IMS
+
+#: 12327 S7/Telecommunications
+    20-Sep-91  16:17:12
+Sb: #11807-MM/1 and STERM
+Fm: Paul K. Ward 73477,2004
+To: Bill Dickhaus 70325,523 (X)
+
+Bill,
+
+I am hoping to have serial drivers for most (if not all) serial ports to handle
+38.4 K baud.
+
+Of course, IsquaredC can handle 100,000bps, but that's not for modem
+communication, generally.
+
+paul ims
+
+#: 12328 S12/OS9/68000 (OSK)
+    20-Sep-91  16:21:51
+Sb: #11810-Questions
+Fm: Paul K. Ward 73477,2004
+To: Jim Peasley 72726,1153 (X)
+
+Jim,
+
+Thanks for the list of questions! When we talked ont he phone recently, you did
+not ask them, so I assume you have been satisfied here. If not, well,
+
+here goes!
+
+John Vestal and NCSU has used a DiamondScan on the MM/1. So has KK Darling.
+
+PCF requires a new driver that support variable sector sizes. That driver is
+being worked on. It will be provided to you for cost of media.
+
+I love emacs.
+
+I also love Bob's VED!
+
+Several folks have I/O boards. More are shipping by the end of the month or so.
+Mostly, we are spending our time on clubs, reps, shipping another big batch of
+MM/1s, shows ( I was involved with two conventions last week) and club shows.
+
+Busy, indeed!
+
+Hope this helps.
+
+Best,
+
+paul ims
+
+#: 12329 S12/OS9/68000 (OSK)
+    20-Sep-91  16:26:32
+Sb: #11884-Questions
+Fm: Paul K. Ward 73477,2004
+To: Mark Wuest 74030,332 (X)
+
+Mark,
+
+We should have g ++ on the MM/1 some time before Christmas, FYI.
+
+Best,
+
+Paul IMS
+
+#: 12330 S12/OS9/68000 (OSK)
+    20-Sep-91  16:29:42
+Sb: #11824-#MM/1 Audio
+Fm: Paul K. Ward 73477,2004
+To: John R. Wainwright 72517,676 (X)
+
+The window driver for your single board MM/1 does not support Display 7. The
+window driver for the dual board system (the bootdisk on Disk #2 contains that
+driver) DOES support Display 7.
+
+The Play commands do require the second board.
+
+if you type Break at a shell prompt to do a software reset, with the PC speaker
+hooked up, I think you will hear the beep. I don't know as my case does not
+have a PC speaker in it.
+
+Paul IMS
+
+PS Good to hear from you, BTW!
+
+There is 1 Reply.
+
+#: 12346 S12/OS9/68000 (OSK)
+    20-Sep-91  21:00:09
+Sb: #12330-MM/1 Audio
+Fm: John R. Wainwright 72517,676
+To: Paul K. Ward 73477,2004 (X)
+
+Aha.   Another problem solved.  Thanks again.
+
+JohnW
+
+#: 12331 S15/Hot Topics
+    20-Sep-91  16:33:38
+Sb: #11825-#MM1 & unknown pins
+Fm: Paul K. Ward 73477,2004
+To: William Phelps 75100,265 (X)
+
+William,
+
+Tech Overview manual will be ready by early October. In the meantime, you can
+call Mark Griffith (call me for phone number) for pinout info.
+
+Many of the jumpers on the CPU board are for video sync, IsquaredC, and VSC
+signals. Most are designated in the Kit Instructions. Details can be found in
+the interim from Mark Griffith and the Signetics manuals on the 66470, 68070,
+and IsquaredC.
+
+The September issue of Embedded Systems Programming contains a nice article on
+IsquaredC, and references source code to be found on CompuServe somehwere.
+
+GIve me a call and I'll tell you more about the ESP article and the source
+code. May interest you!
+
+Best,
+
+paul IMS
+
+PS Please do call for Mark's number.
+
+
+
+There is 1 Reply.
+
+#: 12377 S15/Hot Topics
+    23-Sep-91  01:44:16
+Sb: #12331-#MM1 & unknown pins
+Fm: William Phelps 75100,265
+To: Paul K. Ward 73477,2004 (X)
+
+You will receive a call soon.
+
+William
+
+There is 1 Reply.
+
+#: 12385 S15/Hot Topics
+    23-Sep-91  16:02:02
+Sb: #12377-MM1 & unknown pins
+Fm: Paul K. Ward 73477,2004
+To: William Phelps 75100,265
+
+William,
+
+Keep trying if the mailbox is full. I try to clear it out every night.
+
+Best,
+
+Paul
+
+IMS
+
+#: 12332 S15/Hot Topics
+    20-Sep-91  16:52:19
+Sb: #11957-#MM/1 & floppies
+Fm: Paul K. Ward 73477,2004
+To: William Phelps 75100,265 (X)
+
+Make sure the 5.25 inch floppy is NOT terminated. In terms of Dmode'ing to make
+sure you can read and write, for a quick, sweet answer, check with KK Darling.
+
+Paul
+
+IMS
+
+(I mention Kevin not because he is an IMS employee or a support person, but
+because he constantly transfers stuff between his CoCo and the MM/1, and I do
+not.)
+
+Best
+
+Paul
+
+There is 1 Reply.
+
+#: 12378 S15/Hot Topics
+    23-Sep-91  01:48:02
+Sb: #12332-#MM/1 & floppies
+Fm: William Phelps 75100,265
+To: Paul K. Ward 73477,2004 (X)
+
+Actually I think the problem is the VERSION of the drivers that I have.
+
+William
+
+There is 1 Reply.
+
+#: 12386 S15/Hot Topics
+    23-Sep-91  16:02:51
+Sb: #12378-MM/1 & floppies
+Fm: Paul K. Ward 73477,2004
+To: William Phelps 75100,265
+
+William,
+
+THere are some new drivers floating around our developers that are improved. I
+have not yet received them, but should have them soon.
+
+Best,
+
+Paul IMS
+
+#: 12333 S15/Hot Topics
+    20-Sep-91  16:55:45
+Sb: #12034-MM/1 & floppies
+Fm: Paul K. Ward 73477,2004
+To: Scott t. Griepentrog 72427,335
+
+Scott,
+
+Hee, hee!! Naturally, I'd like to fix up William's thing with the 5.25" drive.
+Have grabbed your messages and will follow up!
+
+Best,
+
+paul ims
+
+
+
+#: 12335 S12/OS9/68000 (OSK)
+    20-Sep-91  17:00:10
+Sb: #11970-OSK
+Fm: Paul K. Ward 73477,2004
+To: Dave Philipsen 73627,710
+
+Dave,
+
+You may be able to find some sample 68k driver code here. Also, try the
+Technical I/O Manaul from Microware, and OS-9 Insights from Microware.
+
+Best of luck,
+
+Paul
+
+IMS
+
+#: 12336 S1/General Interest
+    20-Sep-91  17:04:15
+Sb: #12014-#The Rescue
+Fm: Paul K. Ward 73477,2004
+To: Paul Hanke 73467,403 (X)
+
+Floyd lives in Cincinnati. I have his phone number if you need it.
+
+Best,
+
+Paul IMS
+
+There is 1 Reply.
+
+#: 12353 S1/General Interest
+    20-Sep-91  22:11:51
+Sb: #12336-The Rescue
+Fm: Paul Hanke 73467,403
+To: Paul K. Ward 73477,2004 (X)
+
+Well, Floyd's address is given in the docs to his games, but I don't have time
+to persue the matter further; besides the fudge fix works.
+
+'Course if there are no bugs in level 23, and it is just my perception that
+there are, I'd have to find time to go back and play some more legitimate
+rounds.   -ph- 
+
+#: 12337 S12/OS9/68000 (OSK)
+    20-Sep-91  17:13:57
+Sb: #12046-OSK
+Fm: Paul K. Ward 73477,2004
+To: Ed Gresick 76576,3312 (X)
+
+Ed,
+
+Thank you for your thoughts on software compatibility.
+
+My first reaction is that OSK will soon have a national visibility due to CD-I
+and that pressure will be on all of us to make hardware and software choices to
+conform to national standards. By "standard", unfortunately, I cannot mean only
+ANSI or ISO standards -- often it must be DE FACTO standards.
+
+Termcap compatibility is a help. Other considerations include ANSI C compiler
+availability to ease porting to/from UNIX, Athena compatibility,
+UUCP/C-BourneShell/UNIX-command set compatibility, a set of aliases to help DOS
+users, Point-and-click environment when consoles are required, with a C library
+and C style guide that allows the same program to run on terminals when
+necessary, and so on.
+
+Keep up the good work.
+
+Best,
+
+Paul
+
+IMS
+
+#: 12339 S12/OS9/68000 (OSK)
+    20-Sep-91  17:20:03
+Sb: #12069-Your Standards Texts
+Fm: Paul K. Ward 73477,2004
+To: Mark Griffith 76070,41 (X)
+
+mark,
+
+absolutely the correct method.
+
+It actually does not make THAT much difference NOW how a programmer programs
+for OSK. The OSK market per se does not really exist since the majority of OSK
+users are a very spread-out, difficult to reach bunch, and so do not constitute
+a large mass of folks with simple needs.
+
+In the future, though, the OSK market will be bigger, and standards, even
+simple ones, are naturally the best route.
+
+Best,
+
+paul
+
+ims
+
+#: 12340 S5/OS9 Users Group
+    20-Sep-91  17:20:38
+Sb: #12076-Cross Assembler
+Fm: Paul K. Ward 73477,2004
+To: Pete Lyall 76703,4230 (X)
+
+Might have been UltraScience.
+
+Best,
+
+paul
+
+ims
+
+#: 12341 S12/OS9/68000 (OSK)
+    20-Sep-91  17:25:29
+Sb: #12089-#MM/1
+Fm: Paul K. Ward 73477,2004
+To: John R. Wainwright 72517,676 (X)
+
+I/O boards ARE shipping, but slowly while we get more base systems out! After
+that, they will go out rapidly.
+
+Yeah, UPS went on strike the first day that Customs in Canada recieved his
+MM/1. It took them several weeks to find it, then they had to call us for some
+information on getting in touch with Colin. A mess.
+
+Paul
+
+IMS
+
+There is 1 Reply.
+
+#: 12350 S12/OS9/68000 (OSK)
+    20-Sep-91  21:08:03
+Sb: #12341-MM/1
+Fm: John R. Wainwright 72517,676
+To: Paul K. Ward 73477,2004 (X)
+
+Hehe, I have a picture in mind of you, finally getting some time to get on to
+the forums and answer questions.  You get the sign-up and welcome to the forum
+and it tells you you have 3,546,230 messages waiting.  EEEEEk! (Maybe not quite
+that bad, but I bet it keeps you busy for a while.  Hang in there.
+
+JohnW
+
+#: 12360 S1/General Interest
+    21-Sep-91  11:23:04
+Sb: Sir Speedy!
+Fm: Jim Peasley 72726,1153
+To: Mark Griffith 76070,41 (X)
+
+Mark;
+  Thanks for the phone call AND the prompt service.  Looking forward to getting
+back to doing some serious programming on the MM/1 in the near future.
+  Now, if I only had my I/O board (Paul, hint - hint!) so I didn't have to keep
+swapping floppies and some more memory!
+
+Thanks,
+  ...Jim
+
+
+
+
+#: 12361 S15/Hot Topics
+    21-Sep-91  11:24:13
+Sb: More questions?
+Fm: Jim Peasley 72726,1153
+To: Paul Ward
+
+Paul;
+  Glad to see you back 'on-line' after so long!  Bet your 'messages waiting'
+counter was WAY up there, eh?
+
+  Mark called me about 15 minutes ago to report that the pallette controller
+was the culprit on my MM/1 and that he'd already replaced it and tested it.
+Should be headed back West on Monday.
+
+  Can you give me an approximate date for the I/O and 2nd serial boards to be
+shipped?  As someone else just mentioned, swapping floppies - even 1.4M
+floppies - is a royal pain when you're trying to accomplish something!  And the
+system memory gets kind of skinny too, even tho it's twice what my CoCo has!
+
+  Do you have an address/phone# for those Signetics data manuals that you
+mentioned in one of your replies yesterday?  Any other sources of data for
+programming/interfacing that you have would also be welcomed!
+
+Thanks,
+..Jim
+
+
+
+#: 12362 S10/OS9/6809 (CoCo)
+    21-Sep-91  11:46:55
+Sb: #cgp220 driber
+Fm: emmett riordan 73367,636
+To: [F] ALL
+
+I have been pleasently suprised to find an emerging library of graphic software
+for OS09 [DI have been experimenting with a variety of formats and relaized
+that I would like to use my CGP-220 printer to get color printo [Dprintouts. I
+have not been able to locate any printer drivers for the CGP-220 on any of the
+local boards or listed from any vendors. I guess another option would be to
+port thr images over to a CM3 format but again, no software seems to be
+available. Is anyone sharing this problem? Is there a driver that will permit a
+user to use their color printer under OS9. I could solve this problem by simply
+doing this from my PC but that is simply not the same as working from OS). Any
+help would be appreciated.
+
+There is 1 Reply.
+
+#: 12363 S10/OS9/6809 (CoCo)
+    21-Sep-91  13:55:10
+Sb: #12362-cgp220 driber
+Fm: Kevin Darling 76703,4227
+To: emmett riordan 73367,636
+
+Hi Emmett,
+
+Sure, just drop into Lib 10, and do a "bro /key:cgp*".
+
+I did, and found 3 interesting print utils.   You might also want to get the
+vefio screen snapshot util/viewer (I believe called VEFIO.AR and WINFO.AR?) if
+you don't already have them.
+
+Yell if have any troubles. - kev
+
+#: 12367 S1/General Interest
+    21-Sep-91  21:18:19
+Sb: 1 meg upgrade
+Fm: Paul Hanke 73467,403
+To: anyone
+
+Just finished browsing thru the latest Rainbow and found that no one appears to
+be advertising the 1 meg upgrade any longer!!!  Does that mean it is no longer
+available from any distributor or that they just don't run the adv in each
+issue?    -ph- 
+
+#: 12375 S10/OS9/6809 (CoCo)
+    22-Sep-91  16:50:02
+Sb: Hard drive
+Fm: PHIL SCHERER 71211,2545
+To: ALL
+
+I currently have a SASI hard drive and I was wondering what it would take to
+convert to SCSI. Is it just a matter of getting a new controller and driver?
+
+#: 12376 S1/General Interest
+    22-Sep-91  16:59:56
+Sb: #Bogus
+Fm: Paul Rinear 73757,1413
+To: Sysop (X)
+
+     I sure do miss checking in every now and then and typing ANN;5 for a list
+of new uploads. Was there a CIS software change or something?
+                            Paul R.
+
+There is 1 Reply.
+
+#: 12401 S1/General Interest
+    25-Sep-91  08:43:27
+Sb: #12376-Bogus
+Fm: Steve Wegert 76703,4255
+To: Paul Rinear 73757,1413
+
+Paul,
+
+Sort of ...
+
+
+By doing a SCAN  with the age switch you can come up with the latest files in
+each of the libraries. Not as handy as seeing everything in one list but that's
+also soon to change with some new software that's due to hit the forum's by the
+end of October.
+
+You'll be able to apply ANY library command across ALL librarys in a forum,
+with a command such as SCA /lib:all /age:10
+
+The software is currently running in the PRACTICE forum. You can check it out
+for free.
+
+Steve
+
+#: 12379 S10/OS9/6809 (CoCo)
+    23-Sep-91  02:14:22
+Sb: #ACIAPAK patch vs. SACIA
+Fm: Erich Schulman 75140,3175
+To: ALL
+
+Which is re likely to improve my /t2's performance:
+      a.) Patching ACIAPAK so as to increase its buffer size, or
+      b.) Intalling SACIA drivers in place of ACIAPAK? I have the ACIAPAK patch
+and the SACIA drivers all ready.  I just need to know which would more likely
+be a better long-term solution.  Since I've been td that SACIA's xmode can't be
+used with /t1 and /p, can I continue using the regular xmode command with them?
+If not, is there any way I can retain ACIAPAK with SACIA without having to
+create a special boot disk just for SACIA?  If the ACIAPAK patch would work
+better, what is the biggest buffer size one ought use (assuming I figure out
+how to modify the patch as per my download)?
+
+There are 2 Replies.
+
+#: 12392 S10/OS9/6809 (CoCo)
+    24-Sep-91  07:04:54
+Sb: #12379-ACIAPAK patch vs. SACIA
+Fm: Bill Dickhaus 70325,523
+To: Erich Schulman 75140,3175 (X)
+
+Erich,
+
+You're best bet is to use SACIA, and get rid of ACIAPAK all together. SACIA is
+based on the ACIAPAK that was to be released with the upgrade. It has all the
+new features, including being able to set the input buffer size in the device
+descriptor. You could have both SACIA and ACIAPAK in the same boot, but you
+would have to make up a new set of descriptors. Not only that, but I'm pretty
+sure that the clock module that comes withSACIA would require additional
+patches on ACIAPAK so that it would work with the new clock module.
+
+Bill
+
+#: 12393 S10/OS9/6809 (CoCo)
+    24-Sep-91  07:05:04
+Sb: #12379-#ACIAPAK patch vs. SACIA
+Fm: Bill Dickhaus 70325,523
+To: Erich Schulman 75140,3175 (X)
+
+Erich,
+
+The stock xmode should work fine with an SACIA descriptor, just the extras
+(like buffer size) can't be modified. I'm not sure which xmode is packaged with
+SACIA (I think its the oe I use), and I'm not sure why it wouldn't work with
+/T1 or /P. I have my modem ports set up with 2 pages of buffer space (512
+bytes), and that seems to work well (I'm not using SACIA, though). Just
+remember the buffer comes out of the system map, if you make it too big, the
+dreaded 237's will get you!
+
+Bill
+
+There is 1 Reply.
+
+#: 12397 S10/OS9/6809 (CoCo)
+    24-Sep-91  12:43:20
+Sb: #12393-ACIAPAK patch vs. SACIA
+Fm: Erich Schulman 75140,3175
+To: Bill Dickhaus 70325,523 (X)
+
+I'm going to work on my OS-9 overhaul today.  Thanks for your info; I'll keep
+all that in mind as I'm working on it.
+
+#: 12388 S7/Telecommunications
+    23-Sep-91  22:56:29
+Sb: #IRQ hack
+Fm: Paul Hanke 73467,403
+To: anyone
+
+Just  completed  the irq hack. Now, using sterm  1.5, I no  longer get missing
+text lines.  I have yet to e upgrades which allow faster transfer times.  A
+question concerning the hack:
+  When removing the blue jumper wire in the rs232 pak, there is no replacement
+wiring for the  other side. Does this mean that the pack can now be  used only
+for  OS9 communications or will it still work for say  Uterm?
+  If only for OS9, how about installing a socket/plug arrangement  on the 
+rs232 pak as well. This would allow for removal of  the irq hack and restore
+the original jumper connection, if the socket is wired correctly.  The only
+problem I can anticipate would be if I forgot to remove the wire before using
+Uterm which might cause damage to  one circuit or  the other  (?).    -ph-
+
+There is 1 Reply.
+
+#: 12398 S7/Telecommunications
+    24-Sep-91  19:37:39
+Sb: #12388-#IRQ hack
+Fm: Pete Lyall 76703,4230
+To: Paul Hanke 73467,403 (X)
+
+Scratching old memory cells here...
+
+All the hack does is pass the IRQ from the 6551 chip directly to the 6809's IRQ
+line... no stopping at PIA's or multiplexor chips. In the original PAK
+configuration, I believe the line (IRQ from the 6551) was originally setup to
+go to NMI (non maskable interrupt). This was a bad idea, thus all the little
+blue jumper wires. It is now connected to pin 8, which lands on the coco as
+either an IRQ or possibly an FIRQ (been too long).
+
+Best advice: try it. I believe you'll have no problems. Hundreds if not
+thousands have installed this simple mod with no negative effects.
+
+Pete
+
+There is 1 Reply.
+
+#: 12400 S7/Telecommunications
+    25-Sep-91  08:03:39
+Sb: #12398-IRQ hack
+Fm: Paul Hanke 73467,403
+To: Pete Lyall 76703,4230 (X)
+
+  Added the socket so that when the plug is removed, the jumper is effectively
+restored, returning the pack to its original status.
+I found that with the hack in place, Uterm doesn't work.  On the other hand,
+DM-3's telecom doesn't seem to care whether it's in place or not. 
+  To be on the safe side, one should probably remove the wire from both sockets
+since a loose end at the pack side could subject the 6809's pin 3 to some
+possible static discharge thru inadvertent mis-handling.    -ph- 
+
+#: 12399 S12/OS9/68000 (OSK)
+    24-Sep-91  21:19:38
+Sb: #Long code
+Fm: Bob van der Poel 76510,2203
+To: All
+
+Does anyone know why Microware used code like this in the strlen() and strcat()
+library functions?
+
+  strlen  move.l   a0,-(a7)
+          movea.l  d0,a0
+  strlen1 tst.b    (a0)+
+          beq.b    strlen2
+          tst.b    (a0)+
+          beq.b    strlen2
+          tst.b    (a0)+
+          beq.b    strlen2
+          tst.b    (a0)+
+          bne.b    strlen1
+  strlen2 ....
+
+I assume that a beq is quicker than a bne??? My 68000 manual doesn't show
+that--but, even if it is, would it make any real difference? After all, we are
+talking about a C library routine.
+
+
+
+There are 2 Replies.
+
+#: 12403 S12/OS9/68000 (OSK)
+    25-Sep-91  09:39:37
+Sb: #12399-Long code
+Fm: Mark Wuest 74030,332
+To: Bob van der Poel 76510,2203 (X)
+
+Bob,
+ *I* know! The guy that wrote it worked for one of those people that evaluated
+programmers' performance by # of lines of code written.
+ Hmmmmmm....
+ Mark
+ <g>
+
+#: 12404 S12/OS9/68000 (OSK)
+    25-Sep-91  10:06:16
+Sb: #12399-Long code
+Fm: Kevin Darling 76703,4227
+To: Bob van der Poel 76510,2203 (X)
+
+An untaken Bcc is faster than a taken Bcc, by a couple of cycles.  So by
+unrolling a testing loop like that, you speed things up a tiny amount... not by
+much, but in a commonly used routine the savings can really add up.
+
+#: 12402 S1/General Interest
+    25-Sep-91  09:07:36
+Sb: #WHAT'S AN OS-9 ???
+Fm: Victor Epstein 70004,515
+To: ALL
+
+Hi !
+
+I've never heard of OS-9 and I kind of wandered in here by accident. It appears
+to be an operating system for the old Tandy Color Computers--am I right ? Can
+someone tell me a little bit about this system and the forum. Do any other
+machines use the OS-9 ? Thanks
+
+
+                                --Vic
+
+There are 2 Replies.
+
+#: 12405 S1/General Interest
+    25-Sep-91  15:19:09
+Sb: #12402-WHAT'S AN OS-9 ???
+Fm: Lee Veal 74726,1752
+To: Victor Epstein 70004,515
+
+Victor,
+
+OS-9 was originally written for the Motorola 6809.  The Tandy CoCo product
+family (1/2/3) has always used the 6809 as its processor.  When the 68000 CPU
+was developed it seemed natural to extend OS-9 to that processor as well.  The
+68K version of OS-9 is sometimes called OSK, but it's still officially called
+OS-9.  With the advent of better Intel processor chips, it became feasible to
+extend the OS-9 product line into the Inael chip world.  OS-9000 is a
+"portable" version of OS-9, that is, it's predominately written in C.  Only
+very low level routines are written in the host processors native machine
+language.
+  OS-9000 will run on Motorola 680x0 processors and is slated, I believe, to
+run on some of their RISC processors as well.  It also runs on the Intel '386
+processor.  Microware is finishing up an MS-DOS emulator, that will allow a 386
+host running OS-9000 to run multiple MS-DOS applications.
+  OS-9(000) is a real-time, multi-tasking, multi-user operating system which
+has some similarities to Unix, but with a better interrupt handling system (for
+better handling of the real-time applications).  The real-time functionality is
+facilitated by some special OS-9 features, namely, preemptive task switching,
+process execution control and fast, flexible interrupt service routines.  More
+detail on this can be found in the OS-9 Catalog.
+
+  OS-9 for the CoCo3 even does windows.  We've been multi-tasking and doing
+windows for years, in fact.  My CoCo3 here at work uses an Epson Equity II+ as
+a terminal through a multi-port serial card that I have plugged into the CoCo3.
+
+ Microware Systems Corporation developed OS-9.
+ They can be reached by mailpat:
+
+  1900 N.W. 114th St
+  Des Moines, Ia  50325-7077
+
+  ph: (515) 224-1929
+
+  Ask for Steve Johnson.
+  Ask him to send you an OS-9 Catalog and/or an OS-9 Sourcebook.  I believe
+they also have counterparts for these books for OS-9000, too.
+
+Lee
+
+
+
+#: 12406 S1/General Interest
+    25-Sep-91  15:58:52
+Sb: #12402-WHAT'S AN OS-9 ???
+Fm: Kevin Darling 76703,4227
+To: Victor Epstein 70004,515
+
+Hi Vic!
+
+If you're who I think you are, I had meant to send you some info for your
+"orphaned" and "niche" machines article.  Is it still planned?
+
+The July 1989 Online issue had a story about this forum and the OS-9 operating
+system (which runs on many machines)... but I think an update is needed.
+
+Especially as, since then, one of the machines which runs it (the Tandy CoCo)
+has been discontinued.  Didn't matter much to the owners tho :-)   I think
+there's more OS-9 users on it now, than there were before the CoCo was
+orphaned!
+
+In addition, some neat new 68K machines have been built, designed in part from
+massive OS-9 user discussions held here.  Some of that's still in the libs, I
+think (15?).
+
+Anyway, just wanted to say "hello and welcome aboard".  Ask away... we'll all
+do our best to answer any Q's you have.   You can also "GO MSC" to check out
+Microware's display area... has much OS-9 info.  cheers - kevin
+
+#: 12411 S10/OS9/6809 (CoCo)
+    26-Sep-91  20:12:53
+Sb: #File Structure
+Fm: Bob Archambault 76506,3544
+To: ALL
+
+I did a DCHECK on my hard drive, and came up with some clusters previously
+allocated, and clusters in file structure but not in allocation map.
+
+Now, the manual explains all this quite well, and I have no problems using the
+system, BUT I need to know what, if anything, can be done to make my file
+structure "intact" again. The book unfortunately doesn't explain this.
+
+Also, is there a "de-fragmenter" program in the DL's anywhere??
+
+Thanx much in advance!
+
+Bob
+
+
+
+There are 2 Replies.
+
+#: 12415 S10/OS9/6809 (CoCo)
+    26-Sep-91  23:26:31
+Sb: #12411-#File Structure
+Fm: James Jones 76257,562
+To: Bob Archambault 76506,3544 (X)
+
+You really shouldn't continue to use the disk until you do something about the
+problems.  A disk sector can only hold one thing at a time, and if two
+different files think they have the same sectors, then their contents can
+easily be corrupted, and ditto for a file that thinks it's using a sector that
+isn't marked as used in the allocation map!
+
+Use the -p option on dcheck, not to mention using -w to put the workfiles
+somewhere *other* than the hard disk, and see what files are using the clusters
+that are in dispute.  The safest thing to do would be to copy those files to
+floppy, delete them from the hard disk, run dcheck to make sure that this has
+corrected the problem on the hard disk, and then copy the files back from
+floppy to the hard disk.  If you've written to sectors that are in dispute,
+then you won't be able to recover all the stuff, but you may be able to get
+most of it back.
+
+There are 2 Replies.
+
+#: 12428 S10/OS9/6809 (CoCo)
+    27-Sep-91  19:45:49
+Sb: #12415-File Structure
+Fm: Bob Archambault 76506,3544
+To: James Jones 76257,562 (X)
+
+Thank you, James,
+
+Your information was a great help to me; I'll get on that disk problem right
+away!
+
+Thanx again,
+
+Bob
+
+
+
+#: 12436 S10/OS9/6809 (CoCo)
+    28-Sep-91  12:05:24
+Sb: #12415-File Structure
+Fm: Pete Lyall 76703,4230
+To: James Jones 76257,562
+
+JJ/Bob -
+
+The 'sectors in file system but not in allocation map' is okay on a floppy, but
+not on a hard disk. (On a floppy it typically refers to the sectors marked as
+'used' that are associated with the boot track information [TRK 34] which don't
+appear in a directory or FD sector anywhere). On a hard disk
+
+(assuming you're booting from floppy) you shouldn't be seeing this. Also, the
+business about have sectors allocated more than once is surely the road to
+ruin. I refer to it as disk cancer.
+
+Two fixes (actually, one fix, one hack):
+
+  Fix: backup the disk, reformat, and then repopulate it.
+
+  Hack: Find out which files are associated with the sectors in question.
+        I believe Kreider wrote a tool called 'Hooz' that did this. Then
+        Make copies of the files into new files (one of them is bound
+        to be trashed, as they have intersecting disk real estate). Then
+        mark both files with unwritable attributes so they can't be deleted.
+        If either file IS deleted, it'll return its sectors to the free
+        pool and cause the cancer to propagate.
+
+One last thought.... if you are making using of the LINK BYTE in alllowing
+multiple filenames for the same file (ala the unix-ish 'ln' command), the
+multiple sector allocation is 'normal'.
+
+Pete
+
+#: 12420 S10/OS9/6809 (CoCo)
+    27-Sep-91  10:38:06
+Sb: #12411-#File Structure
+Fm: Erich Schulman 75140,3175
+To: Bob Archambault 76506,3544 (X)
+
+I remember seeing something in the Libs that will defragment a file but NOT a
+disk.  And that's obviously not the best way to defrag a hard drive!  If you
+want it, I believe it's in Lib 9 or 10, but I don't recall offhand.  I am not
+aware of any downloadable program for disks.  You might want to check ads in
+Rainbow for Burke&Burke (their commercial program is not that expensive) and
+for NineTimes (they listed one among other stuff).  Since I have no hard drive,
+I don't actually have any of this; I merely remember seeing it before.
+
+There is 1 Reply.
+
+#: 12427 S10/OS9/6809 (CoCo)
+    27-Sep-91  19:43:01
+Sb: #12420-File Structure
+Fm: Bob Archambault 76506,3544
+To: Erich Schulman 75140,3175 (X)
+
+Thanks, Erich,
+
+I probably will go with B&B's de-fragmenter program. Just wanted to see if
+there was a free one available <grin>.
+
+Bob
+
+
+
+#: 12416 S12/OS9/68000 (OSK)
+    27-Sep-91  00:10:15
+Sb: #Intercept
+Fm: Roy Dacus 70721,1113
+To: [F] Mark Wuest 74030,332 (X)
+
+/* sigl.c */
+/* a program to show that after you catch a signal you can longjmp() */
+/* runs best after a "$ Tmode nopause" */
+/* control E to end  *   control C to test */
+
+#include <stdio.h>
+#include <setjmp.h>
+#define TRUE 1
+#define FALSE 0
+
+/* start of stuff for tcept */
+unsigned long _afunc1;
+unsigned long _afunc2;
+/* end of stuff for tcept */
+
+unsigned long count1;
+char count2;
+int fflag;
+
+int init;
+int ret;
+jmp_buf env1;
+
+c1check(signum)
+int signum;
+{
+    if (signum != 3)
+        exit(signum);
+}
+
+c2check()
+{
+    pmain();
+    exit(0); /* safety net */
+}
+
+numpr()
+{
+    int count;
+    long place;
+    count = 0;
+    place = (long)&count;
+    printf("%lu\n",place);
+}
+
+c1ounter()
+{
+    int time1;
+    while(1) {
+        printf("%lu\n",count1++);
+        if (count1%24==0)
+            numpr();
+        for (time1=0; time1<5000; time1++);
+    }
+}
+
+c2ounter()
+{
+    int time1;
+    while(1){
+        for (count2=33; count2<126; count2++){
+            for (time1=0; time1<5000; time1++);
+            printf("%c\n",count2);
+        }
+        numpr();
+    }
+
+}
+/* continued */
+
+There is 1 Reply.
+
+#: 12418 S12/OS9/68000 (OSK)
+    27-Sep-91  07:56:13
+Sb: #12416-Intercept
+Fm: Mark Wuest 74030,332
+To: Roy Dacus 70721,1113 (X)
+
+Roy,
+ Boy have *you* been busy! I hope Bob sees and understands your code examples
+as he is the one that wanted to longjmp(). I must confess that, even after
+seeing an example of how to get around it, I would never write such code. If my
+Unix-experienced fellow developers ever had to fix a bug in my code while i was
+out of town, they would *kill* me when I got back <g>! It was bad enough having
+to port stat(), etc to os9. (Actually, getting Stevie to work properly was the
+real pain).
+ Mark
+
+#: 12417 S12/OS9/68000 (OSK)
+    27-Sep-91  00:11:54
+Sb: Intercept
+Fm: Roy Dacus 70721,1113
+To: Mark Wuest
+
+pmain()
+{
+    if (init)
+        longjmp(env1,1);
+    ret=setjmp(env1);
+    if (ret == 0)
+        init=TRUE;
+    if(fflag){
+        fflag=FALSE;
+        c1ounter();
+    }
+    if(!fflag){
+        fflag=TRUE;
+        c2ounter();
+    }
+    
+}
+
+main()
+{
+    count1=0;
+    init=FALSE;
+    tcept(c1check,c2check);
+    pmain();
+}
+
+#asm
+* * * * *
+* void tcept(func1,func2))
+* int (*func1)()
+* int (*func2)()
+* tcept (Twin interCEPT)
+* A intercept replacement that lets you longjmp().
+* notes:
+* func1 is run just like in intercept().
+* Thats means the following:
+* 1: you can not call any function that calls F$SigMask,
+* F$Sleep or F$Wait as they will unmask.  This is just like
+* intercept().
+* 2: you can not do a longjmp().  This is just like
+* intercept().
+* 
+* func2 is run just like any other function, except that
+* you must never return.
+* Thats means the following:
+* 1: you can longjmp().
+* 2: you can exit().
+*
+tcept: move.l a0,-(a7) save a0
+ move.l d0,a0 temp save of -> one
+ move.l a0,_afunc1(a6) real save of -> one
+ beq.b _tcept1 if zero jump and tell os9 to turn off intercept
+ move.l d1,_afunc2(a6) save of -> two
+ lea.l _tcept2(pc),a0 get -> to inside me
+_tcept1 os9 F$Icpt tell os9
+ move.l (a7)+,a0 restore a0
+ rts
+*
+_tcept2 move.l d1,d0 put signal in right place
+ move.l _afunc1(a6),a0 -> to func1
+ jsr (a0) run func1
+ move.l _afunc2(a6),a0 -> to func2
+ move.l a0,66(a7) fix stack so i start func2
+ os9 F$RTE go to func2 and NEVER return!
+* because of F$RTE OSK will not have a stack overflow
+#endasm
+
+#: 12421 S7/Telecommunications
+    27-Sep-91  10:40:30
+Sb: #Case-sensitive sterm
+Fm: Erich Schulman 75140,3175
+To: ALL
+
+I have seen that when I use sterm -f -l /t2, on the command line, sterm seems
+to be case-sensitive on the switches invoked.  sterm -F -L /T2 does not start
+the program.  Why is this?  Can anything be done about it?
+
+There is 1 Reply.
+
+#: 12430 S7/Telecommunications
+    27-Sep-91  22:01:20
+Sb: #12421-Case-sensitive sterm
+Fm: James Jones 76257,562
+To: Erich Schulman 75140,3175
+
+It's just the way the program was written; it would be hard to do much about it
+without the source code, to change and recompile.
+
+#: 12422 S9/Utilities
+    27-Sep-91  10:43:06
+Sb: #MS-DOS ARC/ZIP
+Fm: Erich Schulman 75140,3175
+To: ALL
+
+I know there are utilities for extracting ZIP archives, but are there any that
+will extract MS-DOS ARC files?  Also, are there utils that will CREATE MS-DOS
+ZIP archives?
+
+There are 2 Replies.
+
+#: 12425 S9/Utilities
+    27-Sep-91  13:23:52
+Sb: #12422-#MS-DOS ARC/ZIP
+Fm: edward langenback 73510,145
+To: Erich Schulman 75140,3175 (X)
+
+well, theres os9arc which will create ms-dos format arhives, but i`ve never
+heard of anything to create .zip format archives.  just burst em.
+
+"KMA-68!!"
+                                  >>>>>S S<<<<<
+                                  !!!!!!!!!!!!!
+
+There is 1 Reply.
+
+#: 12429 S9/Utilities
+    27-Sep-91  21:17:26
+Sb: #12425-MS-DOS ARC/ZIP
+Fm: Erich Schulman 75140,3175
+To: edward langenback 73510,145
+
+Thanks, I'll be looking for it.
+
+#: 12431 S9/Utilities
+    27-Sep-91  22:04:16
+Sb: #12422-MS-DOS ARC/ZIP
+Fm: James Jones 76257,562
+To: Erich Schulman 75140,3175
+
+Yes, there are programs that will extract at least some versions of MS-DOS
+ARC files.  Nothing to create .ZIP files, though; somebody made a program
+available to extract stuff from them, but nobody's done the same for a program
+to create them.  A group of people is working on a reverseengineered ZIP
+program, and I expect that once it's done, people will port it to OS-9.
+
+#: 12426 S5/OS9 Users Group
+    27-Sep-91  17:10:00
+Sb: #UGSpell Checker
+Fm: Mike Haaland 72300,1433
+To: Sysop (X)
+
+Can you upload the UG Spell cheker to lib 5 please...
+
+Mike
+
+There are 2 Replies.
+
+#: 12432 S5/OS9 Users Group
+    28-Sep-91  04:50:30
+Sb: #12426-UGSpell Checker
+Fm: Mike Ward 76703,2013
+To: Mike Haaland 72300,1433 (X)
+
+If I have it here I'd be happy to. Can you give me some clues as to what file
+name(s) it might be lurking under?
+
+
+
+
+#: 12433 S5/OS9 Users Group
+    28-Sep-91  05:19:15
+Sb: #12426-#UGSpell Checker
+Fm: Mike Ward 76703,2013
+To: Mike Haaland 72300,1433 (X)
+
+But wait.... did you mean the spell checker for 68K? On the off-chance that
+this is the case, I'm uploading SPEL68.AR to Lib 5 here in a moment.
+
+
+
+
+There is 1 Reply.
+
+#: 12437 S5/OS9 Users Group
+    28-Sep-91  12:24:41
+Sb: #12433-UGSpell Checker
+Fm: Mike Haaland 72300,1433
+To: Mike Ward 76703,2013
+
+Thanks Mike,  I think that's the one.  I couldn't remember the name of the
+file.  SPEL68.AR is the correct one.  Thanks again.
+
+#: 12435 S1/General Interest
+    28-Sep-91  10:56:20
+Sb: FILE FINDER
+Fm: JOERG SATTLER 74016,631
+To: ALL
+
+Barring the intro of a File Finder forum selection for OS9 I wonder if it would
+be to much trouble to introduce a across the libraries search and find program
+similar to the one just recently introduced in the UNIX forum. It would
+practically do the same thing as a file finder type forum but probably be a lot
+cheaper to implement. Is there reasonable chance for that in the near future
+???. I certainly hope so since trying to  find any one specific file or even
+only a type of file based on a keyword is nearly impossible unless you know
+exactly which library it's in, and even then it's not easy unless you know the
+that was used when it was stored.      Joerg Sattler
+
+Press <CR> !>

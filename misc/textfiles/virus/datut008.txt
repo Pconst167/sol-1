@@ -1,0 +1,486 @@
+
+                         อออออออออออออออออออออ
+                         EXE Self-Disinfection
+                         อออออออออออออออออออออ
+                            By Dark Angel
+                            Phalcon/Skism
+                         อออออออออออออออออออออ
+
+In the last issue of 40Hex, Demogorgon presented an article on self-
+disinfecting COM files. COM file disinfection is simplistic and very
+straightforward. In this article, we shall deal with the somewhat more
+complex topic of EXE file self-disinfection.
+
+You should already be familiar with the EXE file header and how each of the
+fields work. A brief summary follows (a fuller treatment may be found in
+40Hex-8.007):
+
+Offset Description
+  00   'MZ' or 'ZM' EXE signature word
+  02   Bytes in last page of the image
+  04   Number of pages in the file
+  06   Number of relocation items
+  08   Size of the header in paragraphs
+  0A   Minimum memory required in paragraphs
+  0C   Maximum memory requested in paragraphs
+  0E   Initial SS, offset from header in paragraphs
+  10   Initial SP
+  12   Negative checksum (ignored)
+  14   Initial IP
+  16   Initial CS, offset from header in paragraphs
+  18   Offset of relocation table from start of file
+  1A   Overlay number (ignored)
+
+There are several methods which allow a virus to infect an EXE file. The
+most common method involves the virus twiddling with the entry point of the
+program to point to the virus. Another involves the virus altering the code
+at the original entry point to jmp to its own code. A further method
+involves the virus simply overwriting the code at the entry point and
+storing the original code somewhere else, possibly at the end of the file.
+A final method involves altering the structure of the EXE file so it is
+instead recognised as a COM file. The ideal self-check routine should be
+able to handle all these cases.
+
+Part 1 - Detection
+~~~~~~~~~~~~~~~~~~
+The strategy for detection is simple; one simply needs to store a copy of
+the original header and the first few bytes located at the entry code. When
+the program executes, simply check these bytes to those found in the copy
+of the program located on the disk. If they differ, then there is clearly
+something amiss. This is essentially the same as the process for COM self-
+checking, but an extra layer of complexity is added since the header is not
+loaded into memory at startup. This minor difficulty may be readily
+overcome by simply physically storing the header at some point in the
+program.
+
+Since the header is not known before assembling the file, it is necessary
+to patch the header into the file after assembly. This may be done rather
+easily with a simple utility called 40patch. It will insert the header and
+the first 20h (32d) bytes at the entry point of an EXE file at the first
+occurence of the string 'Dark Angel eats goat cheese.' in the program. This
+string is exactly the length of the header, so be sure to allocate an
+additional 20h bytes after the string for the entry point code.
+
+A sample self-checking program follows:
+
+----EXE Self-Check Program 1 begin----
+                .model  small
+                .radix  16
+                .code
+; Self-Checking EXE 1
+; Written by Dark Angel of Phalcon/Skism
+; For 40Hex #13
+
+; To assemble: (tested with TASM 2.0)
+;   tasm <filename>
+;   tlink <filename>
+entry_point:    mov     ah,51                   ; Get current PSP to BX
+                int     21
+                mov     ds,bx
+
+                mov     bx,ds:2c                ; Search the environment for
+                mov     es,bx                   ; our own filename. Note that
+                mov     di,1                    ; this only works in DOS 3+.
+                xor     ax,ax
+                dec     di                      ; It also won't work if the
+                scasw                           ; environment has been
+                jnz     $ - 2                   ; released.
+
+                xchg    dx,di
+                inc     dx
+                inc     dx
+                push    es                      ; filename to ds:dx
+                pop     ds
+                mov     ax,3d02                 ; unless this handler is
+                int     21                      ; tunneled, a virus may
+                xchg    ax,bx                   ; infect it
+                mov     ax,_DATA
+                mov     ds,ax                   ; restore DS and ES
+                mov     es,ax
+                jc      error
+
+                mov     cx,1c                   ; check the header for
+                mov     si,offset header        ; corruption
+                call    read_buffer
+                jc      close_error
+
+                mov     ax,4200                 ; go to the entry point
+                xor     cx,cx
+                mov     dx,word ptr [header+8]
+                add     dx,word ptr [header+16]
+                rept    4
+                        shl     dx,1
+                        adc     cx,0
+                endm
+                add     dx,word ptr [header+14] ; add this to the entry point
+                adc     cx,0                    ; offset from header
+                int     21
+                jc      close_error
+
+                mov     cx,20                   ; now check the first 32 bytes
+                mov     si,offset first20       ; for corruption
+                call    read_buffer
+                jc      close_error
+
+close_error:    pushf
+                mov     ah,3e                   ; close the file
+                int     21
+                popf
+                jc      error
+
+                mov     dx,offset good          ; In an actual program, replace
+                                                ; this line with a JMP to the
+                jmp     short $+5               ; program entry point
+error:          mov     dx,offset bad
+                mov     ah,9
+                int     21
+
+                mov     ax,4c00
+                int     21
+
+read_buffer:    mov     ah,3f
+                mov     dx,offset readbuffer
+                int     21
+                jc      error_read
+                clc
+                cmp     ax,cx
+                jnz     error_read
+
+                xchg    dx,di
+                rep     cmpsb
+                clc
+                jz      $+3
+error_read:     stc
+                ret
+
+                .data
+good            db      'Self-check passed with flying colours.',0Dh,0A,'$'
+bad             db      'Self-check failed. Program may be infected!'
+                db      0Dh,0A,'$'
+                        ;0123456789ABCDEF0123456789AB
+header          db      'Dark Angel eats goat cheese.'
+first20         db      20 dup (0)
+readbuffer      db      20 dup (?)
+
+                .stack
+                db      100 dup (?)
+                end     entry_point
+----EXE Self-Check Program 1 end----
+
+----40patch begin----
+                .model  tiny
+                .code
+                .radix  16
+                org     100
+; 40patch
+; Written by Dark Angel of Phalcon/Skism
+; For 40Hex #13
+
+; To assemble: (tested with TASM 2.0)
+;   tasm /m 40patch
+;   tlink /t 40patch
+
+; Syntax:
+;  40patch filename.exe
+
+; 40patch will take the executable <filename.exe> and patch in the
+; header and the first 32d bytes at the entry point in the first
+; occurence of the string 'Dark Angel eats goat cheese.' in the
+; executable.
+patch:          mov     ah,9
+                mov     dx,offset welcome
+                int     21
+
+                mov     si,82
+back:           lodsb
+                cmp     al,0dh
+                jnz     back
+                dec     si
+                xchg    si,di
+                mov     byte ptr [di],0
+
+                mov     dx,82
+                mov     ax,3d02
+                int     21
+                xchg    ax,bx
+                jnc     open_okay
+
+                mov     si,offset extension
+                movsw
+                movsw
+                movsb
+
+                mov     dx,82
+                mov     ax,3d02
+                int     21
+                xchg    ax,bx
+                jnc     open_okay
+
+                mov     dx,offset syntax
+error:          mov     ah,9
+                int     21
+
+                mov     ax,4c01
+                int     21
+
+open_okay:      mov     ah,3f
+                mov     cx,1c
+                mov     dx,offset header
+                int     21
+
+                mov     ah,3f
+                mov     cx,20
+                mov     dx,offset scratchbuffer
+                int     21
+find_signature: xor     ax,ax
+                mov     di,offset scratchbuffer + 20
+                mov     cx,(100 - 20) / 2
+                rep     stosw
+
+                mov     ah,3f
+                mov     cx,100 - 20
+                mov     dx,offset scratchbuffer + 20
+                int     21
+                or      ax,ax
+                jz      signature_not_found
+                add     ax,offset scratchbuffer - signature_length + 20
+                xchg    bp,ax
+                mov     ax,'aD'
+                mov     di,offset scratchbuffer
+try_again:      scasw
+                jz      signature_check
+                dec     di
+                cmp     di,bp
+                ja      try_next_bytes
+                jmp     short try_again
+signature_check:mov     si,offset signature + 2
+                mov     cx,signature_length - 2
+                rep     cmpsb
+                jz      signature_found
+                jmp     short try_again
+try_next_bytes: mov     si,offset scratchbuffer + 100 - 20
+                mov     di,offset scratchbuffer
+                mov     cx,10
+                rep     movsw
+                jmp     short find_signature
+
+signature_not_found:
+                mov     dx,offset no_signature
+                jmp     short error
+
+signature_found:sub     di,bp
+                sub     di,1c * 2
+                xchg    dx,di
+                or      cx,-1
+                mov     ax,4201
+                int     21
+
+                mov     ah,40
+                mov     dx,offset header
+                mov     cx,1c
+                int     21
+
+                mov     ax,4201
+                xor     cx,cx
+                cwd
+                int     21
+                push    dx ax
+
+                mov     ax,4200                 ; go to the entry point
+                xor     cx,cx
+                mov     dx,word ptr [header+8]
+                add     dx,word ptr [header+16]
+                rept    4
+                        shl     dx,1
+                        adc     cx,0
+                endm
+                add     dx,word ptr [header+14]
+                adc     cx,0
+                int     21
+
+                mov     ah,3f
+                mov     dx,offset first20
+                mov     cx,20
+                int     21
+
+                pop     dx cx
+                mov     ax,4200
+                int     21
+
+                mov     ah,40
+                mov     dx,offset first20
+                mov     cx,20
+                int     21
+
+                mov     ah,3e
+                int     21
+
+                mov     ah,9
+                mov     dx,offset graceful_exit
+                int     21
+
+                mov     ax,4c00
+                int     21
+
+welcome         db      '40patch',0Dh,0A,'$'
+graceful_exit   db      'Completed!',0Dh,0A,'$'
+syntax          db      'Syntax:',0Dh,0A,'  40patch filename.exe',0Dh,0A,'$'
+no_signature    db      'Error: Signature not found.',0Dh,0A,'$'
+extension       db      '.EXE',0
+signature       db      'Dark Angel eats goat cheese.'
+signature_length =      $ - signature
+header          db      1c dup (?)
+first20         db      20 dup (?)
+
+scratchbuffer   db      100 dup (?)
+
+                end     patch
+----40patch end----
+
+To test out the programs above, first assemble them both. Next, run 40patch
+on the EXE file. If the EXE file is -subsequently- altered in any way, then
+it will alert the user of the problem. Note that this will do nothing for a
+program that is infected prior to 40patching, so be sure to run it on a
+clean system.
+
+This simple self-checking mechanism won't catch spawning viruses. However,
+it is trivial to add such a check.
+
+Part 2 - Disinfection
+~~~~~~~~~~~~~~~~~~~~~
+Usual methods (for there are many oddball variants) of infecting an EXE
+file involve appending the virus code to the end of the executable. With
+this knowledge in hand, it is sometimes possible to reconstruct an infected
+EXE file without too much difficulty. A simple modification of the previous
+program will suffice:
+
+----EXE Self-Check Program 2 begin----
+                .model  small
+                .radix  16
+                .code
+; Self-Checking EXE 2
+; Written by Dark Angel of Phalcon/Skism
+; For 40Hex #13
+
+; To assemble: (tested with TASM 2.0)
+;   tasm <filename>
+;   tlink <filename>
+entry_point:    mov     ah,51                   ; Get current PSP to BX
+                int     21
+                mov     ds,bx
+
+                mov     bx,ds:2c                ; Search the environment for
+                mov     es,bx                   ; our own filename. Note that
+                mov     di,1                    ; this only works in DOS 3+.
+                xor     ax,ax
+                dec     di                      ; It also won't work if the
+                scasw                           ; environment has been
+                jnz     $ - 2                   ; released.
+
+                xchg    dx,di
+                inc     dx
+                inc     dx
+                push    es                      ; filename to ds:dx
+                pop     ds
+                mov     ax,3d02                 ; unless this handler is
+                int     21                      ; tunneled, a virus may
+                xchg    ax,bx                   ; infect it
+                mov     ax,_DATA
+                mov     ds,ax                   ; restore DS and ES
+                mov     es,ax
+                mov     errorcount,0
+
+                mov     cx,1c                   ; check the header for
+                mov     si,offset header        ; corruption
+                call    read_buffer
+
+                mov     ax,4200                 ; go to the entry point
+                xor     cx,cx
+                mov     dx,word ptr [header+8]
+                add     dx,word ptr [header+16]
+                rept    4
+                        shl     dx,1
+                        adc     cx,0
+                endm
+                add     dx,word ptr [header+14] ; add this to the entry point
+                adc     cx,0                    ; offset from header
+                int     21
+
+                mov     cx,20                   ; now check the first 32 bytes
+                mov     si,offset first20       ; for corruption
+                call    read_buffer
+
+                mov     ah,3e                   ; close the file
+                int     21
+
+                mov     dx,offset good
+                cmp     errorcount,0
+                jz      $+5
+                mov     dx,offset errors
+
+                mov     ah,9
+                int     21
+
+                mov     ax,4c00
+                int     21
+
+read_buffer:    mov     ah,3f
+                mov     dx,offset readbuffer
+                int     21
+                jc      error_read
+                clc
+                cmp     ax,cx
+                jnz     error_read
+
+                xchg    dx,di
+                mov     bp,si
+                rep     cmpsb
+                jz      read_buffer_ok
+
+                push    ax
+                xchg    ax,dx
+                neg     dx
+                or      cx,-1
+                mov     ax,4201
+                int     21
+
+                mov     ah,40
+                xchg    bp,dx
+                pop     cx
+                int     21
+
+                mov     dx,offset bad
+                inc     errorcount
+                jmp     short $+5
+error_read:     mov     dx,offset read_error
+                mov     ah,9
+                int     21
+
+read_buffer_ok: ret
+
+                .data
+good            db      'Self-check passed.',0Dh,0A,'$'
+errors          db      'Errors were detected.',0Dh,0A,'$'
+bad             db      'Self-check failed. Fixing (may not work).'
+                db      0Dh,0A,'$'
+read_error      db      'Error reading file.',0Dh,0A,'$'
+                        ;0123456789ABCDEF0123456789AB
+header          db      'Dark Angel eats goat cheese.'
+first20         db      20 dup (0)
+readbuffer      db      20 dup (?)
+errorcount      db      ?
+
+                .stack
+                db      100 dup (?)
+                end     entry_point
+----EXE Self-Check Program 2 end----
+
+Summary
+~~~~~~~
+In general, it is poor practise to rely upon self-disinfection. The ancient
+(!) adage 'restore from backups' is best followed upon the discovery of an
+infection. However, it is helpful for programs to have a degree of self-
+awareness in order to alert the user of a virus's presence before it has a
+chance to spread too far. Disinfection will allow the user to continue
+using some programs (under certain circumstances) without fear of further
+spreading the virus.

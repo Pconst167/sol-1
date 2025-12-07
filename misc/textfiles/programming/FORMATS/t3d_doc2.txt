@@ -1,0 +1,415 @@
+
+                               TEXTURE FORMAT
+                               --------------
+                       Imagine 3.0 Texture File Format
+
+                         Rev 1.0  05-22-94 S.Kirvan
+                Copyright 1994 Impulse Inc., Mpls, MN 55444
+
+    Disclaimer:
+        All information contained herein is subject to change without
+        notice.  Knowledge is dangerous - use at your own risk.  No
+        warranties are made or implied, and no liability or responsibility
+        is assumed.     Good luck.
+
+SCOPE:
+=====
+
+This text will attempt to describe the construction of Imagine 3.0's
+run-time loadable texture modules.  The idea behind this text is basically,
+"teach by example."  By this, I mean that I have actually included and
+(perhaps overly) documented a texture module that does a basic, seen-it-
+way-too-many-times-in-raytraces, checkerboard (or checkerbored) texture.
+The code included is in C and all text in this document is in comment form.
+This document, of course, doesn't attempt to explain how Imagine 3.0's
+textures do what they do, but is instead, a basic example for understanding
+textures.
+
+Unfortunately, Impulse does not have the support staff available to answer
+technical questions about the information included in this document.
+Hopefully, this will be basic enough to be a reasonable starting point, and
+at the same time, will have enough depth to leave you with a sense of
+direction towards more complex subjects.
+
+Again, Good luck.
+
+
+GENERAL INFO:
+============
+
+The primary communications between the texture code and the renderer are
+handled through a "patch" structure.  The patch is a collection of
+attributes and other information that are relevent to a particular spot
+where a camera ray has hit an object.  This spot is refered to as the "hit
+point."  The information passed to the texture code by the renderer (via.
+the patch) can be modified to change surface attributes and create
+textures.  Information commonly modified by texture code is the color,
+transparency, reflect, and surface normals.
+
+The functions, fwork() and iwork(), below, are the guts of the texture
+code.  One of these functions, fwork() for floating point and PC versions,
+and iwork() for Amiga integer version, is called from the renderer each
+time a ray hits an object with this texture on it.  The patch structure
+gets passed to the work function along with information about the texture
+axis and the position of the hit point.  Using this information, the patch
+may be modified, changing the object's attributes.  The texture code doesn't
+get any information about the "world," or about the geometry (points/edges
+/faces) of the object that was hit.
+
+The entry module for the texture code is texture_init().  texture_init()
+sets up a structure (ttable{}) which is passed back to imagine.
+texture_init() also checks for software version compatability.  The
+structure passed back to imagine has information so that imagine can find
+the work() function, and the interface (the texture requester) data.
+Imagine's rendering code uses this pointer to the work() function when it
+calls the texture(s).
+
+The section of texture.c (below), called "INITIALIZATIONS,"  sets up the
+data for the user interface to the textures.  This section has all the
+information for the text, defaults, and texture axis data that can be
+modified by the user.
+
+Imagine's texture hook is intentionally as streamlined as possible - there
+is no error checking done within Imagine - it's all up to you.  If objects
+start looking bright, dark, or translucent in ways you aren't expecting,
+it's probably because some value has gone out of range and Imagine has
+forced the errant value through the renderer.  Doing this may look cool, but
+it could have unpredictable side effects so we recomend against doing it.
+
+Color gun values (for color, reflect, and filter) are set by the user in a
+range from 0 to 255.  Within the patch, the associated color gun values are
+stored as floats (FRACTS) and must be normalized to range from 0.0 to 1.0.
+
+The surface normal within the patch must also be normalized (ie. The length
+of the normal vector must equal 1.0).  When doing bumpy textures (like
+DinoSkin), you modify the surface normal to fool the renderer into putting
+shading and specular highlights in areas that normally wouldn't get them.
+As well as making sure the surface normal is normalized, you must also be
+sure that modifications to the surface are made relative to the local
+texture axis - not doing this will lead to bumps that have illogical
+highlights and won't animate properly.  The way to see if the bumps are
+being applied properly is as follows:  Create an animation with the texture
+in question on an object - have the camera and a light source associated to
+the object (so they all move in tandem). Put all these objects in black
+space, and rotate the main object throughout the animation.  There should
+be no change in the look of the object through the length of the animation
+since the scene is being viewed and lit relative to the object itself.  If
+the texture isn't doing the bumps properly, the specular highlights will
+crawl on the bumps.  The texture, Rainbow.itx, which was include with
+Imaigne 3.0 is a big help in debugging and getting bumpy textures to work
+properly.
+
+In the patch, some of the data is read-only.  This data is supplied as
+information that can be used by the textures but modifying the data will
+have no effect.
+
+When a texture is used repeatedly in the same image, it is only loaded into
+memory once - The important thing about this is that texture's can have
+static data space, but this data space will be shared by every instance of
+the texture.
+
+
+*********   COMPILING DETAILS   *********
+
+The SAS/C Compiler Ver 6.5 command line is as follows:
+        sc nostartup code=far data=far math=68881 nostackcheck link
+                                                to Texture.itx texture.c
+(all typed on one line...)
+
+On the PC, the texture code has to be linked as a Phar Lap 32-bit ".REX"
+file (relocatable executable).  Impulse's textures were compiled using the
+Metaware High-C compiler, and linked using Pharlap's linker.
+        hc386 -Hoff=Protection -c texture.c
+        386link texture.obj -relexe Texture.itx
+
+The important things to "get" about trying to compile texture code are as
+follows:
+    - don't link in startup code
+    - everything is 32 bit - ie. far pointers for both data and code
+    - don't allow the compiler to put in any stack checking code
+
+*/
+
+/**************************************************************/
+/*                                                            */
+/*   Texture.c - Imagine 3.0 checkerboard texture example     */
+/*                                                            */
+/**************************************************************/
+
+/*********   CONSATANTS   *********/
+
+// constants to be used in infoflags[]
+#define TXTF_RED    1
+#define TXTF_GRN    2
+#define TXTF_BLU    4
+#define TXTF_SCL    8
+
+// version number constant - if not correct, texture won't load
+#define TXT_VERS    0x49545854
+//#define TXT_VERS    0x54585449        // PC version
+
+#define NULL (0L)
+
+
+/*********   DATA TYPES   *********/
+
+typedef char                BYTE;
+typedef unsigned char       UBYTE;
+typedef short               WORD;
+typedef unsigned short      UWORD;
+typedef long                LONG;
+typedef void *              APTR;
+typedef float               FLOAT;
+
+// FRACT can be typedef'ed as a float without harm since this example is
+// for the floating point version only.  See TDDD.DOC for an explanation
+// of the FRACT data type.
+
+typedef float               FRACT;
+
+typedef struct _vector {
+    FRACT   X;
+    FRACT   Y;
+    FRACT   Z;
+}   VECTOR;
+
+typedef struct _tform   {
+    VECTOR  r;      // texture axes position
+    VECTOR  a;      // texture's X axis alignment
+    VECTOR  b;      // texture's Y axis alignment
+    VECTOR  c;      // texture's Z axis alignment
+    VECTOR  s;      // length of each axis
+}   TFORM;
+
+// The ttable{} structure is used as a communication link between
+// Imagine and the run-time loadable texture modules.  This structure is
+// initialized and passed back to imagine by the entry module
+// (texture_init()).
+
+typedef struct ttable {
+    LONG    id;             // version number identifier
+    void    (*init)();      // reserved - curently unused
+    void    (*cleanup)();   // reserved - curently unused
+    void    (*work)();      // hook to the texture algorithm (the "guts")
+    BYTE    **infotext;     // pointer to text fields for requester
+    UBYTE   *infoflags;     // pointer to data field flags for requester
+    APTR    params;         // pointer to data values for requester
+    APTR    tform;          // pointer to texture axis geometry info
+} TTABLE;
+
+
+// The PATCH structure contains all the (ray) hit point info.
+// This structure is passed to a texture function each time a
+// ray hits the object with a texture on it.
+
+typedef struct _patch {
+    VECTOR  ptc_pos;    // global hit point - read only
+    VECTOR  ptc_nor;    // surface normal (must be normalized)
+    FRACT   ptc_col[3]; // surface color (R,G,B) at hit point
+    FRACT   ptc_ref[3]; // surface color (R,G,B) at hit point
+    FRACT   ptc_tra[3]; // surface color (R,G,B) at hit point
+    FRACT   ptc_spc[3]; // surface color (R,G,B) at hit point - read only
+    UWORD   ptc_shp;    // copy of SHAP flags - read only - see TDDD.DOC
+    UWORD   ptc_shd;    // flag - obj can shadow itself - read only
+    FRACT   ptc_pc0;
+    FRACT   ptc_pc1;
+    VECTOR  *ptc_ray;   // position/exit direction of camera ray - read only
+    FRACT   raydist;
+    FRACT   foglen;     // surface foglength
+}   PATCH;
+
+// In the patch structure, ptc_ray[0] is the (camera) ray's base point
+// position, and ptc_ray[1] is ray's (normalized) direction vector
+
+
+/*********   PROTOTYPES   *********/
+
+TTABLE *texture_init (LONG);
+void fwork (FRACT *, PATCH *, VECTOR *, FRACT *);
+void iwork (FRACT *, PATCH *, VECTOR *, FRACT *);
+
+
+/*********   INITIALIZATIONS   *********/
+
+// infotext[][] is an array of strings that contain the texture name and
+// all the text fields that appear in the texture requester.  The
+// texture name file (infotext[0]) is not currently used, but we
+// suggest supplying a name it in case it eventually is used.
+
+BYTE    *infotext[17] = {
+    "Tutorial Texture",
+    "Color Red",
+    "Color Green",
+    "Color Blue",
+    "",
+    "", "", "", "",
+    "", "", "", "",
+    "", "", "", "",
+};
+
+// infoflags[] is an array of TXTF_ (texture flags) for the data
+// fields of the texture requester.  The the TXTF flags are as
+// follows:
+//      Bit 0 - alter the red gun in the requester color chip
+//      Bit 1 - alter the green gun in the requester color chip
+//      Bit 2 - alter the blue gun in the requester color chip
+//      Bit 3 - auto-scale this data field when object is scaled
+//      Bits 4 thru 7 - reserved
+
+UBYTE   infoflags[16] = {
+    TXTF_RED,
+    TXTF_GRN,
+    TXTF_BLU,
+    0,
+    0, 0, 0, 0,
+    0, 0, 0, 0,
+    0, 0, 0, 0,
+};
+
+// fparams[] is an array of floats that are the initial defaults
+// in the texture requester.  The values in this array can be
+// modified by the user and are passed to the texture code by
+// the floating point version of Imagine's renderer.
+
+FLOAT   fparams[16] = {
+    255.0, 255.0, 0.0, 0.0,
+    0.0, 0.0, 0.0, 0.0,
+    0.0, 0.0, 0.0, 0.0,
+    0.0, 0.0, 0.0, 0.0,
+};
+
+// iparams[] is an array of FRACT that are the initial defaults
+// in the texture requester.  The values in this array can be
+// modified by the user and are passed to the texture code by
+// the integer version (amiga only) of Imagine's renderer.  To
+// use FRACT with math functions requires a little creative
+// slight-of-hand with math macros and type conversions - doing
+// this is beyond the scope of this example, so the integer version
+// of this example texture will be stubbed out.  These are treated
+// as fixed point, FRACTs, stored as longs.
+
+LONG    iparams[16] = {
+    0L, 0L, 0L, 0L,
+    0L, 0L, 0L, 0L,
+    0L, 0L, 0L, 0L,
+    0L, 0L, 0L, 0L,
+};
+
+// ftform[] is an array of floats that represent the initial TFORM data
+// (size and position) of the texture axis.  The values in this array can
+// be modified by the user (via edit axis) and are passed to the texture
+// code by the floating point version of Imagine's renderer.
+
+FLOAT   ftform[15] = {
+    0.0, 0.0, 0.0,      // position vector
+    1.0, 0.0, 0.0,      // X axis alignment vector
+    0.0, 1.0, 0.0,      // Y axis alignment vector
+    0.0, 0.0, 1.0,      // Z axis alignment vector
+    10.0, 10.0, 10.0,   // size of each axis
+};
+
+// itform[] is an array of FRACT that represent the initial TFORM data
+// (size and position) of the texture axis.  The values in this array can
+// be modified by the user (via edit axis) and are passed to the texture
+// code by the integer version of Imagine's renderer.  Again, this example
+// is for floating point systems only.  The FRACT data type is explained
+// in TDDD.DOC and the integer version of this texture example will be
+// stubbed out.  These are treated as fixed point, FRACTs, stored as longs.
+
+LONG    itform[15] = {
+    0L, 0L, 0L,
+    0L, 0L, 0L,
+    0L, 0L, 0L,
+    0L, 0L, 0L,
+    10*0x10000L, 10*0x10000L, 10*0x10000L,
+};
+
+// this ttable{} structure is defined earlier and initialized here.
+
+TTABLE ttable = {
+    TXT_VERS,       /* version identifier - this contstant must be used */
+    NULL,
+    NULL,
+    NULL,
+    infotext,
+    infoflags,
+};
+
+
+/*********   FUNCTIONS   *********/
+
+// This is the texture_init() module for the textures.  This is the entry
+// module through which Imagine loads and calls the texture code.
+// texture_init() is called with a version number and a flag representing
+// whether this texture is being called from a floating point version or an
+// integer version of Imagine.  On the Amiga, these two (WORD) arguments
+// are packed into and passed as a single LONG which, in turn, is parsed
+// into the two arguments and interpreted within texture_init(). If all
+// goes well, texture_init() then initializes the ttable{} structure
+// (defined above) with the proper info and returns a pointer, for the
+// ttable{} structure, back to Imagine.
+
+TTABLE *texture_init (LONG arg0)
+{
+    // "TTABLE *texture_init (int vers, int fp)" on PC
+
+    WORD    vers, fp;
+
+    vers = arg0 >> 16;      // parse out the two arguments
+    fp = arg0 & 0xffff;
+
+    if(vers != 0x60)        // look for wrong version number
+        return 0L;
+
+    if (fp) {      // called from the floating point version
+        ttable.work = fwork;
+        ttable.params = (APTR)fparams;
+        ttable.tform = (APTR)ftform;
+    } else {      // called from the (Amiga only) integer version
+        ttable.work = iwork;
+        ttable.params = (APTR)iparams;
+        ttable.tform = (APTR)itform;
+    }
+    return &ttable;
+}
+
+
+
+void fwork(params, pt, v, t)    // this is the floating point work function.
+FRACT *params;          // pointer to user definable numbers in requester
+PATCH *pt;              // pointer to patch structure - defined above
+VECTOR *v;              // hit position  -  relative to texture axis
+FRACT *t;               // info about texture axis (TFORM array - 15 floats)
+{
+    FLOAT X, Y, Z;
+
+    X = v->X / t[12];  // note that the texture axis is used for scaling
+    Y = v->Y / t[13];
+    Z = v->Z / t[14];
+
+    if (X < 0.0) X -= 1.0; // this eliminates duplication across the axes
+    if (Y < 0.0) Y -= 1.0; // as the chex go from the posative to the
+    if (Z < 0.0) Z -= 1.0; // negative regions
+
+    if (((int)X + (int)Y + (int)Z) % 2) { // check for even numbers
+        pt->ptc_col[0] = params[0] * .00392157; // use the params from
+        pt->ptc_col[1] = params[1] * .00392157; // the requester on
+        pt->ptc_col[2] = params[2] * .00392157; // these chex.
+    } else {
+        pt->ptc_col[0] = 0.0;   // force the others to be blue
+        pt->ptc_col[1] = 0.0;
+        pt->ptc_col[2] = 0.5;
+    }
+
+}
+
+
+void iwork(params, pt, v, t)   // This is the integer version work function.
+FRACT *params;
+PATCH *pt;
+VECTOR *v;
+FRACT *t;
+{
+    ;   // stub...
+}
+

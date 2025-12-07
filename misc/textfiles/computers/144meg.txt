@@ -1,0 +1,358 @@
+From: pegram@uvm-gen.UUCP (Robert B. Pegram)
+Newsgroups: comp.sys.atari.st.tech
+Subject: How to upgrade your ST floppies to 1.44Meg 3.5" drives
+Date: 18 Jul 90 16:14:16 GMT
+Sender: nobody@uvm-gen.UUCP
+Organization: EMBA Computer Facility, Univ. of Vermont, Burlington.
+
+
+Tried to post this yesterday from GnuEmacs - no go.  Here it is,
+Hartmut Semken(AKA hase)'s 1.44 meg Upgrade for Atari STs and Megas.
+This is a compilation of several postings, edited by Bob Pegram, my
+comments are indicated by  [..text..] <- RBPIII.  I have yet to do the
+upgrade myself (lazy 8-), but it seems workable.  From the TT rumor 
+about no HD floppy for now, it would seem that Atari is doing the same 
+thing, only with a new (not yet fully available) floppy controller from 
+Western Digital that *is rated* to handle the higher clock input that is
+necessary.  Thus, in the future, this upgrade may become a more reliable 
+and simple chip replacement.  Enjoy,
+Bob Pegram
+
+originally From: hase@hase_1.UUCP (Hartmut Semken)
+original Subject: Re: Floppy drive 1.44 meg woes!
+original Date: 11 Feb 90 09:55:00 GMT
+ References: <9002030029.AA23185@jade.berkeley.edu> <2103@ultb.isc.rit.edu>
+ Organization: h.a.s.e., Berlin, West Germany
+
+
+clf3678@ultb.isc.rit.edu (C.L. Freemesser) writes:
+
+ Reply-To: hase@netmbx.UUCP (Hartmut Semken)
+ Organization: netmbx Public Access Unix, Berlin, West Germany
+ Lines: 28
+ Posted: Sat Nov 25 17:57:46 1989
+
+
+>>  I'm having a few problems hooking up my 1.44 meg teac. I was wondering
+> From what I know, you can't use HD on the ST.  The controller chip
+>can't handle it.  Just be glad it works in 720k mode.  :^)
+
+Well, you can, if you hack the hardware.
+
+Here we go again:
+
+The trick is to double the clock frequency of the controller chip, so it
+will talk twice as fast to the drive: the bit stream has "high-density"
+format.
+A clock of 16 MHz is well beyond specification (the WD1772 is rated to
+run at up to 10 MHz), but it will work most of the time.
+
+The hack consists of two parts: hardware and software and works with
+( [3.5 inch] <- RBPIII ) high density drives only!
+
+[The reason being that the drive must auto-sense the HD disk when it is 
+ inserted and change its RPMs up accordingly.  5.25 (1.2Meg) drives do 
+ *not* do this!  Neither do all HD 3.5" floppies (notably the ones on 
+ true blue PS 2 s). ] <- RBPIII
+ 
+Now: the hardware.
+
+The clock pin of the WD1772 is pin 18. It is normally hooked to the 8
+MHz clock.
+Cut this pin and connect it to the output of a simple circuit. feed the
+two inputs of this simple circuit with 8 MHz and 16 MHz clocks (16 MHz
+can be gotten at SHIFTER pin 39).
+The "simple circuit" mentioned above could be a simple, manual switch.
+Now You are able to select two clock frequencies and therfore two
+"modes" for the controller chip: double density and high density.
+
+The simple circuit could also be a multiplexer (74LS157, I think)
+controlled by the "I detected a HD-disk in me"-output of the floppy
+drive (the TEAC FD 235 HFN provides this outout on pin 2 if a jumper is
+set; the 235 HFN has a second jumper that enables internal detection of
+HD disks: this must be set, too).
+With the MUX, a disk inserted will select the appropriate mode of
+operation automatically.
+
+Do not worry about two drives in different modes: when copying from one
+drive to the other, the clock rate will be switched once to twice a
+second. This will not trouble the controller (remember the clock to be
+in the range of Megahertz...).
+If you want to connect one HD drive and one DD drive, you'll need two
+more TTL gates (one 74LS00 will do) to make sure, the controller is in
+DD mode for the DD only drive: invert the HD-detected-output (it is LOW
+for DD before, HIGH for DD behind the inverter) and feed it into a NAND
+gate together with drive select for the DD drive. Let a HIGH output of the
+NAND gate select DD-clock (8 MHz). Now "not-HD-detected OR DD-drive-select"
+will select DD mode, right?
+
+With two HD drives, there is no problem at all :-) [except for the 
+High Density floppy boot problem, discussed below.  You have to set 
+the step rate from the boot sector.] <- RBPIII
+
+Now for the software:
+
+The controller uses its clock as base for all timings.
+The pulse width and time between pulses for the step line are controller
+controlled.                                                   ^^^^^^^^^
+                                                       [WD 1772] <- RBPIII
+To make it short: with the doubled clock the controller will try to make
+the head step twice as fast: he will send a step pulse every 1.5
+milliseconds if set to 3 milliseconds (which is TOS standard).
+Just set the step rate to 6 milliseconds to make the controller step 3
+milliseconds in HD mode (well, the 6 milliseconds steps in DD mode will
+slow down floppy operation a bit, but not that much. Not stepping, [but]
+reading and writing takes the time!).
+
+How to set the step rate?
+Well, there is a documented TOS variable for the step rate at 0x440
+called seekrate.
+The step rate in this variable will be used by the BIOS after a call of
+the routine, pointed to by "hdv_init" (the hdv_init routine seems to
+initialize the BIOS parameter blocks for the floppies). The pointer to
+hdv_init can be found at 0x46A (this is a supported TOS variable, too).
+Look at the MWC-Assembler source below.
+
+[More information on the step rate from another posting - between the 
+curly braces below] <- RBPIII
+
+{
+ In article <1346@uvm-gen.UUCP> pegram@uvm-gen.UUCP (pegram r) writes:
+ >
+ >Rats! I looked up the possible seek rates last night, 6 msec is as slow
+ >as she goes. 
+
+ Hmm, TOS will step at 6,12,2,3 msec (with rate codes 0,1,2,3).
+ Setting the controller to 6 msec and doubling the clock works for almost
+ all 3.5 inch HD drives.
+
+ [I wanted to know if you could still use a (360 K) 5.25 drive, which 
+ needs a true 6 msec step rate.  This was when no WD 1772 clock switching 
+ (between 8 and 16 Mhz) was contemplated.  If your 1772 works this 
+ fast, you can forget the switch, or use a properly buffered manual 
+ switch for those rare occasions when it's necessary.  "Properly buffered"
+ you ask?  See any of the usual designs that eliminate switch bounce -
+ Radio Shack's pamphlets on digital electronics have the circuits needed.
+ The 74LS00 mentioned above will work nicely as the debouncer and "glue".
+ You still want that Multiplexer and you send in the debounced 16Mhz ("On" 
+ or "TRUE") and 8Mhz (The inverted "FALSE" or "OFF") outputs from the manual 
+ switch to select the clocks.  That is just a design off the top of my
+ head, which needs to be improved.  Please do post a better one if you
+ come up with one, I can think of a one chip (the LS00) solution if
+ clock skew to the WD1772 is unimportant (as in 180 degrees out of
+ phase 8-). The reason I mention it is because, I believe that the 
+ problem mentioned at the beginning of the original posting was due to 
+ either an incorrect jumper setting on the drive, or a noise problem 
+ in the ST, having the clocks going all over the ST to the switch, 
+ is not a good idea at all!  You don't have to worry about driving 
+ more capacitance with such free standing wires, but you do have to 
+ think about the effect of having some new high frequency antennas 
+ inside your ST!] <- RBPIII
+
+ >It would also be hard to boot from a floppy with this
+ >mod (double - 16Mhz - clock for 1772 + formatter + "6"msec seek rate).
+ >Do you have to have a seek rate setting boot sector on every boot
+ >floppy and would that idea even work?
+
+ Sure, that should work, since no steps schould be necessary to read the
+ boot sector.
+ I boot from harddisk...
+
+ [Me too, but some utilities (DC formatter at least) can format disks 
+  with boot sectors that can reset the step rate on boot up. Game disks
+  could be similarly hacked to work with the new drive.] <- RBPIII
+
+ If the HD-floppy does not work after modifying the ST, the step pulse
+ width is a probable cause.
+ In that case, use an edge-triggered monoflop to "resize" the pulse.
+                                     ^^^^^^^^
+ [hase means a monostable or "one-shot" available in TTL or with the "555"
+  timer chip.] <- RBPIII  
+}
+
+The second thing is to get a formatter that will format 18 sectors per
+track. HYPERFORMAT by Claus Brodt is such a thing, but a simple
+formatter hacked from the example in the Mark Williams C Lexicon did the
+same. It's included below.
+
+
+For help try to write to hase@hase_1.mbx.sub.org, but it'll probably
+bounce; our mail service is fading fast... 
+
+[Check if hase's current address is the same, he does show up on c.s.a.s] 
+<- RBPIII
+
+I'll try to reply to anything, I finally get.
+
+hase
+
+------- cut for seek6.s -----------
+/module name seek6
+
+.shri
+
+.globl main_
+main_:
+clr.l-(sp)
+move.w$0x20,-(sp)
+trap$1
+addq.l$6,a7
+move.ld0,_save_ssp
+move.w$0,0x440/ 0 => 6 ms
+lea0x46a,a0
+move.l(a0),d0
+movea.ld0,a0
+jsr(a0)
+move.l_save_ssp,-(sp)
+move.w$0x20,-(sp)
+trap$1
+addq.l$6,a7
+.even
+_save_ssp:
+.blkl1
+/ seek rate codes are 0,1,2,3 for 6,12,2,3 milliseconds
+
+Sets seek rate to 6 Milliseconds for *all* drives (with *any* TOS
+version; tested on Rainbow TOS (1.4), BLiTTER TOS (1.2) and TOS 1.0):
+
+------------ cut for formath.c -------------
+
+/* formath.c Formatter fuer High Density Disketten */
+/* nur fuer angepasste Hardware! Floppycontroller und Laufwerk */
+/* muessen High-Density tauglich sein! */
+/* Hartmut Semken, Lupsteiner Weg 67 1000 Berlin 37 */
+/* hase@hase_1.mbx.sub.org or hase@netmbx.mbx.sub.org */
+/* 03-SEP-89 */
+#include <stdio.h>
+#include <osbind.h>
+#include <time.h>
+
+#define SLEEPTIME 1/* 1: Zeitschleife, 0: Taste */
+#define BLANK (0xE5E5)
+#define MAGIC (0x87654321L)
+#define BUFSIZE (20*1024) /* Platz fuer mehr als 18 Sektoren... */
+
+#define DEVICE 0/* 0 = Floppy A, 1 = Floppy B*/
+#define SIDES 2/* je  */
+#define SECTORS 18/* nach*/
+#define TRACKS 80/*Belieben*/
+
+#define TOTSEC (TRACKS * SIDES * SECTORS)
+
+extern int errno;
+
+main(){
+int track;
+int side;
+int status;
+short *bf;
+register char reply;
+short *middle;
+char buffer[512];
+
+printf("\033E\n");
+printf("Public Domain High Density Mini Formatter\n");
+printf("von H. Semken\nDer Autor garantiert in keiner Weise fr die Funktion\nDi
+eses Programmes.\nBenutzung auf eigene Gefahr.\n");
+printf("\n\n\n");
+printf("\007\033pFormatiere Diskette in Drive %c\033q\n%d Seiten\n%d Sektoren p
+ro Spur\n%d Spuren\n\n", (65+DEVICE), SIDES, SECTORS, TRACKS);
+printf("Wirklich formatieren? ");
+fflush(stdout);
+if ((reply = Crawcin()) != 'y' && reply != 'Y' && reply != 'j' && reply != 'J')
+ {
+printf("Nein. Floppy nicht formatiert.\n");
+sleep(1);
+Pterm0();
+}
+printf("Ja.\n");
+printf("Diskette einlegen; Taste drcken...");
+fflush(stdout);
+Crawcin();
+printf("\n");
+bf = malloc(BUFSIZE);
+for (track = TRACKS-1; track >= 0; track--) {
+for (side = 0; side < SIDES; side++) {
+printf("Formatiere Spur %d, Seite %d", track, side);
+fflush(stdout);
+status = Flopfmt(bf, 0L, DEVICE, SECTORS, track, side, 1, MAGIC, BLANK);
+if (status) {
+middle = bf;
+printf("\t%d\n", status);
+while (*middle) {
+printf("\tDefekter Sektor %d\n", *middle++);
+}
+} else {
+printf("\tokay\r");
+}
+}
+}
+printf("\n\nAlle Spuren formatiert\n");
+printf("Initialisiere Directory\n");
+for (track = 0; track < (BUFSIZE>>1); bf[track++] = 0);
+for (track = 0; track < 2;track++) {
+for (side = 0; side < SIDES; side++){
+if (status = Flopwr(bf, 0L, DEVICE, 1, track, side, SECTORS)) {
+errno = -status;
+perror("Write Error");
+}
+}
+}
+Protobt(buffer, (long)Random(),3,0); /* Prototyp Bootsector fr 
+                                      * 80 * 2 * 9 Sektoren */
+/* Prototyp Bootsektor fr das neue Format anpassen */
+/* Bytes 19 und 20 enthalten die Sektoren pro Disk */
+
+/* unteres Byte von TOTSEC */
+buffer[19] = (char)(((TOTSEC>>8)<<8)^TOTSEC);
+/* oberes Byte von TOTSEC; es lebe das Intel int-Format */
+buffer[20] = (char)(TOTSEC>>8);
+buffer[24] = (char)SECTORS; /* Sektoren pro Spur */
+status = Flopwr(buffer, 0L, DEVICE, 1, 0, 0, 1);
+if (status) {
+errno = -status;
+perror("Write Error (Bootsector)");
+}
+status = Flopver(buffer, 0L, DEVICE, 1, 0, 0, 1);
+if (status) {
+errno = -status;
+perror("Verify Error (Bootsector)");
+}
+printf("Diskette in Laufwerk %c formatiert\n", (65+DEVICE));
+sleep(1);
+Pterm0();
+}
+
+sleep(seconds)
+int seconds;
+#if SLEEPTIME
+{
+clock_t t;
+for(t = clock();clock() < (t + CLK_TCK*seconds););
+}
+#else
+{
+printf("Taste druecken\n");
+fflush(stdout);
+Crawcin();
+}
+#endif
+-- 
+original idea and post by:
+
+>Hartmut Semken, Lupsteiner Weg 67, 1000 Berlin 37 hase@hase_1.UUCP
+>Dennis had stepped up into the top seat whet its founder had died of a
+>lethal overdose of brick wall, taken while under the influence of a
+>Ferrari and a bottle of tequila. (Douglas Adams; the long dark teatime...)
+
+Additions by:
+
+Bob Pegram   Internet: pegram@griffin.uvm.edu
+     UUCP: you figure it out!
+     Physical Mail: R. Pegram, R.R. #2, Box 2843, Green St.,
+    Vergennes, Vt. 05491, U.S.A.
+     Home Tel: (in N.A., add appropriate codes if elsewhere)
+ (802) 877 0018
+
+
+

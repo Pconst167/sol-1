@@ -1,0 +1,393 @@
+Documentaion for SBDSP - SoundBlaster APT Demodulation Program
+ 
+This program and documentation are the property of the Dallas Remote Imaging
+Group (BBS 214 394 7438).   If it is used on other systems, this copyright
+notice must be kept in this documentation.   This program may NOT be sold or
+marketed in any form.  All rights are reserved by the Dallas Remote Imaging
+Group (1992).
+                               Dallas Remote Imaging Group
+                               PO BOX 117088
+                               Carrollton, Texas  75011-7088
+                               BBS 214-394-7438
+                               FAX 214-492-7747
+Rev DRG5193Beta
+                
+----------------------------
+
+Introduction:
+
+The SoundBlaster and SoundBlaster Pro audio I/O cards from Creative
+Labs, Inc.  are very popular accessories found in many IBM PC compatible
+computer systems.  Although the boards are usually used only to provide
+music and sound output for computer games, they also support audio input
+into the computer.  The standard SoundBlaster supports mono audio I/O
+and is available in the $100 price range.  The Pro model supports stereo
+and adds a CD/ROM (SCSI) interface.  It costs around $250 dollars.
+
+The boards can digitize sound at high speed and, using one of the
+computer's DMA (direct memory access) channels, transfer the sound
+samples directly into computer memory.	Once in memory the sound samples
+are written to disk.  It is this ability to digitize and record sound
+that enables the SoundBlasters to be used for the reception and decoding
+of APT satellite signals.
+
+The output of a radio receiver tuned to an APT signal is just a 2400 Hz
+audio tone.  As the satellite scans the earth and clouds,  it varies the
+amplitude of the tone in proportion the the brightness of the area that
+it is currently observing.
+
+-------
+What it does:
+
+
+If you viewed the contents of the .VOC sample file produced by the
+SoundBlaster VREC program with your favorite image processing program,
+it would not look at all like a weather satellite photo.  The .VOC file
+is like an exposed roll of film.  Its contents must first be "developed"
+before you can view the image.	The process of "devloping" the .VOC
+file contents into a weather satellite image is called DEMODULATION.
+
+Demodulation converts the recorded values of the samples of the 2400 Hz
+APT sine wave into their corresponding pixel values.  The desired image
+pixel values actually represent the amplitude of each peak in the
+APT sine wave signal.
+
+Signal sampling theory states that if you are to do anything meaningful
+with a digitally sampled signal then you must sample the signal at least
+twice as fast as the highest frequency component of the signal.  The
+2400 Hz APT signal needs to be sampled at least 4800 times a second.
+Because the APT signal is not a constant tone,	it has freqency
+components much beyind 2400 Hz.  Also the laws of thermodynamics (and
+life) say that nothing is perfect as theory predicts and you really need
+to sample at a higher rate.
+
+If we sample the APT signal at exactly 4 times its 2400 Hz
+carrier frequency (i.e at 9600 samples per second), each input sample
+will be eactly 90 degrees (360/4) in phase apart from its adjacent
+samples.  Using the following trigonometry identities it turns out to be
+particularly easy to accurately demodulate the APT samples:
+
+   cos(x) = sin(90-x)
+   sin(x)*sin(x) + cos(x)*cos(x) = 1
+
+By substituting the first equation into the last equation we get:
+
+   sin(x)*sin(x) + sin(90-x)*sin(90-x) = 1
+
+Because each recorded sample of the 2400 Hz APT sine wave is 90
+degrees apart from the next sample we can calculate the pixel value as:
+
+   pixel = sqrt((sample[t]*sample[t]) + (sample[t-1]*sample[t-1]))
+
+The demodulation program just needs to read the .VOC sample file, throw
+away the file header information,  adjust the samples for clock/DMA
+rate errors and DC offsets, calculate the pixel values from adjacent
+pairs of sample values,  scale the results to values from 0 to 255, and
+finally write the resulting pixel values to the image file.
+
+This could be a very time consuming process when you consider that a
+typical 14 minute capture has about 8 million input samples and that
+multiples, adds, and square roots are all operations that take lots
+of CPU time.  This is particularly true if floating point arithmetic is
+used.
+
+To make the demodulation program run very quickly a table of all 65536
+possible combinations of adjacent 8-bit sample values is pre-computed
+according to the above formula.  All the demodulation software then has
+to do in order to convert the recorded APT samples into their pixel
+values is look up the proper table entry.  No time consuming floating
+point arithmetic need be used once the demodulator table has been built.
+
+Reading and writing 8 megabyte files is always a time consuming process.
+By always reading and writing the sample and image files in multiples of
+512 bytes, the demodulation software takes full advantage of the
+behavior of the DOS file system.
+
+
+-------
+Problems,  problems,  problems:
+
+
+Although the SoundBlaster is quite good at adding a little zip to the
+odd computer game,  it is far from being a precision signal processing
+system.   Using the SoundBlaster card for APT reception presents many
+problems.  Fortunately software techniques may be used to overcome
+the problems and yield APT images that rival the best commercial
+systems.
+
+Using the SoundBlaster for APT demodulation presents two main types
+of problems:
+     1) Sample inaccuacies and offsets
+     2) Clock rate and missing sample errors
+
+
+
+Sampling a perfect sine wave with a perfect board in a perfect world
+should yield a series of samples with an average sample value of zero.
+Unfortunately the SoundBlaster circuitry usually adds a small DC offset
+to the recorded sample values.	This DC offset can cause noise and
+"beat" patterns to appear in the demodulated image file.
+
+To remove the effects of any DC offset in the sample values, the
+demodulation software calculates the average sample value in each block
+of input samples.  This sample bias is then subtracted from each input
+sample.
+
+The demodulation program is currently a bit paranoid about things and
+re-calculates the sample bias for each input block.  It would be a
+bit faster to calculate the value for only the first block.  If the
+input level to the SoundBlaster board is properly adjusted, the sample
+value offset does not seem to change between blocks.
+
+
+
+For easy demodulation of the APT signal we need to sample at 9600
+samples per second.  If the resulting image is to be properly
+synchronized to the satellite data this needs to be EXACTLY 9600 samples
+per second.  PRECISELY EXACTLY 9600 samples per second.  How exact?
+A typical fourteen minute satellite pass requires an accuracy of around
+one part per 10 million...  9600.0000 samples per second.
+
+Typically a satellite scans one line of pixels every 1/2 second (120
+lines per minute).  At a sample rate of 9600 samples per second, a 14
+minute satellite pass generates about 8 megabytes of data.  If the
+sample clock rate is only accurate to a mere one part per million, the
+resulting image will be skewed 8 pixels from top to bottom.  Although 8
+pixels of skew across of screen of 4800 pixel lines is only about a .1
+percent skew, it is noticeable if you are looking for it or are wanting
+to do some quantitative analysis of the satellite orbit from the doppler
+bow.
+
+How accurate is the SoundBlaster clock you ask?  It turns out the
+closest that you can set the sample rate is around 9620 samples per
+second...  an accuracy of around one part in a few hundred...  not even
+close.	To make matters worse the clocks on any two SoundBlaster boards
+can easily differ by parts per thousand.  Clock errors of this magnitude
+cause the image to appear like a TV set that has lost sync.  The image
+is an unreadable mess of slanted bars.
+
+The DMA circuitry on the SoundBlaster boards can automatically transfer
+blocks of up to 32768 signal samples into the computer's memory without
+using any CPU time.  Once a block of samples has been DMAed into memory,
+the recording software starts DMAing the next block of samples into
+another memory area.  While the second block of samples is being
+received, the recording software writes the first block to the
+computer's hard disk.  The process alternates in a ping-pong fashion
+between reading samples into one buffer while writing the other buffer's
+data to disk.
+
+Unfortunately a few signal samples are lost in the time between the end
+of one DMA block and the startup of the next DMA block.  To make matters
+worse the number of samples lost depends on the computer system's CPU
+type and clock rate.  Faster systems loose fewer pixels between blocks.
+Also number of pixels lost seems to depend upon whether the block is an
+ODD or EVEN numbered block.
+
+Fortunately it is possible to compensate for the errors in the clock
+rate and the samples lost between DMA blocks.  The demodulation program
+compensates for the pixels lost betwwen DMA blocks by duplicating the
+last few samples of each DMA block.  The user can independently specify
+the number of samples to add to (or even remove from) the odd and even
+numbered DMA blocks with the /O and /E command line parameters.
+
+The sample clock rate error is compensated for in two stages.  The first
+stage is the coarse adjustment factor.	This factor causes every n'th
+input sample to be removed (or duplicated).  By throwing away
+every 601'st sample, the 9620 samples per second that the SoundBlaster
+produces is cut down to ABOUT 9600 samples per second.	The coarse
+adjustment factor can be changed by using the /C command line parameter.
+
+The second clock rate adjustment factor is the fine tuning factor.  It
+is used to zero in the exact timing value.  It adjusts out any
+residual skew in the image caused by variations in individual
+SoundBlaster board clock generators.  The fine adjustment factor
+works just like the coarse adjustment factor.  It causes every n'th
+input sample to be removed (or duplicated).  It may be specified with
+the /F command line parameter.
+
+
+-----------------------------
+Doing it:
+
+
+The first step is to connect your satellite receiver to the microphone
+input of the SoundBlaster.  You must be very careful to set the
+amplitude of the receiver output low enough so that it does not
+overdrive the SoundBlaster.  If you overdrive the card its automatic
+gain control (AGC) circuitry will attempt to compensate.  This will
+cause streaking in the resulting images.
+
+To properly set the receiver level use the VEDIT2 program supplied with
+the SoundBlaster card.	Select the SCAN INPUT item from the RECORD menu.
+This will show a graphical representation of the input signal.	While
+monitoring a good satellite pass adjust the receiver level until none of
+the signal peaks touch the top or bottom margins of the graph.	Leave a
+little safety margin (1/8 inch) just to be safe.
+
+
+Once the receiver level has been set,  the next step is to record a
+satellite pass to disk.  This is done with the VREC program supplied
+with the SoundBlaster card.
+
+For the SoundBlaster Pro use the command:
+   vrec c:cap /a:mic /m:mono /f:low /s:9620 /l:15 /t:840
+
+where:
+   c:cap - is the name of the file that you want to write the samples.
+	   Remember the sample file will be quite large.  Around 600 Kb
+	   per minute of recording.  In this case the samples will be
+	   written to the file C:\CAP.VOC
+
+   /a:mic  - selects the MICROPHONE input.
+
+   /m:mono - selects MONO recording.
+
+   /f:low  - sets the LOWPASS recording filter.
+
+   /s:9620 - sets the recording sample rate to 9620 samples per second.
+	     Note the if you ask for values less that /S:9619 the VREC
+	     program rounds the value down to around 9500 samples per
+	     second.  /S:9620 is the smallest value that actually
+	     selects a sample clock greater than 9600 Hz.
+
+   /l:15   - sets the microphone level to full open.  Use the receiver
+	     output level control to adjust the recording level.
+	     (I don't think this is what this does or is necessary
+	     any more.	It is left over from early attempts to get
+	     rid of hum in the image caused by a bad cable)
+
+   /t:840  - says to record for 840 seconds (14 minutes).  This value
+	     can be adjusted to whatever length is desired.
+
+
+After a satellite pass has been recorded and written to disk as a .VOC
+sound sample file,  the next step is to demodulate the .VOC sample file
+into an image file.  Use the command:
+
+   sbdsp c:cap.voc c:cap.img
+
+This will read the recorded sample file C:CAP.VOC and write the
+resulting image to the file C:CAP.IMG  (remember that these files will
+be about 8 Megabytes EACH).  If you do not specify the output file name,
+the demodulation program will ask if it is OK to write the output image
+over the data in the .VOC file.  This is a VERY time consuming process,
+but can be useful if you are short on disk space.  Note that if you
+choose to overwrite the input data file,  you cannot experiment with the
+various timing adjustments or interrupt the demodulation program.
+
+
+Once the input file has been demodulated you can use your favorite
+image processing program (such as IMDISP, APTCAP, or SATVIEW) to view
+the resulting image.  The file written by the demodulation program is
+raw binary 8-bit gray scale image.  Each line is 4800 pixels wide.  A 14
+minute pass has 1680 scan lines. (Because of the timing adjustments, etc
+the output image may be short a few lines).
+
+---
+Tweaking in the timing:
+
+What you should see is the APT image complete with the normal "doppler
+bow" curve.  The curve in the image is due the speed of light.  Since
+light travels at 186,000 miles per second, each pixel of image shift in
+the doppler bow (1/9600 of a second) represents about 19.4 miles of
+satellite movement relative to the receiver.
+
+As the satellite approaches the receiver the radio signal has to travel
+less and less distance to reach the receiver.  As the satellite moves
+away the radio signal takes longer and longer to reach the receiver.
+The point in the doppler bow where the curve changes slope
+is the closest point of approach of the satellite pass.
+
+In a properly adjusted image,  the shape of the doppler bow curve
+should appear symmetrical about the closest point of satellite approach.
+If the image is slanted more towards the left or right, or appears like
+a TV image that has lost sync then you will need to adjust one or
+more of the timing adjustment factors.
+
+(For further information, contact the software developers at:
+Dallas  Remote Imaging Group BBS - 214-394-7438  FAX 214 492 7747
+Usually only the fine timing adjustment (/F) needs to be set.  To get an
+idea of the magnitude of the adjustment needed, count or estimate the
+number of pixels that the image slants.  (Hint:  use the pan and zoom
+features of your image display program.  If your display program
+re-sizes the image to fit the screen, remember to count pixels in the
+FILE, not those on the screen).  Divide the total file size by the
+number of pixels that the image slants from top to bottom.
+
+   adjustment factor = (file size / pixels of image slant)
+
+The more the severe image slant is, the SMALLER the timing adjustment
+factor value.  Subtle image slants are typically corrected with large
+valued adjustment factors (say 50,000 - 500,000).  Adjustment factors in
+the thousands would be used for images that slant a good portion of the
+width of the screen.  Even more severe slants first should be corrected
+by tweaking the /C (coarse) timing adjustment.
+
+Images that slant to the left use a positive adjustment count.
+Images that slant to the right use a negative adjustment count.
+
+    ->|      |<- estimate the number of pixels of image slant
+      |      |
+      |       ----------	    ----------
+      |     /	       /	   \	       \
+      |   /  image   /		     \	 image	 \
+      | /	   /		       \	   \
+      | ----------			 -----------
+       Use /F+value			Use /F-value
+
+
+The loss of pixels between DMA sample blocks shows up as small
+periodic jags in the image of a pixel or so every 6-8 scan lines.
+Experiment with the /O and /E command line options may be to minimize
+these remaining jaggies.  For these options,  larger values produce
+greater effect.  The maximum DMA adjustment factor possible is +/- 255.
+Only + values should be needed here.  The software supports - values
+just in case...
+
+
+The image may look OK except for one or more large and sudden shifts or
+discontinuities.  These shifts usually occur on systems with slower hard
+drives or CPU's.  The cause is usually the excessive time it takes DOS
+to extend or otherwise allocate disk space as it writes the .VOC file.
+If this occurs in your images, it can usually be fixed by recording the
+sample file to a freshly "defragmented" disk.  Use a disk optimizer
+program like Norton Utilities or PC Tools to pack the sample file hard
+disk drive before running the VREC recording program.
+
+
+Once the proper timing adjustment factors have been determined for a
+particular computer, they should not need to be changed (except possibly
+for a drift in the SoundBlaster sample clock rate with temperature).
+A batch file can be created that will automatically use the appropriate
+timing factors.
+
+--------
+Development team at:
+Dallas Remote Imaging Group
+PO BOX 117088
+Carrollton, Texas 75011-7088
+FAX 214 492 7747
+================================================================================
+ ============================================================================
+
+             DALLAS REMOTE IMAGING GROUP BBS    =====>>  214-394-7438
+                                         FAX             214-492-7747
+                                       VOICE             214-394-7325
+
+             DEDICATED TO SATELLITE IMAGERY, SATELLITE TRACKING, NASA,
+                          DIGITAL SIGNAL PROCESSING, IMAGE PROCESSING,
+                          AMATEUR RADIO, AND ELECTRONIC INTELLIGENCE
+
+    PCBoard SUPPORTS 6 Lines (USR Dual Standard V.32bis V.42 24 hrs. Daily)
+
+          E-MAIL FOR Weather Satellite Report and InterNet UUCP News Groups
+                                                                      
+              ON-LINE HAMCALL APPLICATION - LOOKUP HAM CALLSIGNS
+              On-Line SATTRAK Satellite Tracking Routines
+              On-Line SHOP Satellite Resource Center - On-line Ordering
+              On-Line BALLTRAK  Balloon Launch and Tracking Program
+
+         THOUSANDS OF IMAGE FILES OF SATELLITE IMAGE AND NASA VOYAGER IMAGES
+         SATELLITE TRACKING PROGRAMS, IMAGE PROCESSING, DSP, ATV, SSTV, FAX
+ ============================================================================
+

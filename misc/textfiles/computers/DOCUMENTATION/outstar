@@ -1,0 +1,780 @@
+ /***********************************************************
+OUTSTAR Simulator
+ 
+)Maureen Caudill
+Adaptics
+16776 Bernardo Center Drive
+Suite 110 B
+San Diego, CA  92128
+(617) 451-3752
+ July, 1988
+Written in Lightspeed C (v. 2.15) on Macintosh
+Version 1.0
+
+This outstar learns to reproduce a specified pattern
+on a grid of border neurodes.  The pattern to be learned
+is read from an external text file called "pattern"
+
+--------------------------------------------------------------------------------
+OPERATION OF THIS SIMULATOR
+
+Read AI Expert Article, November, 1988 for discussion of Grossberg
+Learning, Activation Equations and Instar/Outstar.
+
+This simulator models a biological system.  The outstar neurode stimulates
+each of a 7x10 grid of neurodes at the same time as an external pattern
+stimulates the grid.  The initial weight connections between the outstar
+and the grid neurodes are randomly set between -0.5 and +0.5.  The initial
+activity in the grid is also randomly set to activity between 0.0 and 0.5.
+
+To run the simulator, you need to have a pattern file which contains the
+pattern you want the grid to learn to reproduce when stimulated by the outstar.
+The program begins by initializing the weights, activations, reading the data
+file and so on.  Then the values of the Grossberg learning/activation constants
+are checked, with default values assumed initially. I suggest that you leave 
+these values as they are until you are sure you understand the learning laws.
+
+The menu gives you four choices.
+1.  Train the network for some specified number of time units.
+2.  Allow the activation in the grid to decay for some number of time units
+3.  Test the network by having the outstar stimulate the grid for some number
+of time units.
+   -1.  Reset the network (and possibly change the network constants) to either
+       quit or start over.
+ When asked to enter the number of time units (for 1 or 2 or 3), remember that
+ a negative number will only display the grid activation after that number of time
+ units has passed, while a positive number displays the grid activation after each
+ time unit.
+ 
+ The proper operation of the simulator is as follows:
+ train the network for some number of time periods.  Remember that the
+ transmission constant t0 determines how many time units must pass before
+ the grid even sees the outstar's stimulus (the external pattern is applied
+ immediately).  Thus, if the t0 constant is 3, you should do NOTHING in less 
+ than 4 time units (3 to travel, and 1 to have an effect on the grid).
+ allow the grid activation levels to decay to zero.  No weight changes occur
+ during this time (why?), so you are effectively just "clearing the slate".
+ test the network (again for t0+1 time units).  If the performance is inadequate,
+ train again for additional time periods, then allow decay, then test.
+Have fun!
+-----------------------------------------------------------------------------------------
+
+--------------------------------------------------------------------------------
+STRUCTURE OF THIS FILE
+
+include files
+constant definitions
+general global storage
+Grossberg activation/learning constant storage (global)
+
+QQ Major functions QQ
+initialize();; initialize network operations
+train();; train the grid for a specified time
+decay();; allow grid activation to decay a specified time
+test();; test the grid for a specified time
+QQ Utility functions QQ
+compute_activation();; compute current activation for a grid neurode
+change_weight();; modify weight of a grid neurode
+read_pattern() ;; read pattern from data file
+parseline()  ;; parse one line of data from file 
+randomize_wts();; randomize weights on grid neurodes
+randomize_activity();; randomize activity of grid neurodes
+set_constants();; set Grossberg equation constants
+  show_constants();; show current values of learning/activity constants
+show_wts();; print current weights on grid neurodes
+displaygrid();; print the current grid activation
+print_menu();; print menu of operator choices (train, test, decay, quit)
+QQ Main control function QQ
+main();; main control function
+-----------------------------------------------------------------------------------
+****************************************************************************************/
+
+include <math.h>
+include <stdio.h>
+#defineROWSIZE7
+defineCOLSIZE10
+defineSTRINGSIZE80
+defineQUIT-1
+defineSTIMMASK1
+defineACTIVATION  1
+defineLEARNING2
+defineDISPLAYON1
+defineDISPLAYOFF2
+defineSTIM1
+defineNOSTIM0
+/************* General Global Storage ***************************************************/
+oublegridwts[ROWSIZE][COLSIZE]; /* this stores only the weights from the
+   single outstar neurode to the grid of rim
+   neurodes. */
+ntpattern[ROWSIZE][COLSIZE];  /*this contains the pattern to be impressed
+on the grid of rim neurodes */
+oubleactivity[ROWSIZE][COLSIZE]; /*this contains the current activation levels
+of each grid neurode */   
+ntcurtime;/* current time (in integral units)  */
+oubleoutstar;/*  activation level of outstar */
+har*inpath = "pattern";/*  file containing pattern to be learned */
+nsigned intoutstar_save;/*saves history of outstar's output */
+/*****************************************************************************************/
+/************* Grossberg Activation Constants (set by user or default values) ************/
+oubleA  =  0.9;/* activation decay constant */
+oubleT  =  0.0;/* threshold */
+ntt0 =    1;/* transmission time between neurodes */
+oubleF  =  0.01;/* forgetting constant for long term memory */
+oubleG  =  0.2;/* learning constant for Hebbian learning term */
+/*************************************************************
+initialize()
+initializes the system by:
+1.  reading in the pattern file
+2.randomizing the weights
+3.setting the current time to 0
+4.establishing the activation/learning constants
+*************************************************************/
+nitialize()
+
+read_pattern();/* read in training pattern from file */
+randomize_wts();/* randomize weights to grid neurodes from outstar */
+randomize_activity();/* randomize activity of grid neurodes */
+show_wts();/* display resulting grid neurode weights */
+curtime = 0;/* reset current time to 0 */
+displaygrid(curtime);/* display the initial activity of the grid */
+set_constants();/* set the constants to user specified values */
+return;
+
+*************************************************************
+train(duration)
+trains the outstar and grid for "duration" timeunits. 
+weights are modified during this training period
+After each synchronous update of the grid, the
+activations are displayed.
+
+If training time is negative, only the grid status after
+all "duration" time units will be displayed.
+
+*************************************************************/
+rain()
+
+intduration, displayflag;
+intstoptime;
+inti,j;
+intstim_grid, stim_outstar;
+/* ask how many time units to train */
+printf("\n How many time units do you want the network to train?  ");
+printf("\n (Integer value < 32767, negative suppresses all but final display)  ");
+scanf("%d", &duration);
+displayflag = DISPLAYON;
+if (duration<0)
+{
+duration = -duration;
+displayflag = DISPLAYOFF;
+}
+stoptime = curtime+duration;
+for ( ; curtime<stoptime; curtime++)
+{
+stim_grid = STIM;
+stim_outstar = STIM;
+printf("\n Current time = %d",curtime);
+save_outstim(stim_outstar);
+for (i=0; i<ROWSIZE; i++)
+{
+for (j=0; j<COLSIZE; j++)
+{
+compute_activation(i,j,stim_grid, stim_outstar);
+change_weight(i,j,stim_outstar);
+}
+}
+if(displayflag == DISPLAYON)
+displaygrid();
+}
+curtime--;  /* decrement to avoid using an extra time unit */
+/* when complete, if have not been updating display, do a final display of status */
+if (displayflag == DISPLAYOFF)
+displaygrid();
+
+return;
+
+/*************************************************************
+decay(duration)
+allows grid activation to decay for "duration" timeunits. 
+no weights are modified during this period, since
+stimulations from the outstar are 0.0
+After each synchronous update of the grid, the
+activations are displayed.
+
+If decay time is negative, only the grid status after
+all "duration" time units will be displayed.
+
+*************************************************************/
+ecay()
+
+intduration;
+intdisplayflag;
+intstoptime;
+inti,j;
+intstim_grid, stim_outstar;
+/* ask how many time units to decay */
+printf("\n How many time units do you want the network to decay?  ");
+printf("\n (Integer value < 32767, negative suppresses all but final display)  ");
+scanf("%d", &duration);
+
+displayflag = DISPLAYON;
+if (duration<0)
+{
+duration = -duration;
+displayflag = DISPLAYOFF;
+}
+stim_grid = NOSTIM;/* during decay, no external stimulation of grid */
+stim_outstar = NOSTIM;/* during decay, the outstar does not stimulate grid */
+stoptime = curtime+duration;
+for ( ; curtime<stoptime; curtime++)
+{
+printf("\n Current time = %d",curtime);
+save_outstim(stim_outstar);
+for (i=0; i<ROWSIZE; i++)
+{
+for (j=0; j<COLSIZE; j++)
+{
+compute_activation(i,j,stim_grid, stim_outstar);
+}
+}
+if(displayflag == DISPLAYON)
+displaygrid();
+}
+curtime--;
+/* when complete, if have not been updating display, do a final display of status */
+if (displayflag == DISPLAYOFF)
+displaygrid();
+
+return;
+
+/*************************************************************
+test(duration)
+tests the outstar and grid for "duration" timeunits. 
+weights are not modified during this training period
+After each synchronous update of the grid, the
+activations are displayed.
+
+If testing time is negative, only the grid status after
+all "duration" time units will be displayed.
+
+*************************************************************/
+est()
+
+intduration, displayflag;
+intstoptime;
+inti,j;
+intstim_grid, stim_outstar;
+
+/* ask how many time units to test */
+printf("\n How many time units do you want the network to test?  ");
+printf("\n (Integer value < 32767, negative suppresses all but final display)  ");
+scanf("%d", &duration);
+displayflag = DISPLAYON;
+if (duration<0)
+{
+duration = -duration;
+displayflag = DISPLAYOFF;
+}
+
+stim_grid = NOSTIM;/* no external stimulation of grid during testing */
+stim_outstar = STIM;/* outstar does stimulate grid during testing */
+stoptime = curtime+duration;
+for ( ; curtime<stoptime; curtime++)
+{
+printf("\n Current time = %d",curtime);
+save_outstim(stim_outstar);
+for (i=0; i<ROWSIZE; i++)
+{
+for (j=0; j<COLSIZE; j++)
+{
+compute_activation(i,j,stim_grid, stim_outstar);
+}
+}
+if(displayflag == DISPLAYON)
+displaygrid();
+}
+curtime-- ; /* decrement to avoid using an extra time unit */
+/* when complete, if have not been updating display, do a final display of status */
+if (displayflag == DISPLAYOFF)
+displaygrid();
+
+return;
+
+****************************************************************************
+save_outstim(stimout)
+Parameter stimout either has the value STIM (1) or NOSTIM (0).
+save_outstim keeps a 16-time-unit historical record of
+the outputs of the outstar by modifying the global unsigned
+integer "outstar_save".
+Each time unit the outstar is stimulating the grid is represented
+by a "1" in outstar_save; if there is no stimulus, outstar_save has
+a "0".  The 0th bit has the most recent record, the 15th bit has
+the oldest record.
+****************************************************************************/
+ave_outstim(stimout)
+ntstimout;
+
+outstar_save = outstar_save << 1;/* left shift one bit.  A zero fills
+   the lowest order bit, and the oldest
+   (highest order bit) is lost         */
+outstar_save += stimout;/* add current stimulus value 
+(0 if no stim, 1 if stim)   */
+return;
+ 
+
+**************************************************************
+compute_activation(row,col,grid_on,out_on)
+compute the current activation for the specified
+grid neurode
+Parameter "grid_on" is a flag to tell whether or not
+the external stimulus is impressing the pattern on
+the grid.  
+Parameter "out_on" is a flag indicating whether the
+outstar is currently stimulating the grid.
+
+Note that differential equation is calculated as an
+incremental difference equation.
+**************************************************************/
+ompute_activation(row,col,grid_on,out_on)
+ntrow,col,grid_on,out_on;
+
+doublechange;
+unsigned intstatus;
+intoutstim;/* effective outstar stimulation at current time */
+
+change = -A*activity[row][col] ; /* no matter what, activity will tend to try to decay */
+if (grid_on == STIM) /* if there is external stimulus, it will counter decay */
+change += pattern[row][col];
+if (out_on == STIM) /* if there is outstar stimulus... */
+{
+status = outstar_save;/* Be sure not to change the global version */
+status = status >> t0;/* right shift by t0 time units to allow for
+   transmission time from outstar           */
+outstim = status & STIMMASK;
+change += gridwts[row][col]*outstim - T;
+}
+activity[row][col] += change;/* new activity = old plus incremental change */
+return;
+
+/**************************************************************************************
+change_weight(row,col,out_on)
+modify the weight of the specified grid neurode synapse
+Parameter "out_on" is a flag indicating whether or not
+the outstar is currently stimulating the grid.
+Note that differential equation is calculated as an
+incremental difference equation.
+***************************************************************************************/
+hange_weight(row,col,out_on)
+ntrow,col, out_on;
+
+doublechange;/* the incremental change to this weight */
+unsigned intstatus;/* local copy of global outstar output history */
+intoutstim;/* effective stimulus from outstar at this time */
+
+change = -F * activity[row][col];
+if (out_on == STIM)
+{
+status = outstar_save;/* Be sure not to change the global version */
+status = status >> t0;/* right shift by t0 time units to allow for
+   transmission time from outstar           */
+outstim = status & STIMMASK;
+change += G * activity[row][col] * (outstim - T);
+}
+gridwts[row][col] += change;
+return;
+
+/*******************************************************************
+read_pattern()
+Read in the input data file and store the patterns in
+in_pats and out_pats.
+
+The format for the data file is as follows:
+line#   data expected
+-----   -----------------------------
+1In-X-size,in-y-size
+21st X row of 1st pattern
+3..following rows of 1st pattern
+etc.
+
+Each row of data is separated by commas or spaces.
+The data is expected to be ascii text corresponding to
+either a +1 or a 0.  
+
+Sample input for a pattern file (The comments to the
+right may NOT be in the file unless more sophisticated
+parsing of the input is done.):
+
+5,7                        input is 5x7 grid
+0,1,1,1,0                  beginning of pattern for "O"
+1,0,0,0,1
+1,0,0,0,1
+1,0,0,0,1
+1,0,0,0,1
+1,0,0,0,0
+0,1,1,1,0
+
+Clearly, this simple scheme can be expanded or enhanced
+any way you like.
+
+Returns -1 if any file error occurred, otherwise 0.
+*******************************************************************/
+ead_pattern()
+
+FILE*infile;
+
+intxinsize,yinsize;
+intrownum, numcols,x;
+intvalue, vals_read, status;
+charinstring[STRINGSIZE];
+
+printf("\n Opening and retrieving data from file.");
+
+infile = fopen(inpath, "r");
+if (infile == NULL)
+{
+printf("\n error in opening file!");
+return -1 ;
+}
+vals_read =fscanf(infile,"%d,%d",&xinsize,&yinsize);
+if (vals_read != 2)
+{
+printf("\n Should read 2 items in line one; did read %d",vals_read);
+return -1;
+}
+if ((xinsize != ROWSIZE) || (yinsize != COLSIZE))
+{
+printf("\n\n ERROR:  Pattern file is invalid!");
+printf("\n Pattern is a %d by %d grid instead of %d by %d",
+xinsize, yinsize, ROWSIZE, COLSIZE);
+return -1;
+}
+numcols = ROWSIZE;
+for (rownum = 0; rownum<COLSIZE; rownum++)
+{
+status = fscanf(infile,"%s",&instring);
+if (status == -1)
+{
+printf("\n  ERROR:  Insufficient data in file!");
+return -1;
+}
+value = parseline(instring,numcols,rownum);
+if (value == -1)
+return -1;
+}
+printf("\n Closing the input file now. ");
+fclose(infile);
+return 0;
+
+/*******************************************************************
+parseline(string,numele,row)
+parse line of text to derive elements from pattern string.
+Parameters
+ "string" is a pointer to string to be parsed.
+ "numele" specifies number of elements contained in "string"
+ "row" is pointer to correct row of "pattern" for elements.
+Elements in the string must be either "0", "1", <space>, ","
+ 0,1 puts appropriate values in pattern array
+ "<space>", or "," is ignored
+ 
+ Notice that this is an extremely primitive parsing routine.
+ This can (and should) be improved or modified as desired.
+ 
+Return:
+ -1 if error, 0 else.
+*******************************************************************/
+arseline(string,numele,ygrid)
+harstring[];
+ntnumele,ygrid;
+
+intvalue;
+intcharnum, ele;
+charch;
+
+charnum = 0;
+value = 0;
+ele = 0;
+while ((ele < numele) && (value == 0))
+{
+if (charnum == STRINGSIZE) /* made it to the end without filling all element entries */
+value = -1;
+else
+{/*This routine does not care if digits are separated or not.
+  each instance of a 0 or 1 will be taken as an element entry in
+  the pattern.  */
+  
+ch = string[charnum];
+switch (ch)
+{
+case '0' :  /* each "0" will be treated as a grid entry */
+pattern[ele][ygrid] = 0;
+ele++;
+break;
+case '1' :  /* each "1" will be treated as a grid entry */
+pattern[ele][ygrid] = 1;
+ele++;
+break;
+default :  /* all other characters are ignored. */
+break;
+}
+charnum++;
+}
+}
+return value;
+
+/*******************************************************************
+randomize_wts()
+Intialize the weights in the grid neurodes to
+random values between -0.25..+0.25
+*******************************************************************/
+andomize_wts()
+
+inti,j;
+doublevalue;
+
+printf("\n Please enter a random number seed (1..32767):  ");
+scanf("%d", &i);
+srand(i);  
+for(i=0; i<ROWSIZE; i++)
+{
+for (j = 0; j<COLSIZE; j++)
+{
+value = (rand() / 32767.0 ) - 0.5;
+gridwts[i][j] = value/2;
+}
+}
+return;
+
+*******************************************************************
+randomize_activity()
+Intialize the activity in the grid neurodes to
+random values between 0.0..0.5
+*******************************************************************/
+andomize_activity()
+
+inti,j;
+doublevalue;
+
+for(i=0; i<ROWSIZE; i++)
+{
+for (j = 0; j<COLSIZE; j++)
+{
+value = ( rand() / 32767.0 );
+activity[i][j] = value/2.0;
+}
+}
+return;
+
+/*******************************************************************
+set_constants()
+displays current (default) values for learning/activation
+constants and requests user changes.  
+*******************************************************************/
+et_constants()
+
+intans;
+floatvalue;
+
+show_constants(ACTIVATION);
+scanf("%d",&ans);
+while (ans != 0)
+{
+printf("\n    New value for A?  ");
+scanf("%f",&value);
+A = (double) value;
+printf("\n    New value for T?  ");
+scanf("%f",&value);
+T = (double) value;
+printf("\n    New value for t0?  ");
+scanf("%d",&t0);
+show_constants(ACTIVATION);
+scanf("%d",&ans);
+}
+show_constants(LEARNING);
+scanf("%d",&ans);
+while (ans != 0)
+{
+printf("\n    New value for F?  ");
+scanf("%f",&value);
+F = (double) value;
+printf("\n    New value for G?  ");
+scanf("%f",&value);
+G = (double) value;
+show_constants(LEARNING);
+scanf("%d",&ans);
+}
+return;
+
+*********************************************************************
+show_constants (which)
+displays either activation or learning constants for
+user approval or modification
+Paramter "which" determines which set will be displayed
+*********************************************************************/
+how_constants(which)
+ntwhich;
+
+if (which == ACTIVATION) 
+{
+printf("\n The current values for the Grossberg activation constants are:");
+printf("\n   Activation Decay Time constant (A):  %6.3f",A);
+printf("\n   Activity Threshold (T):              %6.3f",T);
+printf("\n   Transmission time to grid (t0):      %d",t0);
+}
+if (which == LEARNING)
+{
+printf("\n The current values for the Grossberg learning constants are:");
+printf("\n   Learning Decay 'Forgetting' constant (F):  %6.3f",F);
+printf("\n   Learning Gain constant (G):                %6.3f",G);
+}
+printf("\n\n Do you wish to change any of these constants? (0 = no) ");
+return;
+
+/*******************************************************************
+show_wts()
+print out the weights for the grid neurodes on the screen
+*******************************************************************/
+how_wts()
+
+introw,col;
+
+printf("\n  The current weights for the grid neurodes are:\n");
+for (col = 0; col < COLSIZE; col++)
+{
+printf ("\n");
+for (row = 0; row < ROWSIZE; row++)
+{
+printf(" %6.3f ",gridwts[row][col]);
+}
+}
+printf("\n\n");
+return;
+
+/**************************************************************
+displaygrid()
+prints (text-only for portability) the current activity
+of the grid neurodes.  Also displays the current time,
+and the desired pattern.
+**************************************************************/
+isplaygrid()
+
+inti,j;
+doublevalue;
+
+printf("\n  Current pattern and activity at time %d:",curtime);
+printf("\n Scale (0.0 to 1.0):  '  .  _  o  O  %' \n");
+printf("\n Grid activity is:");
+printf("                   ");
+printf("  Desired pattern is:");
+for (j=0; j<COLSIZE; j++)
+{
+printf("\n     ");
+for (i=0; i<ROWSIZE; i++)
+{
+value = activity[i][j];
+if (value < 0.17)
+printf("   ");
+if ((value >= 0.17) && (value < 0.35))
+printf(" . ");
+if ((value >= 0.35) && (value < 0.50))
+printf(" _ ");
+if ((value >= 0.50) && (value < 0.67))
+printf(" o ");
+if ((value >= 0.67) && (value < 0.83))
+printf(" O ");
+if (value >= 0.83)
+printf(" % ");
+}
+printf("                   ");
+for (i=0; i<ROWSIZE; i++)
+{
+switch(pattern[i][j])
+{
+case 0:printf("   ");
+break;
+case 1:printf(" % ");
+break;
+default:break;
+}
+}
+}
+printf("\n");
+return;
+
+/***************************************************************
+print_menu()
+prints out menu of operations for user choice
+***************************************************************/
+rint_menu()
+
+printf("\n\n\n     Please select an operation:");
+printf("\n\n          1.  Train the network for a period of time.");
+printf("\n              (Both external and outstar stimulate grid)");
+printf("\n\n          2.  Allow the network to decay for a period of time.");
+printf("\n              (Neither external or outstar stimulates grid)");
+printf("\n\n          3.  Test the network for a period of time.");
+printf("\n              (Only outstar stimulates grid)");
+printf("\n\n         -1.  Train the network for a period of time.");
+return;
+
+/***************************************************************
+main()
+main program
+***************************************************************/
+ain()
+
+intyesno;
+intdone, donetraining;
+inttraintime;
+intchoice;
+
+done = 0; donetraining = 0;
+while (done == 0)
+{
+initialize();
+choice = 0;
+/* display the desired grid pattern on the screen */
+print_menu();
+printf("\n\n  Please enter your choice:  ");
+scanf("%d",&choice);
+printf("\n Your selection was %d",choice);
+while (choice != QUIT)
+{
+switch (choice)
+{
+case 1:
+train();
+break;
+case 2:
+decay();
+break;
+case 3:
+test();
+break;
+default:
+{
+choice = QUIT;
+break;
+}
+}
+print_menu();
+printf("\n\n  Please enter your choice:  ");
+scanf("%d",&choice);
+printf("\n Your selection was %d",choice);
+}
+printf("\n\n Training session terminated at user request...");
+
+/* want to start over (allows modification of constants)? */
+printf("\n\n Would you like to reset the network and begin again (no = 0)?  ");
+scanf("%d",&yesno);
+if (yesno < 1)
+done = 2;
+}
+printf("\n\n Program complete.");
+/* stop */
+return;
+ain (no = 0)?  ");
+scanf("%d",&yesno);
+if (yesno < 1)
+done = 2;
+}
+printf("\n\n Program complete.");
+/* stop 

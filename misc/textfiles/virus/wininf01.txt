@@ -1,0 +1,559 @@
+
+		
+		Windows Executable Infection 
+			   by
+		  Qark and Quantum [VLAD]
+
+
+ This document attempts to explain technically NewExe infection for the
+ virus writer.  This isn't for the novice coder and you'll need to
+ understand DOS EXE infection before being able to use any of it.
+
+ The infection described in detail here is the same as used by the
+ accompanying WinSurfer virus, there are other methods that can be done 
+ but they aren't our concern (it's up to you to develop new code!)
+
+ You will want a copy of the New Exe header information which is available
+ in Ralf Browns interrupt listings under Int21h AH=4Bh, a copy of which is
+ included at the end of this article.
+
+ This is a map of what we are trying to do:
+ 
+       Before infection                  After Infection
+
+     0h---------------------           0h---------------------   
+       |                   |             |                   |
+       |  DOS EXE header   |             |  DOS EXE header   |
+       |                   |             |                   |
+       ---------------------             ---------------------
+       |                   |             |                   |
+       |  DOS Code         |             |  DOS Code         |
+       |                   |             |                   |
+       |                   |         3F8h---------------------
+   400h---------------------             |                   |
+       |                   | <- Move     |  New EXE Header   |
+       |  New EXE Header   |     this    |  and some tables  |
+       |  and some tables  |      up     |                   |
+       |                   |             | ----------------- |
+       | ----------------- |             |   Segment         |
+       |   Segment         |             |   Table           |
+       |   Table           |             |                   |
+       |                   |             |                   |
+       |                   |   Insert -> | ----------------- | Virus segment
+       | ----------------- |    this     | ----------------- | entry
+       |   Misc Other      |             |   Misc Other      |
+       |   Tables          |             |   Tables          |
+       |                   |             |                   |
+       x                   x             x                   x
+       x                   x             x                   x
+       x                   x             x                   x
+ CS:IP ---------------------             ---------------------
+       |                   |             |                   |
+       |   Windows Code    |             |   Windows Code    |
+       |   and Misc        |             |   and Misc        |
+       |   Segments        |             |   Segments        |
+       |                   |             |                   |
+   End ---------------------       CS:IP ---------------------
+					 | Virus segment     |
+			     Append all  | with code etc     |
+				this ->  |                   |
+					 --------------------- Virus
+					 |                   | Relocation
+				     End --------------------- Entry
+ 
+
+ Infection Theory:
+ -----------------
+ Test the EXE to make sure its windows and that the NE is at offset 1024.
+ Reduce the NE pointer at 3ch by eight.
+ Reduce DOS SP by eight.
+ Any NE offsets which are larger than the segment table offset must be
+  increased by eight.
+ Increment the segment counter.
+ Save the CS:IP.
+ Point the CS:IP to the new segment entry
+ Calculate the position of the end of the segment table, move all data up to
+  and including the segment table up by eight bytes.
+ Add another segment entry
+ Write the virus to the end of the file
+ Write relocation entry to the end of the file.
+ ---
+
+ That is a very basic overview of what is wanted.
+
+ The main idea of it all is moving the NE header forward to add a new
+ segment table entry, and changing the CS:IP to point to it.
+
+ We'll go through all the stages step by step.
+
+ Testing for a Windows executable.
+ ---------------------------------
+
+ A NewEXE file always begins with a DOS header and some DOS executable
+ code.  With a windows executable:
+	The word at offset 0 is 'MZ'.
+	The word at offset 18h is 40h or greater.
+ assuming that these conditions are met then we also want the pointer to the
+ NE header (3ch) to be equal to 400h.  The reason for this is that room is 
+ needed to move the NE header forward by 8.
+
+ Rewriting the DOS header.
+ -------------------------
+
+ Before rewriting the DOS header, reduce the DOS SP field (10h) by 8, because
+ if it was pointing to the end of the DOS code section it would point to
+ the start of the NE header. (No real reason for doing it really)
+ The NE header pointer at 3ch must be reduced by 8, because we intend on
+ moving most of the NE header forward to that position.
+ 
+ Modifications to the NE header.
+ -------------------------------
+
+ From this point onwards we are referring to the offsets in relation to the
+ NE header.
+
+ The pointer to the segment table is a word at 22h.  If any of the pointers
+ at 4,24h,26h,28h,2ah are larger than [22h], then increase that
+ pointer by eight.  The reason for this is that since we are inserting a
+ new segment table entry, all tables behind the segment table will be
+ eight bytes further from the start of the header.
+
+ The segment counter is a word at offset 1ch.  Increment it by one because
+ since we are adding another segment, we need to indicate this in the
+ header.
+
+ At offset 14h is the dword pointer to the program entry point, CS:IP
+ where the CS is actually the segment table entry number.  Save this pointer
+ for use in your relocation entry (that part will be explained in detail
+ later on).  Now point the CS:IP instead to the virus segment.  Do this
+ by writing the necessary starting IP value to 14h (offset of the entry into
+ your segment) and the segment counter value into 16h (since the virus
+ segment is the last in the segment table it will be equal to the segment
+ counter value which we have incremented).
+
+ You can work this out for yourself, but what you need to do now is move
+ the entire NE header, upto and including the segment table, but not
+ the data behind it, forward by eight bytes.  Heres an equation on
+ calculating how much to move:
+	((segmentcounter-1)*8)+word ptr [22h]
+
+ Directly after this position is where to insert the new virus segment entry.
+
+ The Virus Segment Entry.
+ ------------------------
+
+ Format of new executable segment table record:
+  00h    WORD    offset in file (shift left by alignment shift for byte offs)
+  02h    WORD    length of image in file (0000h = 64K)
+  04h    WORD    segment attributes (see below)
+  06h    WORD    number of bytes to allocate for segment (0000h = 64K)
+
+ Offsets 2 and 6 in the segment record are just the virus size. Offset
+ 4 is the segment attribute, we use 180h, which makes the segment executable
+ with relocations.
+
+ Calculating offset 0 is more difficult.  It is necessary to get the file
+ length and shift it right by the alignment shift value which was saved
+ earlier.  I wouldn't know how to do a dword shift so I convert it to a
+ division.
+
+ File length into DX:AX :
+	mov     ax,4202h
+	xor     cx,cx
+	cwd
+	int     21h
+ Shift right DX:AX by alignment shift:
+	mov     cl,byte ptr alignment_shift
+	push    bx
+	mov     bx,1
+	shl     bx,cl
+	mov     cx,bx
+	pop     bx
+	div     cx
+     AX=required offset 0 value
+
+ Write this eight byte table behind all the moved header.
+
+ Writing the Virus.
+ ------------------
+
+ Lseek to the end of the executable and write the virus.
+
+ Writing the Relocation Entry.
+ -----------------------------
+
+ You need a relocation entry so that you can return control to the host
+ after the virus has done its dirty work.  The relocation entries follow
+ the segment itself.
+
+ Format of relocation entry:
+ Offset  Size    Description
+  00     WORD    Number of relocation entries
+	 Offset  Size    Description
+	  00     BYTE    relocation type
+	  01     BYTE    relocation flags
+	  02     WORD    offset within segment
+	  04     WORD    target address segment
+	  06     WORD    target address offset
+
+
+ The first word will be 1 because only 1 relocation entry.
+ First byte is 3 to signal a 32bit pointer (a far jump).
+ Second byte is 4 to signal additive relocation. (doesn't work without this)
+ Word at offset 2 is the offset of the dword after the 'far jump' opcode.
+ Word at offset 4 is the CS of the original host CS:IP
+ Word at offset 6 is the IP of the original host CS:IP
+
+ To put all this into code:
+
+		db      0eah    ;Opcode of JMP FAR PTR
+    ret_ip      dw      0
+		dw      0ffffh
+
+    relocation  dw      1       ;One relocation entry
+		db      3       ;32bit pointer relocation
+		db      4       ;Additive relocation
+		dw      offset ret_ip   ;Offset of the relocation in segment
+    hostcs      dw      0       ;CS:IP of place we want our relocation to
+    hostip      dw      0       ; point.
+
+ Note: the relocation address data (ret_ip) _must_ be FFFF:0000 as above
+       because windows treats it as a linked list.  If you don't understand
+       don't worry, just do it!  It won't work otherwise.  It is important
+       that before writing the virus body to the executable that you set
+       this address to FFFF:0000 so that executable will be setup correctly.
+
+ Write the relocation entry to the end of the file.
+
+ Windows allows a standard Int 21h call just fine so all file manipulation
+ is as simple as ever, with a few minor changes.
+
+
+ Writting TSR/ISR's under Windows.
+ ---------------------------------
+
+ Windows is a protected mode environment and thus to set a vector under it we
+ must manipulate the various tables that protected mode requires to be
+ updated.  Of these tables one is of interest to us.  The "Interrupt
+ Descriptor Table" (IDT). The IDT holds all the Protected Mode interrupt
+ vectors that are in the "Interrupt Vector Table" (IVT) - if they are
+ supported - and some more.  This is all well and good - all we have to do is
+ set a vector in the IDT to point to our code like we do with dos and the 
+ IVT but - there are complications.
+
+ V86 mode.
+ ---------
+
+ When Windows is running in 386 enhanced mode the processor is locked into
+ v86 mode.  In v86 mode each application has its own 1mb memory block.  All
+ EMS/XMS is locked away from the application and (usually) each process has
+ its own IDT/IVT.  The idea being to allow the application to think it is
+ alone on the system.  Any attempt to access any other tasks that may be
+ running is a "violation of system integrity" and will cause an exception.
+ This is no good for a virus and by now you're thinking we're screwed but
+ windows solves the problem for us.  Windows has but one IDT and of course
+ only one IVT to shadow it and thus if we are to a hook a vector in the IDT
+ it will be reflected in every task.  (Ever seen that OS/2 warp advert where
+ they say "... and true multi-tasking" - well this simply means that OS/2
+ warp holds a seperate IDT for every task under v86 mode.)
+
+ Setting the Vector.
+ -------------------
+
+ So let's get this straight.. the IVT is the one at 0:0 that we all know and
+ love and the IDT is a protected mode/v86 shadow of it.  So you're most
+ probably asking "why can't we just hook the IVT and let windows reflect it
+ into the IDT?" - well there's 2 reasons: firstly windows doesn't "reflect"
+ the IVT as we would like to think, actually it copies the IVT into the IDT
+ on startup then replaces certain routines with "protected mode call
+ structures" which call the real mode routines and some routines it doesn't
+ even do this, secondly trying to access the IVT directly is a big nono and
+ will cause an exception error.
+ 
+ Can we use DOS ?  well yes, you can.. most dos functions have been reflected
+ up into windows although windows is supposed to be trying to get rid of
+ them. So you can call int 21,25/35 to set the vector but remember that this
+ will be setting a vector in the GVT and only at the discretion of windows.
+
+ A better way: use DPMI.  Windows is NOT your host under protected mode or
+ even v86 mode as microsoft would have you believe.  Windows has an
+ overlooker that provides windows time-slicing and exception abilities.  In
+ fact all windows does is act as a mediator to DPMI and basically slow things
+ down.  So how do we use DPMI to set the vector ?  well.. by using functions
+ 0204h/0205h  - with the vector in BL  - of the DPMI provider int 31.  This
+ way windows has no say over what goes in its IDT and thus we have a LOT of
+ control.
+
+ Writing the Interrupt.
+ ----------------------
+
+ This is perhaps one of the easier things to do - once you understand the
+ principles.  In protected mode/v86 mode your code segment is supposed to be
+ read only and thus you're supposed to have a code, stack and data segment.
+ Everyone knows this is bad so what we need is a way to write to the code
+ segment. You won't find one - writing to the code segment just isn't
+ possible.  BUT - if we were to have a data segment that pointed to the same
+ code segment then we could do it. (actually we don't have any segments in
+ protect mode.. we have a thing called a "selector" which gives access
+ parameters to areas of memory.)
+
+ To get an "alias selector" to the code segment we can use another DPMI
+ function and bypass windows altogether: function ax=000ah with the code
+ selector in bx of int 31h, it returns a read/writeable alias selector to
+ the code segment in ax.
+
+ So now Protected mode isn't protected and we're free to write to the code
+ segment. One problem arises from this idea.  Qark wanted to put this code
+ to generate the alias in the loader part of the virus and store it in the
+ code segment for the interrupt routine.  This seemed fine until I found out
+ that windows likes to move segments around.  One minute your code might be
+ at one address the next it may be at another.  Thus you should always
+ regenerate the alias on every execution of the ISR or lock down the segment
+ - we chose against this last approach as it can cause exception errors from
+ windows (DPMI has no problems with this strategy.)
+
+ For a detailed look at DPMI consult Ralf Brown's interrupt listing under
+ int 31h.  These functions haven't been included in this text.
+
+ Staying Resident.
+ -----------------
+
+ Finally: don't go resident off something that can be closed.  If you go
+ resident off something like mine sweeper or something and the user closes
+ the application, your code segment will be deleted and removed from the IDT
+ and will point to an empty segment.  This will cause windows to hang.
+ Solution: look for a process that will never be closed, direct action 
+ infect this as soon as you find it and only ever go resident off it.
+
+ In the 'system.ini' file in your windows directory, is a variable 'shell='
+ that points to a file that is never closed.  Mostly it will be
+ 'progman.exe' but sometimes other programs are used, so read it in and
+ infect it.
+
+ To find the path of the windows directory, search the environment for a
+ variable called 'windir=' (yes, lowercase!).  On entry to any windows
+ executable ES will point to the PSP (or something functionally similar).
+ The word at 2ch is the segment (selector) of the environment segment.
+ Scan through this as you would within a DOS application.  We didn't discover
+ this through any documentation, but when Quantum accidentally typed 'set'
+ from within a DOS window.
+
+ Facts and Possible Techniques.
+ ------------------------------
+
+ At offset 0eh in the New Executable header is the 'auto data segment index'.
+ This is another segment table index, which will be automatically in DS
+ on execution entry.  Although this is pure guesswork, if you set that
+ 'auto data segment' to the same segment as CS, (ie in every way the same
+ except the segment attributes) then you could write to your CS without
+ using DPMI and would also open the gateway to polymorphic windows viruses.
+ (Polymorphism would be pretty useless if you had to put a DPMI call before
+ you could write to your code segment.)
+
+ Mark Ludwig's 'Windows Virus #2' uses a different form of infection in that
+ it extends the length of the code segment as indicated in the segment
+ table, and moves the entire host program starting from the end of the file
+ back by virus length until the end of the code segment is reached, at which
+ point the virus is written.  The IP is then repointed to the virus.
+ There are some advantages to this, such as no need to add relocation entries
+ because the jmp is intra-segment but this is greatly outweighed by the
+ fact that moving an entire file is very slow and a much larger number of
+ pointers in the header need to be modified to account for the change.
+
+ There are DPMI calls for allocating memory (Int 31h ax=501h) but it is
+ unknown at this point whether the memory remains allocated after the program
+ is closed.  Mark Ludwig makes extensive use of these calls for temporary
+ buffers in his direct action 'Windows Virus #2'.
+ 
+ Mark Ludwig also demonstrates use of the WinAPI calls, which involve adding
+ a new relocation entry for each call and pushing some stuff on the stack.
+ This may become important when win95 comes out but for the moment it is
+ more convenient to simply use int 21h.
+
+ Some food for thought.
+ ----------------------
+
+ Microsoft has a dream [here we go], the dream is to control the world.  They
+ intend to do this with applications like Windows [scary isn't it ?], and by
+ the looks of it they might succeed.  A lot of people think computers should
+ be easy, that there should be no skill involved in it and that everyone
+ should HAVE to use one.  Microsoft are using this idea to flood the market
+ with shit like Windows, in the hope that it will be accepted as a "standard".
+ Windows is already this but Microsoft aren't happy with one success, they
+ want to be on top of the hill.
+
+ This is where we come in.  If Microsoft is going to succeed in taking over
+ the world then we should be there making their lives difficult.  The
+ WinSurfer virus created by us is so stable that an average windows
+ user wouldn't even notice it.  [Then again the average windows user
+ wouldn't notice if his hair caught on fire.]  And thus will stay with us
+ for quite some time.  At least until AVers recognise the windows market
+ and start releasing scanners.
+
+
+
+
+ The New Executable format.     (From Ralf Browns Interrupt listing 21 AH=4B)
+ --------------------------
+
+ new executables begin running with the following register values
+	AX = environment segment        (Wrong! AX=0)
+	BX = offset of command tail in environment segment
+	CX = size of automatic data segment (0000h = 64K)
+	ES,BP = 0000h                   (Wrong! ES=PSP)
+	DS = automatic data segment
+	SS:SP = initial stack
+  the command tail corresponds to an old executable's PSP:0081h and
+  following, except that the 0Dh is turned into a NUL (00h); new
+  format executables have no PSP  (All wrong)
+
+Format of .EXE file header:
+Offset  Size    Description
+ 00h  2 BYTEs   .EXE signature, either "MZ" or "ZM" (5A4Dh or 4D5Ah)
+ 02h    WORD    number of bytes in last 512-byte page of executable
+ 04h    WORD    total number of 512-byte pages in executable (includes any
+		partial last page)
+ 06h    WORD    number of relocation entries
+ 08h    WORD    header size in paragraphs
+ 0Ah    WORD    minimum paragraphs of memory to allocation in addition to
+		executable's size
+ 0Ch    WORD    maxi paragraphs to allocate in addition to executable's size
+ 0Eh    WORD    initial SS relative to start of executable
+ 10h    WORD    initial SP
+ 12h    WORD    checksum (one's complement of sum of all words in executable)
+ 14h    DWORD   initial CS:IP relative to start of executable
+ 18h    WORD    offset within header of relocation table
+		40h or greater for new-format (NE,LE,LX,PE,etc.) executable
+ 1Ah    WORD    overlay number (normally 0000h = main program)
+---new executable---
+ 1Ch  4 BYTEs   ???
+ 20h    WORD    behavior bits
+ 22h 26 BYTEs   reserved for additional behavior info
+ 3Ch    DWORD   offset of new executable (NE,LE,etc) header within disk file,
+		or 00000000h if plain MZ executable
+
+Format of new executable header:
+Offset  Size    Description
+ 00h  2 BYTEs   "NE" (4Eh 45h) signature
+ 02h  2 BYTEs   linker version (major, then minor)
+ 04h    WORD    offset from start of this header to entry table (see below)
+ 06h    WORD    length of entry table in bytes
+ 08h    DWORD   file load CRC (0 in Borland's TPW)
+ 0Ch    BYTE    program flags (see below)
+ 0Dh    BYTE    application flags (see below)
+ 0Eh    WORD    auto data segment index
+ 10h    WORD    initial local heap size
+ 12h    WORD    initial stack size (added to data seg, 0000h if SS <> DS)
+ 14h    DWORD   program entry point (CS:IP), "CS" is index into segment table
+ 18h    DWORD   initial stack pointer (SS:SP), "SS" is segment index
+		if SS=automatic data segment and SP=0000h, the stack pointer
+		is set to the top of the automatic data segment, just below
+		the local heap
+ 1Ch    WORD    segment count
+ 1Eh    WORD    module reference count
+ 20h    WORD    length of nonresident names table in bytes
+ 22h    WORD    offset from start of this header to segment table (see below)
+ 24h    WORD    offset from start of this header to resource table
+ 26h    WORD    offset from start of this header to resident names table
+ 28h    WORD    offset from start of this header to module reference table
+ 2Ah    WORD    offset from start of this header to imported names table
+		(array of counted strings, terminated with a string of length
+		  00h)
+ 2Ch    DWORD   offset from start of file to nonresident names table
+ 30h    WORD    count of moveable entry point listed in entry table
+ 32h    WORD    file alignment size shift count
+		0 is equivalent to 9 (default 512-byte pages)
+ 34h    WORD    number of resource table entries
+ 36h    BYTE    target operating system
+		00h unknown
+		01h OS/2
+		02h Windows
+		03h European MS-DOS 4.x
+		04h Windows 386
+		05h BOSS (Borland Operating System Services)
+ 37h    BYTE    other EXE flags
+		bit 0: supports long filenames
+		bit 1: 2.X protected mode
+		bit 2: 2.X proportional font
+		bit 3: gangload area
+ 38h    WORD    offset to return thunks or start of gangload area
+ 3Ah    WORD    offset to segment reference thunks or length of gangload area
+ 3Ch    WORD    minimum code swap area size
+ 3Eh  2 BYTEs   expected Windows version (minor version first)
+Note:   this header is documented in detail in the Windows 3.1 SDK
+	Programmer's Reference, Vol 4.
+
+Bitfields for new executable program flags:
+Bit(s)  Description
+ 0-1    DGROUP type
+	  0 = none
+	  1 = single shared
+	  2 = multiple (unshared)
+	  3 = (null)
+ 2      global initialization
+ 3      protected mode only
+ 4      8086 instructions
+ 5      80286 instructions
+ 6      80386 instructions
+ 7      80x87 instructions
+
+Bitfields for new executable application flags:
+Bit(s)  Description
+ 0-2    application type
+	001 full screen (not aware of Windows/P.M. API)
+	010 compatible with Windows/P.M. API
+	011 uses Windows/P.M. API
+ 3      is a Family Application (OS/2)
+ 5      0=executable, 1=errors in image
+ 6      non-conforming program (valid stack is not maintained)
+ 7      DLL or driver rather than application
+	(SS:SP info invalid, CS:IP points at FAR init routine called with
+	  AX=module handle which returns AX=0000h on failure, AX nonzero on
+	  successful initialization)
+
+Format of new executable segment table record:
+ 00h    WORD    offset in file (shift left by align shift to get byte offs)
+ 02h    WORD    length of image in file (0000h = 64K)
+ 04h    WORD    segment attributes (see below)
+ 06h    WORD    number of bytes to allocate for segment (0000h = 64K)
+Note:   the first segment table entry is entry number 1
+
+Bitfields for segment attributes:
+Bit(s)  Description
+ 0      data segment rather than code segment
+ 1      unused???
+ 2      real mode
+ 3      iterated
+ 4      movable
+ 5      sharable
+ 6      preloaded rather than demand-loaded
+ 7      execute-only (code) or read-only (data)
+ 8      relocations (directly following code for this segment)
+ 9      debug info present
+ 10,11  80286 DPL bits
+ 12     discardable
+ 13-15  discard priority
+
+Format of new executable relocation data (immediately follows segment image):
+Offset  Size    Description
+ 00h    WORD    number of relocation items
+ 02h 8N BYTEs   relocation items
+		Offset  Size    Description
+		 00h    BYTE    relocation type
+				00h LOBYTE
+				02h BASE
+				03h PTR
+				05h OFFS
+				0Bh PTR48
+				0Dh OFFS32
+		 01h    BYTE    flags
+				bit 2: additive
+		 02h    WORD    offset within segment
+		 04h    WORD    target address segment
+		 06h    WORD    target address offset
+
+
+
+		[end]
+
+

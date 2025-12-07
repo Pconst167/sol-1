@@ -1,0 +1,180 @@
+
+                              様様様様様様様
+                              Boot Infectors
+                              様様様様様様様
+                               By Dark Angel
+                               Phalcon/Skism
+                              様様様様様様様
+
+     As most of our readers have no doubt noticed, 40Hex articles have
+traditionally covered file based viruses. It is time to fill in the hole and
+cover the other large class of viruses, the partition table and boot sector
+viruses, herein termed "boot infectors" for brevity.
+     File based viruses are executed after the operating system loads. Boot
+infectors, however, latch onto the parts of the drive that are accessed by the
+BIOS when it attempts to load the operating system itself. Therefore, there is
+little that can be done to intercept the boot infector once it has
+successfully installed itself onto a disk.
+     A brief explanation of the basics of disk terminology is in order. Each
+disk is divided into 512 byte chunks called sectors. Due to an unfortunate
+choice in terminology, however, the system BIOS uses the term "sectors"
+differently. For our purposes, we will divide the disk into 512 byte blocks,
+with block 0 residing on the beginning of the disk.
+     The system BIOS assigns three values to each block on the disk. The
+values are known as sectors, cylinders (sometimes known as tracks), and heads
+(sometimes called sides) and can be represented as a triple
+(sector,cylinder,head). Each disk has a certain number of sectors (SEC),
+cylinders (CYL), and heads (HDS). Cylinders are numbered from 0 to CYL - 1.
+Heads are numbered from 0 to HDS - 1. Sectors, for some unfathomable reason,
+are numbered from 1 to SEC. Block 0 corresponds to the triple (1,0,0) (sector
+1, cylinder 0, head 0). Block 1 corresponds to (2,0,0), Block 2 with (3,0,0),
+and so on, until Block SPH. Block SPH corresponds to (1,1,0), Block SPH+1 with
+(2,1,0), and so on. Block 2*SPH is (1,2,0), Block 2*SPH+1 is (2,2,0), etc.
+This continues until Block HPC*SPH, which is (0,0,1).
+     An introduction to the boot process is vital to understanding boot
+infectors. When the system is reset, the BIOS checks the first block, triple
+(1,0,0), of the first hard drive of the system (if any are installed, of
+course) to absolute memory address 7C000. If the hard drive exists, the block
+that was read in is checked for the signature 0AA55 (in reverse word format)
+occuring at offset 1FE. This is the marker for a valid partition table. If a
+partition table is found, the code residing in this block is executed at
+0:7C00. If a valid partition table is not found (or the hard drive doesn't
+exist), then the BIOS tries booting from the floppy drive. It again reads the
+first block from the first floppy drive to absolute memory address 7C000. If
+there is a readable disk in the drive, it will be loaded in and executed. No
+check is made for the 0AA55 signature, although many boot sectors have it
+there anyway just for consistency.
+     Technically, the first block of the hard disk is a boot sector just as it
+is on floppies. However, it is sometimes given a different name because of the
+partition table convention that allows multiple operating systems to reside on
+a single drive. We will call it by the somewhat misleading name of partition
+table. Another common name is the master boot record, for reasons that will
+become clear momentarily. The partition table convention is basically a simple
+structure at the end of the first block of the hard drive that defines where
+each operating system exists on a given hard drive. The partition table
+structure begins at offset 1BE in the block and consists of an array with four
+entries. The format of each entry is:
+
+Ofs Size Description
+ 0  BYTE boot indicator, 0 = non-bootable, 80h = bootable
+ 1  BYTE head the partition begins on
+ 2  BYTE sector the partition begins on
+ 3  BYTE cylinder the partition begins on
+ 4  BYTE system indicator, indicates what OS resides in the partition
+         01 indicates DOS 12-bit FAT
+         04 indicates DOS 16-bit FAT
+ 5  BYTE head the partition ends on
+ 6  BYTE sector the partition ends on
+ 7  BYTE cylinder the partition ends on
+ 8 DWORD total number of blocks preceding the partition
+0C DWORD total number of blocks in the partition
+
+     The code in the partition table loads the boot record of the active
+partition (as indicated in the first bit of the partition table structure).
+The boot record then loads the operating system that resides in its respective
+partition.
+     When BIOS decides to boot from a floppy, it reads in the first block off
+the floppy to 7C000. Floppies don't have partition tables, so this block is
+the equivalent of the boot record of a partition on a hard disk.
+     In DOS, the boot record consists of three bytes for a JMP followed by the
+following structure, sometimes known as the BIOS parameter block (BPB):
+
+Offset  Size     Description
+  3     8 bytes  OEM name and version (ASCII)
+ 0B     Word     bytes per sector
+ 0D     Byte     sectors per cluster
+ 0E     Word     reserved sectors (starting at logical sector 0)
+ 10     Byte     number of FATs
+ 11     Word     number of root directory entries (32 bytes each)
+ 13     Word     total sectors in partition
+ 15     Byte     media descriptor
+ 17     Word     sectors per FAT
+ 19     Word     sectors per track
+ 1B     Word     number of heads
+ 1D     Word     number of hidden sectors
+
+     The rest of the boot record consists of code that loads and executes the
+DOS system files, which then take over. There are a number of terms in the
+above structure which may be unfamiliar, but don't fret; they will be
+explained in due course.
+     First, however, it is important to note that nothing requires these
+structures to exist! The partition table, for example, is merely a de facto
+convention which was set up to allow operating systems to co-exist on a single
+hard drive. The boot record structure defined above is used by DOS for DOS
+programs. Of course, another operating system could interpret the structure,
+but there is no requirement for a given operating system to use that format.
+When infecting disks, however, keep in mind that certain programs require the
+structures to be in place. DOS, for example, won't recognise partitions
+properly without the partition table being at its usual location. Floppies
+also won't work properly if the boot record is not loaded when DOS requests a
+read to the first block. In other words, make sure that all requests to the
+partition table or boot record return the partition table and boot record in
+the appropriate locations. The other code may be changed with the only
+drawback in such a scheme being easy detection of the code modifications. A
+better approach is to redirect requests to the modified blocks to a stored
+copy of the original. In other words, stealth.
+     Seeing these structures, the method of infection, conceptually, at the
+very least, should be apparent. It's a simple matter to replace the code of
+the partition table or boot record with your own. All your code has to do is
+store the block somewhere else on the disk and replace the block with itself.
+When the virus gains control, it needs to put itself in memory and then load
+the original block into memory at 7C000 and then transfer control to this
+code. Once it is in memory, it is free to infect any disks which come into
+contact with the computer.
+     This is all nice and easy to say, but there are a few details which would
+be helpful to know before plunging into writing a boot infector. When control
+is transferred to either the partition table or boot record, CS:IP is set to
+0:7C00. SS:SP is undefined, so most boot infectors set it to 0:7C00, which
+causes the stack to be placed just below the loading area. This is sufficient
+for the needs of most viruses.
+     Additionally, it would be nice to be able to locate empty space to store
+the original boot sector or partition table. Here, the virus has a number of
+choices. In hard disks, many viruses store the original partition table in the
+unused space between the partition table and the first partition. The first
+partition generally starts at triple (2,1,0) or later (some start as late as
+(2,0,1), so there is a wealth of space in which to store the virus in that
+area. A simple calculation reveals that there are (number of cylinders - 2)
+sectors between (1,0,0) where the partition table is and (2,1,0) where the
+first partition starts). Multiply that value by 512 and you have the number of
+bytes you can store there. That's a large chunk of space you have at your
+disposal. A virus may also store itself at the end of the root directory,
+although it risks overwriting valid directory entries. The BPB contains
+everything necessary to calculate the location and length of the root
+directory.
+     An alternate approach, which is used by several viruses, is to alter the
+file allocation table, or FAT. The FAT is an array of entries which describe
+how the blocks on the disk are related. FAT entries are either 12 or 16 bits
+long, depending on the disk. 12 bit FAT's are generally used in disks and
+partitions with less than 20740 sectors and 16 bit FAT's are used in larger
+disks and partitions. The location and size of the FAT can be found in the
+BPB. Each entry in the FAT corresponds to a block on the disk. The FAT
+describes a file's placement on the disk. By following the chain, you can find
+the location of the blocks of the file, since they need not be contiguous. The
+value of the FAT entry is the number of the next block in the chain, i.e. an
+index to the FAT entry corresponding to the next block of the file, unless it
+is one of the special values. If the value of the FAT entry is 0, then the
+block is unused. If the value is -1 to -8 (FFF8-FFFF) then the block is the
+last block in a file. If the value is -9 to -10h (FFF0-FFF7) then the block is
+reserved (usually a bad block). The first and second entries in the FAT are
+always -1. The third entry governs the first data area. The idea is for the
+virus to find empty blocks, mark them as bad in the FAT, and store the code
+there. This way, DOS thinks the blocks are bad and does not overwrite the
+virus.
+     One important issue with partition table infectors is whether they should
+preserve the partition table itself, i.e. leave the partition table structure
+at offset 1BE in the first block of the disk. Similarly, should boot sector
+infectors retain the BPB? This is a particularly interesting issue with
+stealth viruses, viruses which redirect attempts at accessing the partition
+table or boot sector. The advantage of retaining the structures is that DOS
+will recognize the disks even when the virus is not loaded in memory.
+Therefore, the virus is somewhat less vulnerable to detection. However, if the
+virus does not keep the structure, then it will be more difficult for the user
+to boot the computer without loading the virus in memory, since DOS will not
+recognise the drive. This is an especially nifty feature, since primitive
+cleaning attempts such as FDISK /MBR will fail against such a virus.
+     Within this motley assortment of information, you will find enough to aid
+you in crafting an original boot infector. There is intentionally no code in
+this tutorial, mainly because there is little virus-specific information
+contained within. Many of the routines used in a boot infector are important
+when writing any boot sector, so there is little importance in repeating the
+code here.

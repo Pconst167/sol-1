@@ -1,0 +1,1355 @@
+; The Jolly-Box v4.3 (1 Mbit Samplerom, 4 Kb Program ROM).
+; New modifications by Zaphod Beeblebrox of Control Team, Origial
+; Code by Jolly Roger/Int. Tollfree Access
+; Multi-Frequenz-Demon-Dialer for Global Access!!!
+; last update 19.June.1993 12:15.32
+; Code for INTEL 8049 running at 10 Mhz (because timing)
+;
+;  How to Operate:
+;  ===============
+;  Press *0 for samplebank 0 select (DTMF, All 16 Digits).
+;  Press *1 for samplebank 1 select (CCITT #5 -R1- *DEFAULT*).
+;  Press *2 for samplebank 2 select (CCITT #5 -R2-).
+;  Press *3 for CCITT #3 (Not yet implemented!!!).
+;  Press *4 for CCITT #4 (2040 Hz/2400 Hz a.k.a 2VF).
+;  Press *8 for Trunking Freq #1 Customization Menu.
+;  Press *90X to change CCITT #5 R1/R2 M-f Tone Duration.
+;  Press *91X to change CCITT #5 R1/R2 M-f Tone Delay.
+;  Press *# for special tone simulation mode (Dialtone, Busy & Greenbox).
+;  Press **0 to enter a new routing code. The default is KP2+46.
+;  Press **1 to enter RAM memory number #1.
+;  Press **2 to enter RAM memory number #2.
+;  # ends the input and adds ST code if not in DTMF mode.
+;
+; When entering a number on the input line, the first digit must be
+; between 0-3: A "0" means that the prefix in ram should be dialed before
+; the actual number you enter. "1" means that KP1 should be the first tone
+; dialed when the macro is played back. "2" is the same, but KP2 instead of
+; KP1. A ST code is always added at the end of a CCITT number stored in RAM
+; or ROM when it's played back. "3" means that this tone should be ignored
+; and the rest of the dialing should be done in DTMF mode.
+;
+;  Press 0 to dial the entered number #1. (without trunk)
+;  Press 1 to dial the entered number #2. (without trunk)
+;  Press 20-27 for dial in the first phonebook
+;  Press 30-37 for dial in the second phonebook
+;  Press 4 for 1850 Hz DHLS tone
+;  Press 5 for a Redbox "Dime" Tone
+;  Press 6 for a Redbox "Quarter" Tone
+;  Press 7 to send US Local Trunk-Tone (2600 Hz, 1.5 seconds).is KP2-460.
+;  Press 8 to send CCITT International Trunk #1
+;  Press 9 to send CCITT International Trunk #2
+;  Press # to get into whitebox mode, press again to return to bluebox mode.
+;
+;  Example:
+;  ========
+;  "b46018262804c"
+;  Press:* 2 4 6 0 1 8 2 6 2 8 0 4 #
+;  or   :* 0 1 8 2 6 2 8 0 4 #  (b460 will be added for 0)
+;  "a08185585636c"
+;  Press:* 1 0 8 1 8 5 5 8 5 6 3 6 #
+
+; When ist beeps three times:
+; Quarz is ok.
+; Porcessor is ok.
+; All chips on the Sound card are ok.
+
+; Press 1,2,3 or 4  when turning on and you get a test of all tones
+; in the sample bank you selected.
+
+;  Register:
+;  =========
+;  r0 = adress reg #1. (Input-Line & Dialing Loops).
+;  r1 = adress reg #2. (Prefix-Dialing Loop).
+;  r2 = counter for wait routine
+;  r3 = sound to play
+;  r4 = sound pause
+;  r5 = sample bank for autodialing
+;  r6 = sound length
+;  r7 = temporary register
+; r0 II (r24) = unused
+; r1 II (r25) = unused
+; r2 II (r26) = unused
+; r3 II (r27) = unused
+; r4 II (r28) = security code entered status
+; r5 II (r29) = dial duration for C5 R1/R2 M-f Tones
+; r6 II (r30) = dial pause for C5 R1/R2 M-f Tones
+; r7 II (r31) = temporary register II
+; r32-65   = memory for entered number #1 (ends with 32)
+; r66-99   = memory for entered number #2 (ends with 32)
+; r100-115 = memory for entered dialing prefix (ends with 32)
+; r116     = Trunk Select Stage 1
+; r117     = Trunk Duration Stage 1
+; r118     = Trunk Delay Stage 1
+; r119     = Trunk Select Stage 2
+; r120     = Trunk Duration Stage 2
+; r121     = Trunk Delay Stage 2
+; r122     = Trunk Select Stage 3
+; r123     = Trunk Duration Stage 3
+; r124     = Trunk Delay Stage 3
+; r125     = Trunk Select Stage 4
+; r126     = Trunk Duration Stage 4
+; r127     = Trunk Delay Stage 4
+
+; codes in the sample rom:
+; the 128Kb rom is divided in 32 2048 large blocks
+
+; 00 - "0" DTMF touch tones   10 - "0"    CCITT #5 R1
+; 01 - "1" DTMF touch tones   11 - "1"    CCITT #5 R1
+; 02 - "2" DTMF touch tones   12 - "2"    CCITT #5 R1
+; 03 - "3" DTMF touch tones   13 - "3"    CCITT #5 R1
+; 04 - "4" DTMF touch tones   14 - "4"    CCITT #5 R1
+; 05 - "5" DTMF touch tones   15 - "5"    CCITT #5 R1
+; 06 - "6" DTMF touch tones   16 - "6"    CCITT #5 R1
+; 07 - "7" DTMF touch tones   17 - "7"    CCITT #5 R1
+; 08 - "8" DTMF touch tones   18 - "8"    CCITT #5 R1
+; 09 - "9" DTMF touch tones   19 - "9"    CCITT #5 R1
+; 0a - "*" DTMF touch tones   1a - "kp1"  CCITT #5 R1
+; 0b - "#" DTMF touch tones   1b - "kp2"  CCITT #5 R1
+; 0c - "a" DTMF touch tones   1c - "st"   CCITT #5 R1
+; 0d - "b" DTMF touch tones   1d - "C.11" CCITT #5 R1
+; 0e - "c" DTMF touch tones   1e - "C.12" CCITT #5 R1
+; 0f - "d" DTMF touch tones   1f - "DHLS" CCITT #5 R1/R2
+
+; 20 - "0"    CCITT #5 R2     30 - 2400/2600 Hz
+; 21 - "1"    CCITT #5 R2     31 - 2400/2400 Hz
+; 22 - "2"    CCITT #5 R2     32 - 2040/2040 Hz
+; 23 - "3"    CCITT #5 R2     33 - 2040/2400 Hz
+; 24 - "4"    CCITT #5 R2     34 - 2280/2280 Hz
+; 25 - "5"    CCITT #5 R2     35 - 2600/2600 Hz
+; 26 - "6"    CCITT #5 R2     36 - 2100/2100 Hz
+; 27 - "7"    CCITT #5 R2     37 - Spare 2
+; 28 - "8"    CCITT #5 R2     38 - 2100/2100 Hz Guard Tone
+; 29 - "9"    CCITT #5 R2     39 - 480/620 Hz (US Ringing Tone)
+; 2a - "kp1"  CCITT #5 R2     3a - 350/440 Hz (US Dialtone)
+; 2b - "kp2"  CCITT #5 R2     3b - 440/480 Hz (US Busy)
+; 2c - "st"   CCITT #5 R2     3c - 440/440 Hz (Sw. Dialt & Busy).
+; 2d - "C.11" CCITT #5 R2     3d - 460/460 Hz (German Tone).
+; 2e - "C.12" CCITT #5 R2     3e - 1700/2200 Hz (US/DK Redbox)                 
+; 2f - "DHLS" CCITT #5 R2     3f - Silence (Empty!!!).
+
+; port1:	bit  0   = Samplebank Select Low Bit
+;	  	bit  1   = Samplebank Select High Bit
+;		bits 2-7 = Rows for keyboard
+; port2: 	bits 0-3 = Program Address Memory High Address Bits
+;		bits 4-7 = select a sample of the sample rom (CCITT or DTMF)
+
+;BEGIN OF PAGE $000
+
+;Resetroutine:
+	nop			;	lo
+	nop			;	hi-pointer to reset ($000)
+	nop			;	lo
+	nop			;	hi-pointer to nmi ($000)
+	nop
+	nop
+	nop
+	nop
+	nop
+
+	call	init
+
+;give ok status (beep ,delay 300ms, beep, delay 100ms,long beep)
+;end of reset routine
+
+wboxb:	mov	r4,=75		; 150 ms delay
+	call	beep		; beep to show reset
+	mov	r4,=25		; set 50 ms delay
+	call	beep		; beep again
+	call	beep		; a third beep!
+
+;select tone 0, sample-bank 1.
+
+	mov	r3,=%00000000
+	mov	r5,=%00000001
+
+;  MainMenu
+;  ========
+;  **0 = enter routing code
+;  **1 = enter number #1
+;  **2 = enter number #2
+;   *0 = select sample bank 0 (DTMF Whitebox, all 16 tones).
+;   *1 = select sample bank 1 (CCITT #5 R1 Tones).
+;   *2 = select sample bank 2 (CCITT #5 R2 Tones).
+;   *3 = select CCITT #3 mode (Not yet implemented!!!).
+;   *4 = select CCITT #4 mode.
+;   *9 = select dial/break timing menu.
+;   *# = special tone simulation mode.
+;    0 = dial entered number #1
+;    1 = dial entered number #2
+;    20-17, 30-37 phonebook(s)
+;    4 = DHLS tone
+;    5 = Redbox - Dime Tone
+;    6 = Redbox - Quarter Tone
+;    7 = Local Trunk, 1.0s 2600 Hz
+;    8 = Int. Trunk #1
+;    9 = Int. Trunk #2
+;    # = whitebox, press again to go back to bluebox.
+
+start:	mov	r4,=0
+	call	beep		; beep again
+
+main:	call	key		; get a code from key Accu
+	jz	dial1		; if it is 0 goto dial
+	anl	A,=%10111111	; %x0xxxxxx
+	jz	command		; if it is 64 command menu 2
+	anl	A,=%01111111	; %00xxxxxx
+	jz	whitebox	; if it is 128 goto wb
+	dec	a		; so it has to be 1-9
+	jz	dial2		; if it is 1
+	dec	a		; so it has to be 2-9
+	jz	dialn1		; if it is 2
+	dec	a		; so it has to be 3-9
+	jz	dialn2		; if it is 3
+	dec	a		; so it has to be 4-9
+	jz	dhls		; if it is 4
+	dec	a		; so it has to be 5-9
+	jz	dime		; if it is 5
+	dec	a		; so it has to be 6-9
+	jz	quart		; if it is 6
+	dec	a		; so it has to be 7-9
+	jz	ltrunk		; if it is 7
+	dec	a		; so it has to be 8,9
+	jz	trunk1		; if it is 8
+	jmp	trunk2		; so it had to be 9
+
+;Input line
+;Press 0-9 to enter a number.
+;Use * to enter special tones (1-6 = A-E, H).
+;Use # to finish and add ST code.
+
+enter_r:mov	r0,=100		; set start for routing code
+	mov	@r0,=32		; give end code
+	jmp	enterl		; goto enterl
+
+enter_1:mov	r0,=32		; set start for number #1 - 32
+	mov	@r0,=32		; give end code
+	jmp	enterl
+
+enter_2:mov	r0,=66		; set start for number #1 - 32
+	mov	@r0,=32		; give end code
+	jmp	enterl
+
+
+dialn1:	mov	A,r5
+	mov	r7,A
+	call	key		; get a key 0-7
+	anl	A,=7		; %00000111
+	jmp	dialn		; goto dial
+
+dialn2:	mov	A,r5
+	mov	r7,A
+	call	key		; get a key 8-15 (0-7)
+	orl	A,=8		; %00001000
+
+;dial a number from p3 rom out of
+
+dialn:	swap	A		; a=a*16
+	mov	r0,a		; put number to r0
+	sel	rb1
+	mov	a,r5
+	sel	rb0
+	mov	r6,a
+	sel	rb1
+	mov	a,r6
+	sel	rb0
+	mov	r4,a
+	mov	a,r0
+	movp3	a,@A		; hole ersten wert
+	inc	r0		; increment position in rom
+	jz	route1		; when 0 then dial prefix
+	dec	a
+	mov	r3,=10		; Sample pointer --> KP1
+	jz	touchn		; If 1 - Dial KP1+Number
+	dec	a
+	mov	r3,=11		; Sample pointer --> KP2
+	jz	touchn		; If 2 - Dial KP2+Number
+	dec	a
+	jnz	main		; If 3 - Dial in DTMF, else go main.
+	mov	r4,=40		; 80 ms pause between DTMF's
+	mov	r6,=40		; 80 ms duration for DTMF's.
+	mov	A,=0
+	mov	r5,A		; Select DTMF Sample-Bank
+	jmp	rbackn
+
+touchn:	call	sound		; Play the sample
+rbackn:	mov	a,r0		; get position in rom
+	movp3	a,@A		; Fetch next tone
+	inc	r0		; increment position in rom
+	mov	r3,a		; put next sample in r3
+	jz	touchn		; 0 is also a tone we should output!
+	anl	A,=%11011111	; If it's $20 - End of signalling!
+	jz	etouch		; We have to check if we should play ST code now...
+	jmp	touchn
+
+;dial a number from ram (r32 or r66).
+
+dial1:	mov	r0,=32		; Dial RAM Macro #1
+	jmp	dial
+
+dial2:	mov	r0,=66		; Dial RAM Macro #2
+
+dial:	mov	A,r5
+	jz	mfdial
+	anl	A,=%11111011
+	jnz	mfdial
+	jmp	c4_dial
+
+mfdial: sel	rb1
+	mov	a,r5
+	sel	rb0
+	mov	r6,a
+	sel	rb1
+	mov	a,r6
+	sel	rb0
+	mov	r4,a
+	mov	A,r5
+	mov	r7,A
+	mov	a,@r0		; hole ersten wert
+	inc	r0		; increment position in ram
+	jz	route2		; If 0 - Dial Routing
+	mov	r3,=10		; Sample pointer --> KP1
+	dec	a
+	jz	touch		; If 1 - Dial KP1+Number
+	dec	a
+	mov	r3,=11		; Sample Pointer --> KP2
+	jz	touch		; If 2 - Dial KP2+Number
+	dec	a
+	jnz	main		; If 3 - Dial in DTMF, else go main.
+	mov	r4,=40		; 80 ms pause between DTMF's
+	mov	r6,=40		; 80 ms duration of DTMF's
+	mov	A,=0
+	mov	r5,A
+	jmp	rback
+
+touch:	call	sound		; play the sample
+rback:	mov	a,@r0		; fetch the next tone
+	inc	r0
+	mov	r3,a
+	jz	touch		; 0 is also a tone we should play!!
+	anl	A,=%11011111	; check for $20 - End of signalling
+	jnz	touch		; if no end code, goto output
+etouch:	mov	A,r5
+	jz	endsig		; Don't add ST code for DTMF mode.
+	mov	r3,=12		; Sample pointer --> ST code
+	call	sound		; play the sample
+endsig: mov	A,r7
+	mov	r5,A
+	jmp	main		; end to main
+
+
+route1: call	dialr		; and wait
+	jmp	rbackn		; end to main
+
+route2:	call	dialr		; and wait
+	jmp	rback		; end to main
+
+trunk1:	jmp	trunk1n
+trunk2: jmp     trunk2n
+ltrunk:	jmp	ltrunkn
+dime:	jmp	dime1
+quart:	jmp	quart1
+dhls:	jmp	dhls2
+whitebox:jmp	white
+command:jmp	command2
+
+	PAGE	1
+
+;Enter number to ram or select sample bank for bluebox mode.
+;Press 0-3 for the different sample-banks, and # to enter
+;the special tone simulation mode.
+
+command2:call	key
+	jz	bank0		; If it's 0 - Samplebank 0 select.
+	anl	A,=%10111111	; If * was pressed check for inputline.
+	jz	enterm
+	anl	a,=%01111111	; If # was pressed goto simulation mode.
+	jz	simtj
+	dec	a
+	jz	bank1		; If it's 1 - Samplebank 1 select.
+	dec	a
+	jz	bank2		; If it's 2 - Samplebank 2 select.
+	dec	a
+	jz	ccitt3		; If it's 3 - CCITT #3 Mode Enable.
+	dec	a
+	jz	ccitt4		; If it's 4 - CCITT #4 Mode Enable.
+	dec	a
+	jz	command2	; 5
+	dec	a
+	jz	command2	; 6
+	dec	a
+	jz	command2	; 7
+	dec	a
+	jz	trunktj		; If it's 8 - Trunking Timing Menu.
+	dec	a
+	jz	timej		; If it's 9 - Dialing Timing Menu.
+	jmp	command2
+
+bank0:	mov	A,=0
+	jmp	banks
+
+bank1:	mov	A,=1
+	jmp	banks
+
+bank2:	mov	A,=2
+	jmp	banks
+
+ccitt3:	mov	A,=3
+	jmp	banks
+
+ccitt4:	mov	A,=4
+
+banks:	mov	r5,A
+	mov	r4,=0
+	call	beep
+	jmp	start
+
+silence:mov	A,=%11111111
+	outl	p1,A
+	mov	A,=$f0
+	outl	p2,A
+	ret
+
+enterm:	call	key
+	anl	A,=%00000011
+	jz	enterr
+	dec	a
+	jz	enter1
+	jmp	enter2
+
+enterl:	mov	r4,=0
+	call	beep		; give message, that * was pushed
+	call	beep
+notspec:call	key		; get a key
+	jz	write		; test 0
+	anl	A,=%10111111	; %x0xxxxxx
+	jz	special		; * = Enter special tone (1-6 = A-E, H)
+	anl	A,=%01111111	; %00xxxxxx
+	jz	startj		; test #
+write:	mov	@r0,a		; if 0-9, write number
+	inc	r0		; go to next
+	mov	@r0,=32		; set end
+	jmp	enterl		; goto enterl
+
+special:call	key
+	anl	A,=%00000111
+	jz	notspec
+	add	A,=9
+	jmp	write
+
+;Whitebox routine
+;press keys as log as the tone has to play
+;	1=$10	2=$20	3=$30
+;	4=$40	5=$50	6=$60
+;	7=$70	8=$80	9=$90
+;	*=$a0	0=$00	#=$b0
+;	A=$c0	B=$d0	C=$e0
+;		D=$f0
+
+white:	mov	r4,=10
+	mov	r6,=20
+	call	beep
+	call	beep
+	mov	a,=%00000011
+	outl	p1,A		; set all rows to output
+whitell:call	release
+	mov	A,=$f0
+	outl	p2,A
+whitel:	mov	A,=%11111011	; set bit 2 low
+	outl	p1,A
+	mov	a,=$10
+	jnt0	wkey		; jump if key is pressed ...
+	mov	a,=$70		; .....
+	jnt1	wkey
+	mov	a,=%11110111
+	outl	p1,A
+	mov	a,=$20
+	jnt0	wkey
+	mov	a,=$80
+	jnt1	wkey
+	mov	a,=%11101111
+	outl	p1,A
+	mov	a,=$30
+	jnt0	wkey
+	mov	a,=$90
+	jnt1	wkey
+	mov	a,=%11011111
+	outl	p1,A
+	mov	a,=$40
+	jnt0	wkey
+	jnt1	ffake
+	mov	a,=%10111111
+	outl	p1,A
+	mov	a,=$50
+	jnt0	wkey
+	mov	a,=$00
+	jnt1	wkey
+	mov	a,=%01111111
+	outl	p1,A
+	mov	a,=$60
+	jnt0	wkey
+	jt1	whitel		; start over if no key is pressed
+	sel	rb1
+	mov	A,r4
+	jz	fake2
+	sel	rb0
+	jmp	wboxb		; return to main menu.
+ffake:	sel	rb1
+	mov	A,r4
+	jz	fake1
+	sel	rb0
+	jmp	wkey2j
+fake1:	sel	rb0
+	mov	A,=$a0
+	jmp	wkey
+fake2:	sel	rb0
+	mov	A,=$b0	
+wkey:	outl	p2,A		; set tone
+	mov	a,=%00000000	; whitebox tones on
+	outl	p1,A
+	jmp	whitell
+
+;wait routine for waiting 2*A ms (a=65: 130ms) (set a to 0, to get 512ms delay)
+wait:	mov	r2,=166		; set loop of 5+166*8 cycles
+wait1:	nop			; delay 1 cycle
+	nop			; delay 1 cycle
+	nop			; delay 1 cycle
+	nop			; delay 1 cycle
+	nop			; delay 1 cycle
+	nop			; delay 1 cycle
+	djnz	r2,wait1	; delay 2 cycles
+	dec	a		; after 1 #s, if a>0
+	jnz	wait		; goto wait again
+	ret			; end of wait
+
+wkey2j:	jmp	wkey2
+enter1:	jmp	enter_1
+enter2:	jmp	enter_2
+enterr:	jmp	enter_r
+simtj:	jmp	simt
+startj:	jmp	start
+timej:	jmp	timing
+trunktj:jmp	trunkt
+
+	PAGE	2
+
+red:	mov	r7,A
+	mov	r3,=$0e		; select sound 14
+	mov	A,r5
+	mov	r1,A
+	mov	r5,=%00000011	; select sample bank 03
+	call	sound		; play tone
+	mov	A,r1
+	mov	r5,A
+	mov	A,r7
+	dec	A
+	jnz	red
+	jmp	main
+
+dime1:	mov	A,=2
+	mov	r4,=33
+	mov	r6,=33
+	jmp	red
+
+quart1:	mov	A,=5
+	mov	r4,=17
+	mov	r6,=17
+	jmp	red
+
+;Enter key
+;gives The Code of pressed Key in Accu and waits for key press.
+;bevore it waits for releasing the key.
+;	1=$01	2=$02	3=$03
+;	4=$04	5=$05	6=$06
+;	7=$07	8=$08	9=$09
+;	*=$40	0=$00	#=$80
+
+key:	call	releaseb
+keyl:	mov	a,=%11111011	; set bit 2 low
+	outl	p1,A
+	mov	a,=1
+	jnt0	kkey		; jump if key is pressed ...
+	mov	a,=7		; .....
+	jnt1	kkey
+	mov	a,=%11110111
+	outl	p1,A
+	mov	a,=2
+	jnt0	kkey
+	mov	a,=8
+	jnt1	kkey
+	mov	a,=%11101111
+	outl	p1,A
+	mov	a,=3
+	jnt0	kkey
+	mov	a,=9
+	jnt1	kkey
+	mov	a,=%11011111
+	outl	p1,A
+	mov	a,=4
+	jnt0	kkey
+	mov	a,=$40
+	jnt1	kkey
+	mov	a,=%10111111
+	outl	p1,A
+	mov	a,=5
+	jnt0	kkey
+	mov	a,=0
+	jnt1	kkey
+	mov	a,=%01111111
+	outl	p1,A
+	mov	a,=6
+	jnt0	kkey
+	mov	a,=$80
+	jnt1	kkey
+	jmp	keyl		; start over if no key is pressed
+kkey:	ret			; ret acc.
+
+;test release key
+
+releaseb:mov	a,=%00000011
+	outl	p1,A		; set all rows to output
+release:jnt0	release		; wait until there is no key pressed
+	jnt1	release		; (both lines)
+	mov	a,=37		; delay 75ms
+	call	wait
+	jnt0	release		; wait if there is no key pressed
+	jnt1	release		; (both lines)
+	ret
+
+;make a beep sound with 30ms delay
+
+beep:	mov	r3,=$01		; select sound 01, Bank 3 (good beep sound)
+	mov	r6,=15		; 30 ms beep
+ 	mov	A,r5
+	mov	r7,A
+	mov	r5,=%00000011	; set sound dma
+	call	sound		; and wait
+	mov	A,r7
+	mov	r5,A
+	ret
+
+;Sound routine
+;r3 represents the sound which is in the sample rom.
+;r4 is the pause after the sound, r5 the sample bank & r6 the length
+
+sound:	mov	A,r6
+	jz	nowait
+	mov	A,r3		; get sample to a
+	swap	A		; a=a*16
+	outl	p2,A		; send sample
+	mov	A,r5		; tone bank select
+	anl	a,=%00000011	; only banks 0-3 are valid
+	outl	p1,A
+	mov	A,r6		; use R6/2 ms to delay
+	call	wait		; wait
+	call	silence		; stop sound
+	mov	A,r4		; pause
+	jz	nowait
+	call	wait
+nowait:	ret			; end of sound
+
+;dial prefix from ram (r100)
+
+dialr:	mov	r1,=100		; start
+	mov	a,@r1		; hole ersten wert
+	inc	r1		; increment position in ram
+	dec	a
+	mov	r3,=10
+	jz	touchr
+	dec	a
+	mov	r3,=11
+	jz	touchr
+	dec	a
+	jnz	dialr2
+	mov	r4,=40		; 80 ms pause between DTMF's
+	mov	r6,=40		; 80 ms duration for DTMF's.
+	mov	r5,=0		; Select DTMF Samplebank.
+	jmp	touchr2
+touchr: call	sound		; send the touchtone
+touchr2:mov	a,@r1		; hole nächsten wert
+	inc	r1
+	mov	r3,a
+	jz	touchr		; gebe null aus
+	anl	A,=%11011111	; kein code eingegeben
+	jnz	touchr		; if no end code, goto output
+dialr2:	ret
+
+wkey2:	call	releaseb
+wkey2l:	mov	A,=%11111011
+	outl	p1,A
+	mov	A,=$a0
+	jnt0	wkeyj
+	mov	A,=%11110111
+	outl	p1,A
+	mov	A,=$b0
+	jnt0	wkeyj
+	mov	A,=%11101111
+	outl	p1,A
+	mov	A,=$c0
+	jnt0	wkeyj
+	mov	A,=%11011111
+	outl	p1,A
+	mov	A,=$d0
+	jnt0	wkeyj
+	mov	A,=%10111111
+	outl	p1,A
+	mov	A,=$e0
+	jnt0	wkeyj
+	mov	A,=%01111111
+	outl	p1,A
+	mov	A,=$f0
+	jt0	wkey2l
+
+wkeyj:	jmp	wkey
+whitej:	jmp	whitel
+
+
+	page	3
+
+; Page 3 contains the 16 stored phonenumber ($300-$3ff).
+
+	page	4
+
+; Special tone simulation mode.
+; =============================
+;
+; 1 = Swedish Dialtone.
+; 2 = Swedish Busy Tone.
+; 3 = Swedish Ringtone.
+; 4 = US Dialtone
+; 5 = US Busy Tone.
+; 6 = US Ringtone.
+; 7 = Swedish All Trunks Busy
+; 8 = US All Trunks Busy
+; 9 = Greenbox Ringback. (700 & 1700 Hz, 1 sec).
+; 0 = Greenbox Coin Return (1100 & 1700 Hz, 1 sec).
+; * = 2600 Hz wink (90 ms).
+; # = Jump back to main menu.
+
+simt:	mov	a,=%00000011
+	outl	p1,A
+siml1:	call	release
+	mov	A,=$f0
+	outl	p2,A
+siml2:	mov	A,=%11111011	; 1 - Swedish Dialtone
+	outl	p1,A
+	mov	a,=$c0
+	jnt0	skey
+	jnt1	sbusy		; 7 - Swedish Slow-Busy
+	mov	A,=%11110111	; 2 - Swedish Busy
+	outl	p1,A
+	mov	A,=$c0
+	jnt0	fbusy
+	mov	A,=$b0
+	jnt1	fbusy		; 8 - US Fast-Busy
+	mov	a,=%11101111	; 3 - Swedish Ringtone
+	outl	p1,A
+	mov	a,=$c0
+	jnt0	ringl
+	jnt1	rngbck		; 9 - Greenbox Ringback
+	mov	a,=%11011111	; 4 - US Dialtone
+	outl	p1,A
+	mov	a,=$a0
+	jnt0	skey
+	jnt1	wink26		; * - 2600 Wink (90 ms).
+	mov	a,=%10111111	; 5 - US Busy
+	outl	p1,A
+	mov	a,=$b0
+	jnt0	busy
+	jnt1	cretn		; 0 - Greenbox Coin Return
+	mov	a,=%01111111	; 6 - US Ringtone
+	outl	p1,A
+	mov	a,=$90
+	jnt0	ringl
+	jt1	siml2		; start over if no key is pressed
+	jmp	wboxb		; return to main menu.
+skey:	outl	p2,A		; set tone
+	mov	a,=%00000011	; simulation tones on
+	outl	p1,A
+	jmp	siml1
+
+busy:	mov	r3,=250
+	jmp	busyl
+fbusy:	mov	r3,=125
+busyl:	outl	p2,A
+	mov	r7,A
+	mov	A,r3
+	call	wait
+	mov	A,=$f0
+	outl	p2,A
+	mov	A,r3
+	call	wait
+	mov	A,r7
+	jnt0	busyl
+	jnt1	busyl
+	jmp	simt
+
+sbusy:	outl	p2,A
+	mov	r7,A
+	mov	A,=250
+	call	wait
+	mov	A,=$f0
+	outl	p2,A
+	mov	A,=250
+	call	wait
+	mov	A,=250
+	call	wait
+	mov	A,=250
+	call	wait
+	mov	A,=250
+	call	wait
+	mov	A,r7
+	jnt0	sbusy
+	jnt1	sbusy
+	jmp	simt
+
+ringl:	outl	p2,A
+	mov	r7,A
+	mov	A,=250
+	call	wait
+	mov	A,=250
+	call	wait
+	mov	A,=$f0
+	outl	p2,A
+	mov	A,=250
+	call	wait
+	mov	A,=250
+	call	wait
+	mov	A,=250
+	call	wait
+	mov	A,=250
+	call	wait
+	mov	A,r7
+	jnt0	ringl
+	jnt1	ringl
+	jmp	simt
+
+wink26:	mov	A,=$50
+	outl	p2,A
+	mov	A,=45
+	call	wait
+	mov	A,=$f0
+	outl	p2,A
+	jmp	simt
+
+cretn:	mov	A,=$c0
+	outl	p2,A
+	mov	A,=%00000001
+	outl	p1,A
+	mov	A,=250
+	call	wait
+	mov	A,=250
+	call	wait
+	mov	A,=$f0
+	outl	p2,A
+	jmp	simt
+
+rngbck:	mov	A,=$a0
+	outl	p2,A
+	mov	A,=%00000001
+	outl	p1,A
+	mov	A,=250
+	call	wait
+	mov	A,=250
+	call	wait
+	mov	A,=$f0
+	outl	p2,A
+	jmp	simt
+
+ltrunkn:mov	A,=$50		; select sound 05
+	outl	p2,a		; no pause
+	mov	A,=%11111111	; set sample bank 03
+	outl	p1,A
+	call	releaseb
+	call	silence
+	jmp	main		; goto main loop
+
+init:	sel	rb0		; use old register
+	orl	p1,=%11111111	; %11111111 all bits for output
+	orl	p2,=%11111111	; %11111111 all bits for output
+
+	mov	a,=%11111000
+	outl	p1,a		; select 1 key and whitebox-mode
+	jnt0	selftj  	; if 1 is pressed while turning on goto selftest
+	mov	a,=%11110101
+	outl	p1,a		; select 2 key and bluebox-mode CCITT #5 R1
+	jnt0	selftj  	; if 2 is pressed while turning on goto selftest
+	mov	a,=%11101110
+	outl	p1,a		; select 3 key and bluebox-mode CCITT #5 R2
+	jnt0	selftj  	; if 3 is pressed while turning on goto selftest
+	mov	a,=%11011111
+	outl	p1,a		; select 4 key and special signalling tones & trunks.
+	jnt0	selftj		; if 4 is pressed while turning on goto selftest
+	jmp	init2
+
+selftj:	jmp	selftst
+
+	page	5
+
+c4_dial:mov	a,@r0		; hole ersten wert
+	inc	r0		; increment position in ram
+	jz	mainj		; If 0 - Dial Routing
+	dec	a
+	jz	c4_kp1		; If 1 - Dial KP1+Number
+	dec	a
+	jz	c4_kp2		; If 2 - Dial KP2+Number
+mainj:	jmp	main
+
+c4_tch:	anl	a,=%00000111
+	rl	a
+	rl	a
+	add	a,=192
+	mov	r1,a
+	mov	r4,=18
+	mov	r5,=$03
+	mov	r6,=18
+	movp	a,@a
+	mov	r3,a
+	call	sound
+	inc	r1
+	mov	a,r1
+	movp	a,@a
+	mov	r3,a
+	call	sound
+	inc	r1
+	mov	a,r1
+	movp	a,@a
+	mov	r3,a
+	call	sound
+	inc	r1
+	mov	a,r1
+	movp	a,@a
+	mov	r3,a
+	call	sound
+	mov	a,=70		; 140 ms interdigit delay.
+	call	wait
+c4_rbk:	mov	a,@r0		; fetch the next tone
+	inc	r0
+	jz	c4_tch		; 0 is also a tone we should play!!
+	anl	A,=%11011111	; check for $20 - End of signalling
+	jnz	c4_tch		; if no end code, goto output
+	mov	r3,=$02
+	call	sound
+	call	sound
+	call	sound
+	call	sound
+c4_end: mov	A,r7
+	mov	r5,A
+	jmp	main		; end to main
+
+c4_kp1:	mov	A,r5
+	mov	r7,A
+	mov	r4,=0		; Delay 0
+	mov	r5,=3		; Samplebank 3
+	mov	r3,=$03		; Sample #03 2040/2400 Hz
+	mov	r6,=75		; Play it for 150 ms
+	call	sound
+	mov	r3,=$02		; Sample #02 2040/2040 Hz
+	mov	r4,=70		; 140 ms delay
+	mov	r6,=50		; Play it for 100 ms
+	call	sound
+	jmp	c4_rbk
+
+c4_kp2:	mov	A,r5
+	mov	r7,A
+	mov	r4,=0		; Delay 0
+	mov	r5,=3		; Samplebank 3
+	mov	r3,=$03		; Sample #03 2040/2400 Hz
+	mov	r6,=75		; Play it for 150 ms
+	call	sound
+	mov	r3,=$01		; Sample #02 2400/2400 Hz
+	mov	r4,=70		; 140 ms delay
+	mov	r6,=50		; Play it for 100 ms
+	call	sound
+	jmp	c4_rbk
+
+c4_clr:	mov	A,r5
+	mov	r7,A
+	mov	r4,=0		; Delay 0
+	mov	r5,=3		; Samplebank 3
+	mov	r3,=$03		; Sample #03 2040/2400 Hz
+	mov	r6,=75		; Play it for 150 ms
+	call	sound
+	mov	r3,=$02		; Sample #02 2040/2040 Hz
+	mov	r4,=60		; 120 ms delay
+	mov	r6,=175		; Play it for 350 ms
+	call	sound
+	mov	A,r7
+	mov	r5,A
+	jmp	main
+
+c4_xfr:	mov	A,r5
+	mov	r7,A
+	mov	r4,=0		; Delay 0
+	mov	r5,=3		; Samplebank 3
+	mov	r3,=$03		; Sample #03 2040/2400 Hz
+	mov	r6,=75		; Play it for 150 ms
+	call	sound
+	mov	r3,=$01		; Sample #02 2400/2400 Hz
+	mov	r4,=60		; 120 ms delay
+	mov	r6,=175		; Play it for 350 ms
+	call	sound
+	mov	A,r7
+	mov	r5,A
+	jmp	main
+
+dhls2:	mov	A,r5
+	mov	r7,A
+	mov	r5,=1		; Samplebank 1
+	mov	r3,=$0f		; Sample #15 DHLS Tone.
+	mov	r6,=250		; Wait 0.5s
+	call	sound
+	mov	A,r7
+	mov	r5,A
+	jmp	main
+
+	page	6
+
+; Dialing Timing sub-menu.
+; ========================
+; *90X = Change M-f Tone Duration, X=20 ms steps. 
+; *91X = Change M-f Tone Delay, X=20 ms steps.
+;
+; 0 = 000 ms      1 = 020 ms   2 = 040 ms
+; 3 = 060 ms      4 = 080 ms   5 = 100 ms
+; 6 = 120 ms      7 = 140 ms   8 = 160 ms
+; 9 = 180 ms      * = 250 ms   # = 500 ms
+
+timing:	call	beep
+	call	key
+	jz	mf_dur
+	anl	A,=%11111110
+	jz	mf_del
+t_mainj:sel	rb0
+	jmp	main
+
+mf_dur:	call	time_ch
+	sel	rb1
+	mov	r5,A
+	sel	rb0
+	call	beep
+	jmp	main
+
+mf_del:	call	time_ch
+	sel	rb1
+	mov	r6,A
+	sel	rb0
+	call	beep
+	jmp	main
+
+time_ch:call	beep
+	call	key
+	jnz	ch_time
+	clr	a
+	jmp	mfdend
+ch_time:anl	A,=%10111111
+	jnz	not_64
+	mov	A,=$7d
+	jmp	mfdend
+not_64:	anl	A,=%01111111
+	jnz	not_128
+	mov	A,=$fa
+	jmp	mfdend
+not_128:mov	r7,a
+	clr	a
+t_loop2:add	a,=10
+	djnz	r7,t_loop2
+mfdend:	ret
+
+; Trunking Timing sub-menu.
+; =========================
+; *80X = Change Trunk Tone #1 Duration, X=20 ms steps. 
+; *81X = Change Trunk Tone #2 Duration, X=20 ms steps. 
+; *82X = Change Trunk Tone #3 Duration, X=20 ms steps. 
+; *83X = Change Trunk Tone #4 Duration, X=20 ms steps. 
+; *84X = Change Trunk Tone #1 Delay, X=20 ms steps. 
+; *85X = Change Trunk Tone #2 Delay, X=20 ms steps. 
+; *86X = Change Trunk Tone #3 Delay, X=20 ms steps. 
+; *87X = Change Trunk Tone #4 Delay, X=20 ms steps. 
+; *88X = Change Trunk Tone #1 Sample, X=0-15. (#=Skip, no tone!!!)
+; *89X = Change Trunk Tone #2 Sample, X=0-15. (#=Skip, no tone!!!)
+; *8*X = Change Trunk Tone #3 Sample, X=0-15. (#=Skip, no tone!!!)
+; *8#X = Change Trunk Tone #4 Sample, X=0-15. (#=Skip, no tone!!!)
+;
+; 0 = 000 ms      1 = 020 ms   2 = 040 ms
+; 3 = 060 ms      4 = 080 ms   5 = 100 ms
+; 6 = 120 ms      7 = 140 ms   8 = 160 ms
+; 9 = 180 ms      * = 250 ms   # = 500 ms
+
+trunkt:	call	beep
+	call	key
+	jz	tt1dur
+	anl	A,=%01111111
+	jz	tt4splj
+	anl	A,=%10111111
+	jz	tt3splj
+	dec	a
+	jz	tt2dur
+	dec	a
+	jz	tt3dur
+	dec	a
+	jz	tt4dur
+	dec	a
+	jz	tt1del
+	dec	a
+	jz	tt2del
+	dec	a
+	jz	tt3del
+	dec	a
+	jz	tt4del
+	dec	a
+	jz	tt1splj
+	dec	a
+	jz	tt2splj
+trmainj:sel	rb0
+	call	beep
+	jmp	main
+
+ttim:	call	time_ch
+	mov	@r0,a
+	ret
+
+tt_spl:	call	key
+	jz	notten
+	anl	A,=%01111111
+	jnz	nquit
+	mov	A,=$0f
+nquit:	anl	A,=%10111111
+	jnz	notten
+	mov	A,=$0a
+notten:	mov	@r0,A
+	ret
+
+tt1dur:	mov	r0,=116
+	call	ttim
+	jmp	trmainj
+
+tt2dur:	mov	r0,=117
+	call	ttim
+	jmp	trmainj
+
+tt3dur:	mov	r0,=118
+	call	ttim
+	jmp	trmainj
+
+tt4dur:	mov	r0,=119
+	call	ttim
+	jmp	trmainj
+
+tt1del:	mov	r0,=120
+	call	ttim
+	jmp	trmainj
+
+tt2del:	mov	r0,=121
+	call	ttim
+	jmp	trmainj
+
+tt3del:	mov	r0,=122
+	call	ttim
+	jmp	trmainj
+
+tt4del:	mov	r0,=123
+	call	ttim
+	jmp	trmainj
+
+tt1splj:mov	r0,=124
+	call	tt_spl
+	jmp	trmainj
+
+tt2splj:mov	r0,=125
+	call	tt_spl
+	jmp	trmainj
+
+tt3splj:mov	r0,=126
+	call	tt_spl
+	jmp	trmainj
+
+tt4splj:mov	r0,=127
+	call	tt_spl
+	jmp	trmainj
+
+;Testmode:  All tones will be played!!!
+
+selftst:mov	r5,a
+	clr	a
+	mov	a,r3
+	mov	a,=250
+	mov	r4,a
+	mov	r6,a
+testloop:
+	call	sound
+	mov	a,r3		;get it back
+	add	a,=%00010000	;next sample
+	mov	r3,a		;keep it
+	jmp	testloop	;loop
+
+init2:	mov	a,r5		; Test M-f Sample Bank is greater than 7
+	anl	a,=%11111000	;
+	jz	au_cjmp		; If it is zero - Skip init.
+	mov	r0,=32		; Address ram memory #1.
+	mov	@r0,=32		; Write ST code to ram memory #1.
+	mov	r0,=66		; Address ram memory #2.
+	mov	@r0,=32		; Write ST code to ram memory #2.
+	mov	r0,=100		; Address ram prefix memory #3
+	mov	@r0,=2		; KP2
+	inc	r0		; increment address pointer
+	mov	@r0,=4		; 4
+	inc	r0		; increment address pointer
+	mov	@r0,=6		; 6
+	inc	r0		; increment address pointer
+	mov	@r0,=0		; 0
+	inc	r0		; increment address pointer
+	mov	@r0,=32		; end
+	jmp	init3
+
+au_cjmp:jmp	au_code
+
+	page	7
+
+init3:	mov	r0,=116		; Set Trunk #1 Duration
+	mov	@r0,=65		; 130 ms duration.
+	inc	r0		; Set Trunk #2 Duration
+	mov	@r0,=0		; Not used - Duration 0.
+	inc	r0		; Set Trunk #3 Duration
+	mov	@r0,=150	; 300 ms duration.
+	inc	r0		; Set Trunk #4 Duration
+	mov	@r0,=0		; Not used - Duration 0.
+	inc	r0		; Set Trunk #1 Delay
+	mov	@r0,=0		; No delay.
+	inc	r0		; Set Trunk #2 Delay
+	mov	@r0,=0		; No delay (1.5 sec default).
+	inc	r0		; Set Trunk #3 Delay
+	mov	@r0,=0		; No delay.
+	inc	r0		; Set Trunk #4 Delay
+	mov	@r0,=0		; No delay.
+	inc	r0		; Set Trunk #1 Sample
+	mov	@r0,=$00	; 2400/2600 Hz, 130 ms
+	inc	r0		; Set Trunk #2 Sample
+	mov	@r0,=$0f	; Not used, set to silence.
+	inc	r0		; Set Trunk #3 Sample
+	mov	@r0,=$01	; 2400 Hz, 300 ms
+	inc	r0		; Set Trunk #4 Sample
+	mov	@r0,=$0f	; Not used, set to silence.
+
+au_code:call	beep
+	sel	rb1		; Power-On Security Access Code
+	mov	r5,=25		; M-f tone duration = 50 ms
+	mov	r6,=15		; M-f tone pause = 30 ms
+	mov	r4,=$ff		; Set disable flag to OK status
+	call	key		; Read keyboard
+	jz	au_n1		; If zero - Set disable flag.
+	anl	A,=%11111110	; Digit #1 = 1
+	jz	au_c1		; Zero means right code - continue...
+au_n1:	mov	r4,=0		; Set disable flag=0
+au_c1:	call	key		; Read keyboard
+	jz	au_n2		; If zero - Set disable flag.
+	anl	A,=%11111101	; Digit #2 = 2
+	jz	au_c2		; Zero means right code - continue...
+au_n2:	mov	r4,=0		; Set disable flag=0
+au_c2:	call	key		; Read keyboard
+	jz	au_n3		; If zero - Set disable flag.
+	anl	A,=%11111100	; Digit #4 = 3
+	jz	au_c3		; Zero means right code - continue...
+au_n3:	mov	r4,=0		; Set disable flag=0
+au_c3:	call	key		; Read keyboard
+	jz	au_n4		; If zero - Set disable flag.
+	anl	A,=%11111011	; Digit #4 = 4
+	jz	au_c4		; Zero means right code - continue...
+au_n4:	mov	r4,=0		; Set disable flag=0
+au_c4:	mov	a,r4		; Check disable flag.
+	jz	c_no		; If zero - Goto dumb DTMF mode...
+	sel	rb0		; Else return to main bluebox menu!!!
+	ret
+
+c_no:	sel	rb0		; Select ram bank 0.
+	jmp	white		; Jump to dumb DTMF mode...
+
+trunk1n:mov	A,r5
+	jz	ntrk1
+	anl	A,=%11111011
+	jnz	ntrk1
+	jmp	c4_clr
+
+ntrk1:	mov	r0,=116
+	mov	A,@r0
+	mov	r6,a
+	mov	r0,=120
+	mov	A,@r0
+	mov	r4,a
+	mov	r0,=124
+	mov	A,@r0
+	mov	r3,a
+	mov	A,r5
+	mov	r7,A
+	mov	r5,=%00000011	; select sample bank 03
+	call	sound		; play tone
+	mov	r0,=117
+	mov	A,@r0
+	mov	r6,a
+	mov	r0,=121
+	mov	A,@r0
+	mov	r4,a
+	mov	r0,=125
+	mov	A,@r0
+	mov	r3,a
+	call	sound		; play tone
+	mov	A,=250		; Another 500 ms pause
+	call	wait
+	mov	A,=250		; Another 500 ms pause
+	call	wait
+	mov	A,=250		; Another 500 ms pause
+	call	wait
+	mov	r0,=118
+	mov	A,@r0
+	mov	r6,a
+	mov	r0,=122
+	mov	A,@r0
+	mov	r4,a
+	mov	r0,=126
+	mov	A,@r0
+	mov	r3,a
+	call	sound		; play tone
+	mov	r0,=119
+	mov	A,@r0
+	mov	r6,a
+	mov	r0,=123
+	mov	A,@r0
+	mov	r4,a
+	mov	r0,=127
+	mov	A,@r0
+	mov	r3,a
+	call	sound		; play tone
+	mov	A,r7
+	mov	r5,A
+	jmp	main
+
+trunk2n:mov	A,r5
+	jz	ntrk2
+	anl	A,=%11111011
+	jnz	ntrk2
+	jmp	c4_xfr
+
+ntrk2:	mov	r3,=$00		; select sound 00
+	mov	r4,=0		; no pause
+	mov	A,r5
+	mov	r7,A
+	mov	r5,=%00000011	; select sample bank 03
+	mov	r6,=65		; 130 ms 2400/2600 Hz
+	call	sound		; play tone
+	mov	A,=250		; Another 500 ms pause
+	call	wait
+	mov	A,=250		; Another 500 ms pause
+	call	wait
+	mov	A,=250		; Another 500 ms pause
+	call	wait
+	mov	A,=250		; Another 500 ms pause
+	call	wait
+	mov	r3,=$01		; select sound 01
+	mov	r4,=0		; no pause
+	mov	r6,=65		; 130ms 2400 Hz
+	call	sound		; play tone
+	mov	A,r7
+	mov	r5,A
+	jmp	main
+
+; The End!

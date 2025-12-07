@@ -1,0 +1,268 @@
+out/kernel.asm line 0069: Duplicate label: (text_org)
+out/kernel.asm line 0158: Duplicate label: (sys_rtc)
+out/kernel.asm line 0159: Duplicate label: (sys_ide)
+out/kernel.asm line 0160: Duplicate label: (sys_io)
+out/kernel.asm line 0161: Duplicate label: (sys_filesystem)
+out/kernel.asm line 0164: Duplicate label: (sys_datetime)
+out/kernel.asm line 0165: Duplicate label: (sys_reboot)
+out/kernel.asm line 0166: Duplicate label: (sys_pause_proc)
+out/kernel.asm line 0167: Duplicate label: (sys_resume_proc)
+out/kernel.asm line 0168: Duplicate label: (sys_terminate_proc)
+out/kernel.asm line 0169: Duplicate label: (sys_system)
+0001   0000             ; --- FILENAME: ../solarium/boot/kernel.c
+0002   0000             .include "lib/asm/kernel.exp"
+0001+  0000             text_org    .EQU  $0400
+0002+  0000             sys_bkpt         .EQU  $0000
+0003+  0000             sys_rtc          .EQU  $0001
+0004+  0000             sys_ide          .EQU  $0002
+0005+  0000             sys_io           .EQU  $0003
+0006+  0000             sys_filesystem   .EQU  $0004
+0007+  0000             sys_spawn_proc   .EQU  $0005
+0008+  0000             sys_list         .EQU  $0006
+0009+  0000             sys_datetime     .EQU  $0007
+0010+  0000             sys_reboot       .EQU  $0008
+0011+  0000             sys_pause_proc   .EQU  $0009
+0012+  0000             sys_resume_proc  .EQU  $000a
+0013+  0000             sys_terminate_proc .EQU  $000b
+0014+  0000             sys_system       .EQU  $000c
+0015+  0000             sys_boot_install .EQU  $000d
+0003   0000             .include "lib/asm/bios.exp"
+0001+  0000             BIOS_RESET_VECTOR .EQU  $01c0
+0002+  0000             IDE_buffer       .EQU  $8204
+0003+  0000             boot_origin      .EQU  $8004
+0004+  0000             bios_uart        .EQU  $0002
+0005+  0000             bios_ide         .EQU  $0003
+0004   0000             ; --- BEGIN SYSTEM SEGMENT
+0005   0000               ; ------------------------------------------------------------------------------------------------------------------;
+0006   0000               ; Solarium - Sol-1 Homebrew Minicomputer Operating System Kernel.
+0007   0000               ; ------------------------------------------------------------------------------------------------------------------;
+0008   0000               ; Memory Map
+0009   0000               ; ------------------------------------------------------------------------------------------------------------------;
+0010   0000               ; 0000    ROM BEGIN
+0011   0000               ; ....
+0012   0000               ; 7FFF    ROM END
+0013   0000               ;
+0014   0000               ; 8000    RAM begin
+0015   0000               ; ....
+0016   0000               ; F7FF    Stack root
+0017   0000               ; ------------------------------------------------------------------------------------------------------------------;
+0018   0000               ; I/O MAP
+0019   0000               ; ------------------------------------------------------------------------------------------------------------------;
+0020   0000               ; FF80    UART 0    (16550)
+0021   0000               ; FF90    UART 1    (16550)
+0022   0000               ; FFA0    RTC       (M48T02)
+0023   0000               ; FFB0    PIO 0     (8255)
+0024   0000               ; FFC0    PIO 1     (8255)
+0025   0000               ; FFD0    IDE       (Compact Flash / PATA)
+0026   0000               ; FFE0    Timer     (8253)
+0027   0000               ; FFF0    BIOS CONFIGURATION NV-RAM STORE AREA
+0028   0000               ; ------------------------------------------------------------------------------------------------------------------;
+0029   0000               ; ------------------------------------------------------------------------------------------------------------------;
+0030   0000               ; System Constants
+0031   0000               ; ------------------------------------------------------------------------------------------------------------------;
+0032   0000             _UART0_DATA       .equ $FF80            ; data
+0033   0000             _UART0_DLAB_0     .equ $FF80            ; divisor latch low byte
+0034   0000             _UART0_DLAB_1     .equ $FF81            ; divisor latch high byte
+0035   0000             _UART0_IER        .equ $FF81            ; Interrupt enable register
+0036   0000             _UART0_FCR        .equ $FF82            ; FIFO control register
+0037   0000             _UART0_LCR        .equ $FF83            ; line control register
+0038   0000             _UART0_LSR        .equ $FF85            ; line status register
+0039   0000             _UART1_DATA       .equ $FF90            ; data
+0040   0000             _UART1_DLAB_0     .equ $FF90            ; divisor latch low byte
+0041   0000             _UART1_DLAB_1     .equ $FF91            ; divisor latch high byte
+0042   0000             _UART1_IER        .equ $FF91            ; Interrupt enable register
+0043   0000             _UART1_FCR        .equ $FF92            ; FIFO control register
+0044   0000             _UART1_LCR        .equ $FF93            ; line control register
+0045   0000             _UART1_LSR        .equ $FF95            ; line status register
+0046   0000             XON               .equ $11
+0047   0000             XOFF              .equ $13
+0048   0000             _ide_BASE         .equ $FFD0            ; IDE BASE
+0049   0000             _ide_R0           .equ _ide_BASE + 0    ; DATA PORT
+0050   0000             _ide_R1           .equ _ide_BASE + 1    ; READ: ERROR CODE, WRITE: FEATURE
+0051   0000             _ide_R2           .equ _ide_BASE + 2    ; NUMBER OF SECTORS TO TRANSFER
+0052   0000             _ide_R3           .equ _ide_BASE + 3    ; SECTOR ADDRESS LBA 0 [0:7]
+0053   0000             _ide_R4           .equ _ide_BASE + 4    ; SECTOR ADDRESS LBA 1 [8:15]
+0054   0000             _ide_R5           .equ _ide_BASE + 5    ; SECTOR ADDRESS LBA 2 [16:23]
+0055   0000             _ide_R6           .equ _ide_BASE + 6    ; SECTOR ADDRESS LBA 3 [24:27 (LSB)]
+0056   0000             _ide_R7           .equ _ide_BASE + 7    ; READ: STATUS, WRITE: COMMAND
+0057   0000             _7SEG_DISPLAY     .equ $FFB0            ; BIOS POST CODE HEX DISPLAY (2 DIGITS) (CONNECTED TO PIO A)
+0058   0000             _BIOS_POST_CTRL   .equ $FFB3            ; BIOS POST DISPLAY CONTROL REGISTER, 80h = As Output
+0059   0000             _PIO_A            .equ $FFB0    
+0060   0000             _PIO_B            .equ $FFB1
+0061   0000             _PIO_C            .equ $FFB2
+0062   0000             _PIO_CONTROL      .equ $FFB3            ; PIO CONTROL PORT
+0063   0000             _TIMER_C_0        .equ $FFE0            ; TIMER COUNTER 0
+0064   0000             _TIMER_C_1        .equ $FFE1            ; TIMER COUNTER 1
+0065   0000             _TIMER_C_2        .equ $FFE2            ; TIMER COUNTER 2
+0066   0000             _TIMER_CTRL       .equ $FFE3            ; TIMER CONTROL REGISTER
+0067   0000             STACK_BEGIN       .equ $F7FF            ; beginning of stack
+0068   0000             FIFO_SIZE         .equ 1024
+0069   0000             text_org          .equ $400
+0070   0000               ; ------------------------------------------------------------------------------------------------------------------;
+0071   0000             ; For the next iteration:
+0072   0000               ; boot-sector(1) | kernel-sectors(32) | inode-bitmap | rawdata-bitmap | inode-table | raw-disk-data
+0073   0000             ; inode-table format:
+0074   0000               ;  file-type(f, d)
+0075   0000               ;  permissons
+0076   0000               ;  link-count
+0077   0000               ;  filesize
+0078   0000               ;  time-stamps
+0079   0000               ;  15 data block pointers
+0080   0000               ;  single-indirect pointer
+0081   0000               ; FILE ENTRY ATTRIBUTES
+0082   0000               ; filename (24)
+0083   0000             ; attributes (1)       :|0|0|file_type(3bits)|x|w|r|
+0084   0000             ; LBA (2)              : location of raw data for file entry, or dirID for directory entry
+0085   0000             ; size (2)             : filesize
+0086   0000               ; day (1)           
+0087   0000               ; month (1)
+0088   0000               ; year (1)
+0089   0000             ; packet size = 32 bytes  : total packet size in bytes
+0090   0000             FST_ENTRY_SIZE          .equ 32  ; bytes
+0091   0000             FST_FILES_PER_SECT      .equ (512 / FST_ENTRY_SIZE)
+0092   0000             FST_FILES_PER_DIR       .equ (512 / FST_ENTRY_SIZE)
+0093   0000             FST_NBR_DIRECTORIES     .equ 64
+0094   0000               ; 1 sector for header, the rest is for the list of files/dirs
+0095   0000             FST_SECTORS_PER_DIR     .equ (1 + (FST_ENTRY_SIZE * FST_FILES_PER_DIR / 512))    
+0096   0000             FST_TOTAL_SECTORS       .equ (FST_SECTORS_PER_DIR * FST_NBR_DIRECTORIES)
+0097   0000             FST_LBA_START           .equ 32
+0098   0000             FST_LBA_END             .equ (FST_LBA_START + FST_TOTAL_SECTORS - 1)
+0099   0000             FS_NBR_FILES            .equ (FST_NBR_DIRECTORIES * FST_FILES_PER_DIR)
+0100   0000             FS_SECTORS_PER_FILE     .equ 32         ; the first sector is always a header with a  0     parameter (first byte)
+0101   0000               ; so that we know which blocks are free or taken
+0102   0000             FS_FILE_SIZE            .equ (FS_SECTORS_PER_FILE * 512)                  
+0103   0000             FS_TOTAL_SECTORS        .equ (FS_NBR_FILES * FS_SECTORS_PER_FILE)
+0104   0000             FS_LBA_START            .equ (FST_LBA_END + 1)
+0105   0000             FS_LBA_END              .equ (FS_LBA_START + FS_NBR_FILES - 1)
+0106   0000             root_id:                .equ FST_LBA_START
+0107   0000               ; ------------------------------------------------------------------------------------------------------------------;
+0108   0000               ; GLOBAL SYSTEM VARIABLES
+0109   0000               ; ------------------------------------------------------------------------------------------------------------------;
+0110   0000               ; ------------------------------------------------------------------------------------------------------------------;
+0111   0000               ; IRQ Table
+0112   0000               ; Highest priority at lowest address
+0113   0000               ; ------------------------------------------------------------------------------------------------------------------;
+out/kernel.asm line 0114: Label not found: (int_0)
+out/kernel.asm line 0114: Label not found: (int_0)
+0114   0000 00 00       .dw int_0
+out/kernel.asm line 0115: Label not found: (int_1)
+out/kernel.asm line 0115: Label not found: (int_1)
+0115   0002 00 00       .dw int_1
+out/kernel.asm line 0116: Label not found: (int_2)
+out/kernel.asm line 0116: Label not found: (int_2)
+0116   0004 00 00       .dw int_2
+out/kernel.asm line 0117: Label not found: (int_3)
+out/kernel.asm line 0117: Label not found: (int_3)
+0117   0006 00 00       .dw int_3
+out/kernel.asm line 0118: Label not found: (int_4)
+out/kernel.asm line 0118: Label not found: (int_4)
+0118   0008 00 00       .dw int_4
+out/kernel.asm line 0119: Label not found: (int_5)
+out/kernel.asm line 0119: Label not found: (int_5)
+0119   000A 00 00       .dw int_5
+out/kernel.asm line 0120: Label not found: (int_6)
+out/kernel.asm line 0120: Label not found: (int_6)
+0120   000C 00 00       .dw int_6
+out/kernel.asm line 0121: Label not found: (int_7)
+out/kernel.asm line 0121: Label not found: (int_7)
+0121   000E 00 00       .dw int_7
+0122   0010               ; ------------------------------------------------------------------------------------------------------------------;
+0123   0010               ; Reset Vector
+0124   0010               ; ------------------------------------------------------------------------------------------------------------------;
+out/kernel.asm line 0125: Label not found: (kernel_reset_vector)
+out/kernel.asm line 0125: Label not found: (kernel_reset_vector)
+0125   0010 00 00       .dw kernel_reset_vector
+0126   0012               ; ------------------------------------------------------------------------------------------------------------------;
+0127   0012               ; Exception Vector Table
+0128   0012               ; Total of 7 entries, starting at address $0012
+0129   0012               ; ------------------------------------------------------------------------------------------------------------------;
+out/kernel.asm line 0130: Label not found: (trap_privilege)
+out/kernel.asm line 0130: Label not found: (trap_privilege)
+0130   0012 00 00       .dw trap_privilege
+out/kernel.asm line 0131: Label not found: (trap_div_zero)
+out/kernel.asm line 0131: Label not found: (trap_div_zero)
+0131   0014 00 00       .dw trap_div_zero
+out/kernel.asm line 0132: Label not found: (trap_undef_opcode)
+out/kernel.asm line 0132: Label not found: (trap_undef_opcode)
+0132   0016 00 00       .dw trap_undef_opcode
+0133   0018 00 00       .dw 0
+0134   001A 00 00       .dw 0
+0135   001C 00 00       .dw 0
+0136   001E 00 00       .dw 0
+0137   0020               ; ------------------------------------------------------------------------------------------------------------------;
+0138   0020               ; System Call Vector Table
+0139   0020               ; Starts at address $0020
+0140   0020               ; ------------------------------------------------------------------------------------------------------------------;
+out/kernel.asm line 0141: Label not found: (syscall_break)
+out/kernel.asm line 0141: Label not found: (syscall_break)
+0141   0020 00 00       .dw syscall_break
+out/kernel.asm line 0142: Label not found: (syscall_rtc)
+out/kernel.asm line 0142: Label not found: (syscall_rtc)
+0142   0022 00 00       .dw syscall_rtc
+out/kernel.asm line 0143: Label not found: (syscall_ide)
+out/kernel.asm line 0143: Label not found: (syscall_ide)
+0143   0024 00 00       .dw syscall_ide
+out/kernel.asm line 0144: Label not found: (syscall_io)
+out/kernel.asm line 0144: Label not found: (syscall_io)
+0144   0026 00 00       .dw syscall_io
+out/kernel.asm line 0145: Label not found: (syscall_file_system)
+out/kernel.asm line 0145: Label not found: (syscall_file_system)
+0145   0028 00 00       .dw syscall_file_system
+out/kernel.asm line 0146: Label not found: (syscall_create_proc)
+out/kernel.asm line 0146: Label not found: (syscall_create_proc)
+0146   002A 00 00       .dw syscall_create_proc
+out/kernel.asm line 0147: Label not found: (syscall_list_procs)
+out/kernel.asm line 0147: Label not found: (syscall_list_procs)
+0147   002C 00 00       .dw syscall_list_procs
+out/kernel.asm line 0148: Label not found: (syscall_datetime)
+out/kernel.asm line 0148: Label not found: (syscall_datetime)
+0148   002E 00 00       .dw syscall_datetime
+out/kernel.asm line 0149: Label not found: (syscall_reboot)
+out/kernel.asm line 0149: Label not found: (syscall_reboot)
+0149   0030 00 00       .dw syscall_reboot
+out/kernel.asm line 0150: Label not found: (syscall_pause_proc)
+out/kernel.asm line 0150: Label not found: (syscall_pause_proc)
+0150   0032 00 00       .dw syscall_pause_proc
+out/kernel.asm line 0151: Label not found: (syscall_resume_proc)
+out/kernel.asm line 0151: Label not found: (syscall_resume_proc)
+0151   0034 00 00       .dw syscall_resume_proc
+out/kernel.asm line 0152: Label not found: (syscall_terminate_proc)
+out/kernel.asm line 0152: Label not found: (syscall_terminate_proc)
+0152   0036 00 00       .dw syscall_terminate_proc
+out/kernel.asm line 0153: Label not found: (syscall_system)
+out/kernel.asm line 0153: Label not found: (syscall_system)
+0153   0038 00 00       .dw syscall_system
+0154   003A               ; ------------------------------------------------------------------------------------------------------------------;
+0155   003A               ; System Call Aliases
+0156   003A               ; ------------------------------------------------------------------------------------------------------------------;
+0157   003A             sys_break            .equ 0
+0158   003A             sys_rtc              .equ 1
+0159   003A             sys_ide              .equ 2
+0160   003A             sys_io               .equ 3
+0161   003A             sys_filesystem       .equ 4
+0162   003A             sys_create_proc      .equ 5
+0163   003A             sys_list_proc        .equ 6
+0164   003A             sys_datetime         .equ 7
+0165   003A             sys_reboot           .equ 8
+0166   003A             sys_pause_proc       .equ 9
+0167   003A             sys_resume_proc      .equ 10
+0168   003A             sys_terminate_proc   .equ 11
+0169   003A             sys_system           .equ 12
+0170   003A             ; --- END SYSTEM SEGMENT
+0171   003A             
+0172   003A             ; --- BEGIN TEXT SEGMENT
+0173   0400             .org text_org
+0174   0400             main:
+0175   0400 FD 49 E0 FF   mov bp, $FFE0 ;
+0176   0404 FD 47 E0 FF   mov sp, $FFE0 ; Make space for argc(2 bytes) and for 10 pointers in argv (local variables)
+0177   0408 05 0B         syscall sys_terminate_proc
+0178   040A             ; --- END TEXT SEGMENT
+0179   040A             
+0180   040A             ; --- BEGIN DATA SEGMENT
+0181   040A             
+0182   040A 0C 04       _heap_top: .dw _heap
+0183   040C 00          _heap: .db 0
+0184   040D             ; --- END DATA SEGMENT
+0185   040D             
+0186   040D             .end
+tasm: Number of errors = 61

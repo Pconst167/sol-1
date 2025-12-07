@@ -1,0 +1,506 @@
+                    Autorouting with the A* Algorithm
+
+
+1. Introduction
+
+A few years ago, a friend of mine designed an adapter board for the IBM PC.
+The tools he used were blue and red strips of tape, a sharp knife, large
+sheets of clear plastic, and a generous amount of patience.  It took him
+several weeks, and after the first board was tested he discovered that some of
+the traces were incorrect, and had to be cut with the knife and rerouted with
+solder and wires.  This caused me to start thinking about ways to use the
+power of the computer to simplify this tedious, error-prone job.
+
+What you want to do when designing a printed circuit board is implement an
+electronic circuit.  First you will create a schematic which represents the
+circuit.  From this, you will derive a list of TTL chips and other components
+that implement the needed functions, and a list of the pins that need to be
+connected.  Together, these lists are referred to as the netlist.  As long as
+the connections are made correctly, you usually don't care where the traces
+(the wires that will be embedded in the board) are placed.  Autorouters are
+computer programs that do this task for you.
+
+As we will see, the autorouting problem is really a search problem, and there
+are algorithms from the field of artificial intelligence we can use to solve
+it.  We will look at two of these, the breadth-first and A* search algorithms.
+The C source code for a freely-copyable implementation of an autorouter using
+the A* search algorithm accompanies this article, and programs to view the
+routed printed circuit board and print it on a laser printer are also
+available.
+
+
+2. Autorouters
+
+Autorouting can be viewed as a global optimization problem, which are very
+difficult problems to solve.  To produce a good circuit you want to minimize
+some things (trace length, board size, number of routing holes (holes created
+by the autorouter to transfer a trace from one side of the board to the other,
+also called vias), signal crosstalk, number of layers, cost to manufacture)
+while maximizing others (signal strength, reliability, ease of debugging).
+The measure of the overall value of a circuit will be a function of all of
+these often conflicting variables (assuming the circuit behaves correctly,
+otherwise its value is zero).  Usually it is acceptable to find a solution
+which satisfies a set of constraints, because finding the globally optimal
+solution is infeasible for all but the most trivial problems.
+
+Autorouting can also be viewed as a collection of search problems.  The
+individual search problems deal with finding a route, and laying down a trace,
+between two locations on a printed circuit board.  There are many algorithms
+for solving search problems, each with different running time characteristics
+and data space requirements.  The two search algorithms we will be discussing
+are breadth-first and A*.
+
+
+3. Autorouting by Searching
+
+When search algorithms are used to solve the autorouting problem, they
+typically operate in two phases (reference [1]), and treat the board as a
+matrix of cells.  The first phase starts at the source cell and searches for
+the target cell, usually by going in several directions at the same time.
+While searching, an auxiliary data structure will be built which keeps track
+of how each cell was reached (this is referred to as Pred in the algorithms in
+figures 1 and 2).  Once the target cell has been found, the first phase is
+finished, and the second phase is started.  However, if the first phase
+exhausts all possibilities without reaching the target cell, then no route
+exists between them, and there is no reason to do the second phase.
+
+In the second phase, the auxiliary data structure is used to trace the route
+from the target cell back to the source cell, actually laying down the
+electrical connections.  The second phase is identical for the breadth-first
+and A* search algorithms.  But the first phase is different, and it is what
+gives these algorithms different behaviors.
+
+The main data structures used in the first phase are the Open queue and the
+Closed set, and are used to hold cell coordinates.  Since a cell's coordinates
+uniquely identify that cell, we'll say that the Open queue and Closed set
+contain cells.  Cell coordinates will be represented as r2c3s1 for the cell at
+row 2, column 3, side 1, or as r2c3 when it is understood that all cells are
+on the same side of the board.  To remind ourselves that Open is a queue and
+Closed is a set, when we talk about adding cells to them, we will put the
+cells "on" the queue, and "in" the set.  Initially, the Open queue contains
+the source cell and the Closed set is empty.  The first phase is a loop which
+removes an element from the head of the Open queue, puts it in the Closed set
+(which indicates that it has been searched), and checks to see if it is the
+target cell.  If it is, the first phase is done.  Otherwise, the neighbors of
+the cell (the cells that are adjacent to it) are placed on the Open queue, and
+the loop continues.  As we will see below, the essential difference in the
+breadth-first and A* search algorithms is the order in which the neighbors are
+placed on the Open queue.
+
+
+4. Breadth-First Search
+
+The breadth-first search algorithm (figure 1) works by processing a
+first-in-first-out (FIFO) queue of open cells (cells that have been reached,
+but not yet searched).  Initially, the open queue contains only the source
+cell.  A cell is removed from the head of the open queue, placed in the set of
+closed cells (cells that have been searched), checked to see if it is the
+target cell, and if it is not, its neighboring cells are placed at the tail of
+the open queue.  Neighboring cells which have already been reached are
+ignored.  (If a cell's coordinates are on the open queue or in the closed set,
+then it has been reached.  Otherwise, it has not been reached.)  This
+continues until the target cell has been found, or the open queue is empty, in
+which case the target cell cannot be reached from the source cell.
+
+A version of breadth-first search known as Lee's algorithm (reference [2]) was
+applied to the autorouting problem in the early 1960's, and is still the basis
+of some autorouters.  (In the original algorithm, cells diagonally adjacent to
+each other were not considered to be neighbors.  Consequently, the
+backtracking phase could only create horizontal and vertical traces.  We will
+enhance the algorithm so that diagonally adjacent cells are neighbors, thus
+diagonal traces can also be produced.)  Unfortunately, Lee's algorithm suffers
+from a behavior inherent in the breadth-first search technique which limits
+its application to problems of relatively small size.  As the distance between
+the source and target cells increases by a factor of N, the number of cells
+processed by Lee's algorithm (and therefore the processing time) increases by
+the square of N.
+
+The behavior of Lee's algorithm while searching for a path between the source
+cell S (r5c5) and the target cell T (r8c8) is shown in figure 2.  Lee's
+algorithm does not specify the order in which neighboring cells are placed on
+the open queue, but we will use the compass directions north, east, south, and
+west, followed by northeast, southeast, southwest, and northwest.  This order
+tends to produce traces with a minimal number of turns.
+
+In figure 2a, the source cell (r5c5) has been searched, and its eight
+neighbors have been placed on the open queue.  The arrows indicate the
+direction from which each cell was reached, and correspond to the Pred data
+structure.  After the first eight cells on the open queue have been reached
+and moved to the closed set, the configuration in figure 2b is searched, where
+there are 16 cells on the open queue.  Once these 16 cells have been searched,
+the configuration in figure 2c is reached.  Now the target cell (r8c8) is
+fourth from the end on the open queue, and a solution is imminent.  When r8c8
+is searched, it will be recognized as the target cell, and the Pred data
+structure will be used to construct a trace back to the source cell.
+
+You can see that the search progresses outward from the source cell in all
+directions, like the ripples in a pond when you throw a pebble into the water.
+If we double the size of the problem (S and T are six cells apart), the number
+of cells searched (and therefore the processing time) will be roughly four
+times as large, and if we triple the size of the problem, the number of cells
+searched will be roughly nine times as large.  Thus, the behavior of Lee's
+algorithm is quadratic in the size of the problem, which makes it infeasible
+for large problems.
+
+
+5. A* Search
+
+The A* search algorithm (figure 3) also works by processing a queue of open
+cells, which initially contains only the source cell.  But this is a priority
+queue, which means cells are inserted according to the estimated distance to
+the target cell (reference [3]), not just at the end.  Cells that are on the
+shortest estimated path from source to target are placed at the head of the
+queue.  Cells are still removed from the head of the open queue, then they are
+checked to see if they are the target cell, and if they are not, their
+neighboring cells are put on the open queue at the proper position.
+Neighboring cells which have already been searched are checked to see if the
+new path between them and the source cell is better (shorter) than the
+previous one.  If it is, they are repositioned on the open queue according to
+the new estimated path length from source to target.  As in breadth-first
+search, this continues until the target cell has been found or the open queue
+is empty.
+
+A* depends on being able to estimate the distance between a cell and the
+target cell.  In the case of autorouting, a simple measure of this distance is
+available, and this helps A* to concentrate the search in the direction most
+likely to succeed.  The more accurate the estimate is, the faster the search
+will be.
+
+In practice, A* does not suffer from the quadratic behavior of Lee's
+algorithm, so it solves the same problems faster, and can be applied to the
+larger problems that Lee's algorithm performs so poorly on.  As the distance
+between the source and target cells increases, the number of cells processed
+by A* will increase, but not as dramatically as with Lee's algorithm.
+
+The behavior of the A* search algorithm is shown in figure 4.  The A*
+algorithm does not specify whether new cells are placed in front of or behind
+cells already on the open queue which evaluate to identical estimated path
+lengths.  We will use the convention that they are placed in front of cells of
+the same distance.  This will minimize the amount of time to insert a cell on
+the open queue.
+
+In figure 4a, the source cell (r3c3) has been searched, and its eight
+neighbors have been placed on the open queue.  Each cell on the open queue
+also includes the estimated length of the shortest path from S to T that goes
+through that cell.  After the first cell on the open queue (r4c4) has been
+searched and moved to the closed set, the configuration in figure 4b is
+reached, where there are 12 cells on the open queue.  Once the next cell
+(r5c5) has been searched, the configuration in figure 4c is reached.  Now the
+target cell (r6c6) is at the head of the open queue, and a solution will be
+found on the next iteration of the loop.  When r6c6 is searched, it will be
+recognized as the target cell, and the Pred data structure will be used to
+construct a trace back to the source cell.
+
+You can see that the search progresses more directly toward the target cell.
+The search is drawn toward the target just as the earth's gravity pulls
+objects toward the center of mass.  If we double the size of the problem, the
+search will search roughly twice as many cells, and if we triple the size of
+the problem, the search will search roughly three times as many cells.  This
+linear behavior makes A* more attractive for autorouting than the quadratic
+Lee's algorithm.  With the incorporation of the heuristic (the rule which
+guides the search in the direction most likely to succeed), it is more
+difficult to specify a worst case behavior.  However, A* will never take more
+time than Lee's algorithm, and will never search any cells that Lee's
+algorithm could avoid.
+
+
+6. Optimizations and Generalizations
+
+The algorithms in figures 1 and 3 solve the general search problem.  When we
+implement these algorithms and customize them to a particular application,
+there are a few things we can do to speed them up.
+
+The A* algorithm as presented in figure 3 recomputes the heuristic H(y) when
+it discovers a better way to reach a cell.  Depending on how difficult this
+heuristic is to compute, we can probably save some work at the expense of
+complicating the algorithm.  When lines 20 and 21 of figure 3 are executed,
+the previous values of G[y] and F[y] are destroyed.  But F[y] = G[y] + H(y),
+so we could save F[y] - G[y] (which is H(y)) in a temporary variable, and use
+that variable instead of recomputing H(y) on line 21.  Also, the common
+subexpression G[x] + Distance(x,y) should be placed in a temporary variable,
+instead of being computed twice (lines 18 and 20).
+
+Often, rather than searching for a path between two individual cells, what is
+really desired is a path between one of a set of source cells and one of a set
+of target cells (as when connecting power and ground pins).  Both algorithms
+can be modified by adding the entire set of source cells to the initial open
+queue, and checking for a member of the set of target cells on each iteration.
+When this is done, the heuristic that the A* algorithm uses becomes more
+complicated.  It must estimate the minimum distance from the current cell to
+any one of the target cells.
+
+For breadth-first search, once the target cell is placed on the open queue, it
+is pointless to add any more cells to the open queue.  In fact, once this
+happens the problem has been solved.  An appropriate shortcut would be to
+insert a check before line 13 in figure 1 to see if y is the target cell.  If
+it is, immediately use Pred[y] to construct the trace back to the source cell,
+and return.
+
+
+Distance Calculations    [sidebar topic, with figures 5, 6, and 7]
+
+The A* search algorithm depends on a heuristic to estimate the distance
+between the current cell and the target cell.  As implemented in the
+accompanying program, the heuristic is a simple geometric distance
+approximation.
+
+Figure 5 illustrates all of the possible cell types used to construct a trace,
+grouped by type.  For each group, the distance of that cell type is also
+given.  These distances are calculated based on a cell size of 50 mils by 50
+mils.  A mil is a thousandth of an inch, so the autorouter uses 20 cells per
+inch.  A typical full-length adapter board for an IBM PC is 4 inches high and
+13 inches long, or 80 cell rowss by 260 cell columns.
+
+The traces of groups B and C can coexist in the same cell, so that a hole can
+have up to 16 traces connecting it with other cells (8 on each side of the
+board).  Also, the parallel traces of group F can coexist in the same cell (on
+the same side of the board), as shown by group J.  This allows the routing of
+two traces through the same cell, providing the higher density required by
+some circuits (memory arrays, for example).  Aside from these exceptions,
+cells can only contain one type of trace (on each side of the board).
+
+In figure 6, we want to know the approximate distance of a trace that will
+connect the two holes.  Viewing the board as a matrix, the differences in cell
+coordinates are three rows and five columns.  The shortest path between them
+will use a diagonal trace across three cells and a horizontal trace across two
+cells, as shown.  Using the cell types in figure 5, the length of the trace
+will be 23 + (2 * 71) + 60 + 50 + 12 = 287 mils.
+
+A trace that uses a routing hole to go from one side of the board to the other
+covers a greater distance than one that goes diagonally across a cell (group E
+in figure 5) and stays on the same side of the board.  This is because part of
+its path goes around the edge of a circle.
+
+A hole is 25 mils in diameter, and is at the center of a cell.  To calculate
+the distance of a trace through a routing hole, we measure the section of the
+hole between the two connecting traces.  Figure 7 shows an entering trace
+connecting to a hole at point A, and possible exiting traces on the opposite
+side of the board at points B, C, D, and E.  The distances between A and each
+of these points are 10, 20, 29, and 39 mils, respectively.  To calculate
+these, we use the geometric formula Circumference = PI * Diameter
+(approximately 78.5 mils) and divide by eight (a one-eighth section of a hole
+is approximately 9.8 mils), then add one, two, three, and four of these
+sections, and round off to an integer.
+
+The heuristic in the accompanying program includes a penalty when a trace
+takes a turn or switches to the other side of the board through a routing
+hole.  This is because turns are often the weak points in a circuit, and
+traces are more likely to break at a turn than in a straight part.  Including
+a penalty encourages A* to use straight lines, and even allows a slightly
+longer trace to be selected over one with too many turns.  The amount of
+penalty depends on the kind of turn; sharper turns are assessed a larger
+penalty.  Routing holes incur a significant penalty, since overusing them
+early in the routing process can make later traces more difficult or even
+impossible to construct.  This is because a routing hole dedicates a cell
+exclusively to a single trace, for both sides of the board.  Such a cell is
+not available to later routing, thus reducing the total number of cells that
+can be used.
+
+
+7. Memory Requirements
+
+Both of the search algorithms require quite a bit of memory in order to solve
+problems of non-trivial size.  The breadth-first search algorithm needs memory
+to represent the board, the predecessor structure, and the closed set.  The A*
+search algorithm needs these too, plus structures for F[x] and G[x].  In
+addition, both algorithms need to dynamically allocate memory for the open
+cell queue.
+
+In this program, the board is represented as a pair of two-dimensional arrays
+(one for the front side of the printed circuit board, and one for the back
+side), where the dimensions are the number of rows and columns of cells.  Not
+counting holes and traces relating to holes (figure 5, groups A, B, and C),
+there are 30 possible cell contents, which can be represented with five bits
+per cell.  The hole-related cells are more difficult to enumerate, since they
+can be combined in many ways.  If we simply assign one bit to each of the
+eight traces in groups B and C, and add one more bit to indicate a hole, 14
+bits will be sufficient to represent any cell.  On a board of N rows and M
+columns, we'll need N*M*28 bits total.
+
+The predecessor structure will also be a pair of two-dimensional arrays, where
+an entry must be able to represent one of the eight compass directions or an
+indication for the opposite side of the board.  This will take four bits per
+cell, or N*M*8 bits total.
+
+The closed set can be represented by a pair of two-dimensional single-bit
+arrays, where a bit is one if the corresponding cell has been searched, and
+zero otherwise.  This will take N*M*2 bits total.
+
+F[x] and G[x] will be similar to the board arrays, but they must contain a
+16-bit integer for each cell.  This will take N*M*64 bits total.  Note that if
+memory usage needs to be minimized at the cost of increased processing time,
+we could omit the F[x] arrays, and calculate the F values as they are needed
+from the G[x] arrays and the heuristic function, H(x).
+
+Breadth-first search will require N*M*38 bits and A* will require N*M*102 bits
+of static memory.  For a printed circuit board that is 4 inches by 13 inches
+(80 cells by 260 cells), breadth-first search will need 98800 bytes and A*
+will need 265200 bytes.  It is often the case that different algorithms to
+solve the same problem trade off memory against processing time to achieve
+different behaviors.  This is the case with breadth-first search and A*.
+
+
+8. Locality of Reference
+
+Despite the fact that A* requires more memory than breadth-first search, A*
+exhibits better memory usage patterns.  This is because it shows better
+locality of reference than breadth-first search.  Locality of reference deals
+with the sequence in which memory locations are used, and consists of two
+rules of thumb: (1) the memory location currently being referenced is likely
+to be referenced again in the near future, and (2) memory locations near the
+one currently being referenced are likely to be referenced in the near future.
+
+When the first rule holds true for a given program, that program can probably
+benefit from a memory cache.  When the second rule holds true, the program can
+probably benefit from a virtual memory environment with a least-recently-used
+page preemption policy.  Most computer systems with virtual memory and caches
+apply them to both code and data, so programs that exhibit good locality of
+reference should benefit from both rules.
+
+This becomes a factor when solving large problems (say, routing a printed
+circuit board that is 10 inches in both dimensions).  In a virtual memory
+environment, improved locality of reference can minimize swapping.  In an
+environment with cache memory, improved locality of reference can increase the
+cache hit rate.  Both of these tend to decrease the total running time.
+
+The memory references in the breadth-first search algorithm go around and
+around in circles of constantly increasing size, and do not reflect a common
+locality of reference.  Thus, the breadth-first search algorithm is not able
+to take good advantage of virtual memory or a memory cache.  However, the
+memory references of A* tend to be from the same area of the printed circuit
+board for extended periods of time, taking better advantage of these
+mechanisms.  On a large problem, this helps to offset the extra memory that A*
+requires by adding speed beyond that provided by the basic algorithm.
+Improved locality of reference by itself may not be a sufficient reason to
+select A* over breadth-first search, but it is icing on the cake.
+
+
+9. Input and Output Formats
+
+Figure 8 contains an example input file; it defines a circuit to calculate a
+parity bit for a 16-bit word using exclusive-or gates.  There are statements
+for defining the size of the printed circuit board, the locations of holes and
+components, and the connections between them.
+
+The autorouter sorts the connections by approximate trace distance (see the
+section on distance calculations, above); the shortest connections are
+processed first, and the longest are processed last.  However, connections
+which include the "priority" keyword are processed before any of the other
+connections.  This allows the designer to have control over the order in which
+traces are constructed.
+
+In addition, there are statements for defining chip templates, and associating
+position-independent labels to each component and pin.  This makes it easy to
+move components from one location to another without having to edit each
+connection.  Chips can be rotated in any of four directions.
+
+Figure 9 shows the traces created by the autorouter while processing the
+example input file in figure 8.  On an 8 Mhz IBM PC-AT compatible computer,
+this board took 37 seconds of processing time to route.
+
+The output from the autorouter is a copy of the printed circuit board as it is
+represented in memory.  This consists of the dimensions of the board (number
+of rows and columns), followed by a pair of two-dimensional arrays (one for
+the front side, and one for the back).  The elements of the arrays are double
+words (32 bits) containing bits which encode the contents of each cell.  For
+example, if a particular bit is set, there is a horizontal line running across
+the cell, and if a different bit is set, there is a hole in the cell.
+
+
+10. Viewing and Printing the Board
+
+A program to view the routed printed circuit board on an IBM PC equipped with
+an enhanced graphics adapter (EGA) is provided with the autorouter.  The
+viewing program provides four levels of detail (zooming), panning, and viewing
+of the front and back sides of the printed circuit board separately.
+
+Another program prints the routed printed circuit board on a laser printer.
+This program allows the user to specify four levels of detail and resolution
+ranging from 75 to 300 dots per inch (dpi).  Figure 9 was produced with this
+program using the maximum zoom level and 300 dpi.
+
+
+11. Future Enhancements
+
+The autorouter presented here provides the basics of a personal computer CAD
+system, but could be enhanced in many ways.  A few of these are:
+
+* Use Lotus-Intel-Microsoft (LIM) 4.0 expanded memory to provide access to
+  more memory.
+
+* Incrementally save the board after each connection is routed, so that a
+  large problem can be solved in several short sessions, rather than requiring
+  a computer to be dedicated for an extended period of time.
+
+* Automatically compress the output (which often consists of many repeated
+  bytes) to save disk space.
+
+* Wide traces for power and ground.
+
+* Calculate how close the solution of each connection is to the optimal
+  solution.
+
+* Add symbolic support for components such as capacitors, resistors, and
+  diodes.
+
+* Support surface mount technology (a pad, rather than a hole).
+
+* Display a "rat's nest" of direct routes (use a straight lines for each
+  connection, without regard for whether traces cross).  This would help the
+  designer decide how the components should be arranged.  It may also be
+  possible to do an analysis, and suggest in which direction each component
+  should be moved.  Reducing the total distance of the traces that must be
+  routed can significantly reduce the processing time of any autorouter.
+
+* Provide support for printed circuit boards with more than two routing
+  layers.
+
+* A program the designer can use to edit the routed printed circuit board.
+
+* Allow multiple priority levels for connections.
+
+* Visually distinguish holes from routing holes by displaying them in a
+  different color.
+
+* Increase the size of the TTL library (chip definitions).
+
+* A program to translate the output into Gerber format (a standard language
+  for describing trace and hole placement, used for board fabrication) and
+  Excellon format (a standard language for describing hole placement, used to
+  drill the holes).
+
+
+12. Conclusion
+
+When autorouting is viewed as a special kind of search problem, there are
+several search algorithms from the field of artificial intelligence that can
+be used to solve it.  An autorouting program can be easily implemented on a
+microcomputer, such as the IBM PC family of computers, and can greatly reduce
+the amount of work required to route a printed circuit board by hand.  When
+combined with other tools, such as the viewing and printing programs,
+high-resolution output devices (laser printers), and high performance
+386-based microcomputers, a complete design system can be built which makes
+tape-ups obsolete.  Just a few years ago, such a system would have required an
+expensive workstation.
+
+
+13. Author Biography
+
+Randy Nevin received a BS in computer science from Oregon State University in
+1983 and an MS in computer science from the University of Washington in 1988.
+He has worked for Microsoft since 1983 on various programming language and
+networking products.
+
+
+14. References
+
+[1] Stephen E. Belter, Computer-aided Routing of Printed Circuit Boards: an
+    Examination of Lee's Algorithm and Possible Enhancements, BYTE, June 1987,
+    pp. 199-208.
+
+[2] C. Y. Lee, An Algorithm for Path Connections and Its Applications, IRE
+    Transactions on Electronic Computers, September 1961, pp. 346-365.
+
+[3] Steven L. Tanimoto, The Elements of Artificial Intelligence, 1987,
+    Rockville, Maryland: Computer Science Press, pp. 148-164.  This covers the
+    breadth-first and A* search algorithms.

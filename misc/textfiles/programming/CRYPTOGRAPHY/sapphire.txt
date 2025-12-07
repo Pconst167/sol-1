@@ -1,0 +1,487 @@
+From: mpj@teal.csn.org (Michael Johnson)
+Newsgroups: sci.crypt.research
+Subject: The Sapphire Stream Cipher
+Date: 10 Dec 1994 00:41:39 GMT
+
+THE SAPPHIRE STREAM CIPHER
+
+The Sapphire Stream Cipher is designed to have the following properties:
+
+ * Be useful for generation of cryptographic check values as well as
+   protecting message privacy.
+
+ * Accept a variable length key.
+
+ * Strong enough to justify _at least_ a 64 bit key for balanced security.
+
+ * Small enough to be built into other applications with several keys active
+   at once.
+
+ * Key setup fast enough to support frequent key change operations but slow
+   enough to discourage brute force attack on the key.
+
+ * Fast enough to not significantly impact file read & write operations on
+   most current platforms.
+
+ * Portable among common computers and efficient in C, C++, and Pascal.
+
+ * Byte oriented.
+
+ * Include both ciphertext and plain text feedback (for both optimal data
+   hiding and value in creation of cryptographic check values).
+
+ * Acceptable performance as a pure pseudorandom number generator without
+   providing a data stream for encryption or decryption.
+
+ * Design in a little extra strength where there is doubt about what attacks
+   might be a threat.
+
+
+HISTORY AND RELATED CIPHERS
+
+The Sapphire Stream Cipher is very similar to a cipher I started work on in
+November 1993.  It is also similar in some respects to the alledged RC-4 that
+was posted to sci.crypt recently.  Both operate on the principle of a
+mutating permutation vector.  Alledged RC-4 doesn't include any feedback of
+ciphertext or plain text, however.  This makes it more vulnerable to a known
+plain text attack, and useless for creation of cryptographic check values. 
+On the other hand, alledged RC-4 is faster.
+
+The Sapphire Stream Cipher is used in the shareware product Quicrypt, which
+is available at ftp://ftp.csn.net/mpj/qcrypt10.zip and on the Colorado
+Catacombs BBS (303-772-1062).  There are two versions of Quicrypt:  the
+exportable version (with a session key limited to 32 bits but with strong
+user keys allowed) and the commercial North American version (with a session
+key of 128 bits).  A variant of the Sapphire Stream Cipher is also used in
+the shareware program Atbash, which has no weakened exportable version.
+
+I don't recall ever reading anything about using a stream cipher like this
+for the generation of cryptographic check values, but it seems like it should
+be a fast technique compared to some existing hash functions.
+
+
+OVERVIEW
+
+The Sapphire Stream Cipher is based on a state machine.  The state consists
+of 5 index values and a permutation vector.  The permutation vector is simply
+an array containing a permutation of the numbers from 0 through 255.  Five of
+the bytes in the permutation vector are moved to new locations (which may be
+the same as the old location) for every byte output.  The output byte is a
+nonlinear function of all 5 of the index values and 7 of the bytes in the
+permutation vector, thus frustrating attempts to solve for the state
+variables based on past output.  On initialization, the index variables are
+set (somewhat arbitrarily) to 1, 3, 5, 7, and 11.  The permutation vector
+(called the cards array in the source code below) is shuffled based on the
+user key.  This shuffling is done in a way that is designed to minimize the
+bias in the destinations of the bytes in the array.  The biggest advantage in
+this method is not in the elimination of the bias, per se, but in slowing
+down the process slightly to make brute force attack more expensive. 
+Eliminating the bias (relative to that exhibited by RC-4) is nice, but this
+advantage is probably of minimal cryptographic value.
+
+
+KEY SETUP
+
+Key setup (illustrated by the function initialize(), below) consists of three
+parts:
+
+    1.  Initialize the index variables.
+    2.  Set the permutation vector to a known state (a simple counting
+        sequence).
+    3.  Starting at the end of the vector, swap each element of the
+        permutation vector with an element indexed somewhere from 0
+	to the current index (chosen by the function keyrand()).
+
+The keyrand() function returns a value between 0 and some maximum number
+based on the user's key, the current state of the permutation vector, and an
+index running sum called rsum.  Note that the length of the key is used in
+keyrand(), too, so that a key like "abcd" will not result in the same
+permutation as a key like "abcdabcd".
+
+
+ENCRYPTION
+
+Each encryption involves updating the index values, moving (up to) 5 bytes
+around in the permutation vector, selecting an output byte, and adding the
+output byte bitwise modulo-2 (exclusive-or) to the plain text byte to produce
+the cipher text byte.  The index values are incremented by different rules. 
+The index called rotor just increases by one (modulo 256) each time.  Ratchet
+increases by the value in the permutation vector pointed to by rotor. 
+Avalanche increases by the value in the permutation vector pointed to by 
+another byte in the permutation vector pointed to by the last cipher text
+byte.  The last plain text and the last cipher text bytes are also kept as
+index variables.  See the function called encrypt(), below for details.
+
+
+PSUEDORANDOM BYTE GENERATION
+
+If you want to generate random numbers without encrypting any particular
+ciphertext, simply encrypt 0.  There is still plenty of complexity left in
+the system to ensure unpredictability (if the key is not known) of the output
+stream when this simplification is made.
+
+
+DECRYPTION
+
+Decryption is the same as encryption, except for the obvious swapping of the
+assignments to last_plain and last_cipher and the return value.  See the
+function decrypt(), below.
+
+
+C++ SOURCE CODE FRAGMENT
+
+The original implimentation of this cipher was in Object Oriented Pascal, but
+C++ is available for more platforms.
+
+/* sapphire.h -- Interface for the Saphire stream cipher.
+
+   Dedicated to the Public Domain the author and inventor
+   (Michael Paul Johnson).  This code comes with no warranty.
+   Use it at your own risk.
+   Ported from the Pascal implementation of the Sapphire Stream
+   Cipher 9 December 1994.
+
+   unsigned char is assumed to be 8 bits.  If it is not, the
+   results of assignments need to be reduced to 8 bits with
+   & 0xFF or % 0x100, whichever is faster.
+*/
+
+class sapphire
+    {
+    // These variables comprise the state of the state machine.
+
+    unsigned char cards[256];       // A permutation of 0-255.
+    unsigned char rotor,            // Index that rotates smoothly
+        ratchet,                    // Index that moves erratically
+        avalanche,                  // Index heavily data dependent
+        last_plain,                 // Last plain text byte
+        last_cipher;                // Last cipher text byte
+
+    // This function is used by initialize(), which is called by the
+    // constructor.
+
+    unsigned char keyrand(int limit, unsigned char *user_key,
+                          unsigned char keysize,
+                          unsigned char *rsum,
+                          unsigned *keypos);
+
+    public:
+
+    sapphire(unsigned char *key = NULL, // Calls initialize if a real
+        unsigned char keysize=0);       // key is provided.  If none
+                                // is provided, call initialize
+                                // before encrypt or decrypt.
+    ~sapphire();                // Destroy cipher state information.
+    void initialize(unsigned char *key, // User key is used to set
+        unsigned char keysize);         // up state information.
+    unsigned char encrypt(unsigned char b = 0);   // Encrypt byte
+                                        // or get a random byte.
+    unsigned char decrypt(unsigned char b);       // Decrypt byte.
+    void burn(void);            // Destroy cipher state information.
+    };
+
+
+
+/* sapphire.cpp -- the Saphire stream cipher class.
+   Dedicated to the Public Domain the author and inventor:
+   (Michael Paul Johnson).  This code comes with no warranty.
+   Use it at your own risk.
+   Ported from the Pascal implementation of the Sapphire Stream
+   Cipher 9 December 1994.
+*/
+
+#include <mem.h>
+#include "sapphire.h"
+
+unsigned char sapphire::keyrand(int limit,
+                                unsigned char *user_key,
+                                unsigned char keysize,
+                                unsigned char *rsum,
+                                unsigned *keypos)
+    {
+    unsigned u,             // Value from 0 to limit to return.
+        retry_limiter,      // No infinite loops allowed.
+        mask;               // Select just enough bits.
+
+    retry_limiter = 0;
+    mask = 1;               // Fill mask with enough bits to cover
+    while (mask < limit)    // the desired range.
+        mask = (mask << 1) + 1;
+    do
+        {
+        *rsum = cards[*rsum] + user_key[(*keypos)++];
+        if (*keypos >= keysize)
+            {
+            *keypos = 0;            // Recycle the user key.
+            *rsum += keysize;   // key "aaaa" != key "aaaaaaaa"
+            }
+        u = mask & *rsum;
+        if (++retry_limiter > 11)
+            u %= limit;     // Prevent very rare long loops.
+        }
+    while (u > limit);
+    return u;
+    }
+
+void sapphire::initialize(unsigned char *key, unsigned char keysize)
+    {
+    // Key size may be up to 256 bytes.
+    // Pass phrases may be used directly, with longer length
+    // compensating for the low entropy expected in such keys.
+    // Alternatively, shorter keys hashed from a pass phrase or
+    // generated randomly may be used. For random keys, lengths
+    // of from 4 to 16 bytes are recommended, depending on how
+    // secure you want this to be.
+
+    int i;
+    unsigned char toswap, swaptemp, rsum;
+    unsigned keypos;
+
+    // Initialize the indices and data dependencies.
+    // Indices are set to different values instead of all 0
+    // to reduce what is known about the state of the cards
+    // when the first byte is emitted.
+
+    rotor = 1;
+    ratchet = 3;
+    avalanche = 5;
+    last_plain = 7;
+    last_cipher = 11;
+
+    // Start with cards all in order, one of each.
+
+    for (i=0;i<256;i++)
+        cards[i] = i;
+
+    // Swap the card at each position with some other card.
+
+    toswap = 0;
+    keypos = 0;         // Start with first byte of user key.
+    rsum = 0;
+    for (i=255;i>=0;i--)
+        {
+        toswap = keyrand(i, key, keysize, &rsum, &keypos);
+        swaptemp = cards[i];
+        cards[i] = cards[toswap];
+        cards[toswap] = swaptemp;
+        }
+    toswap = swaptemp = rsum = 0;
+    keypos = 0;
+    }
+
+sapphire::sapphire(unsigned char *key, unsigned char keysize)
+    {
+    if (key && keysize)
+        initialize(key, keysize);
+    }
+
+void sapphire::burn(void)
+    {
+    // Destroy the key and state information in RAM.
+    memset(cards, 0, 256);
+    rotor = ratchet = avalanche = last_plain = last_cipher = 0;
+    }
+
+sapphire::~sapphire()
+    {
+    burn();
+    }
+
+unsigned char sapphire::encrypt(unsigned char b)
+    {
+    // Picture a single enigma rotor with 256 positions, rewired
+    // on the fly by card-shuffling.
+
+    // This cipher is a variant of one invented and written
+    // by Michael Paul Johnson in November, 1993.
+
+    unsigned char swaptemp;
+
+    // Shuffle the deck a little more.
+
+    ratchet += cards[rotor++];
+    swaptemp = cards[last_cipher];
+    cards[last_cipher] = cards[ratchet];
+    cards[ratchet] = cards[last_plain];
+    cards[last_plain] = cards[rotor];
+    cards[rotor] = swaptemp;
+    avalanche += cards[swaptemp];
+
+    // Output one byte from the state in such a way as to make it
+    // very hard to figure out which one you are looking at.
+
+    last_cipher = b^cards[cards[(cards[ratchet] + cards[rotor] +
+                                 cards[last_plain] +
+                                 cards[last_cipher] +
+                                 cards[avalanche])&0xFF]];
+    last_plain = b;
+    return last_cipher;
+    }
+
+unsigned char sapphire::decrypt(unsigned char b)
+    {
+    unsigned char swaptemp;
+
+    // Shuffle the deck a little more.
+
+    ratchet += cards[rotor++];
+    swaptemp = cards[last_cipher];
+    cards[last_cipher] = cards[ratchet];
+    cards[ratchet] = cards[last_plain];
+    cards[last_plain] = cards[rotor];
+    cards[rotor] = swaptemp;
+    avalanche += cards[swaptemp];
+
+    // Output one byte from the state in such a way as to make it
+    // very hard to figure out which one you are looking at.
+
+    last_plain = b^cards[cards[(cards[ratchet] + cards[rotor] +
+                                cards[last_plain] +
+                                cards[last_cipher] +
+                                cards[avalanche])&0xFF]];
+    last_cipher = b;
+    return last_plain;
+    }
+
+
+GENERATION OF CRYPTOGRAPHIC CHECK VALUES (HASH VALUES)
+
+For a fast way to generate a cryptographic check value (also called a hash or
+message integrity check value) of a message of arbitrary length, simply
+generate a set of 20 bytes (160 bits) by encrypting zeroes.  The output so
+generated is the cryptographic check value.  To generate a cryptographic
+check value when message integrity is desired but encryption is not (for
+example, as part of a digital signature process), either use a "standard" key
+(like four bytes of zero) or simply bypass the "card shuffling" part of the
+key setup (for even more speed).  The plain text is still fed to the encrypt
+function, but the ciphertext is discarded until the check value is generated.
+
+
+SECURITY ANALYSIS
+
+There are several security issues to be considered.  Some are easier to
+analyze than others.  The following includes more "hand waving" than
+mathematical proofs, and looks more like it was written by an engineer than a
+mathematician.  The reader is invited to improve upon or refute the
+following, as appropriate.
+
+
+KEY LENGTH
+
+There are really two kinds of user keys to consider: (1) random binary keys,
+and (2) pass phrases.  Analysis of random binary keys is fairly straight
+forward.  Pass phrases tend to have much less entropy per byte, but the
+analysis made for random binary keys applies to the entropy in the pass
+phrase.  The length limit of the key (255 bytes) is adequate to allow a pass
+phrase with enough entropy to be considered strong.
+
+To be real generous to a cryptanalyst, assume dedicated Sapphire Stream
+Cipher cracking hardware.  The constant portion of the key scheduling can be
+done in one cycle.  That leaves at least 256 cycles to do the swapping
+(probably more, because of the intricacies of keyrand(), but we'll ignore
+that, too, for now).  Assume a machine clock of about 256 MegaHertz (fairly
+generous).  That comes to about one key tried per microsecond.  On average,
+you only have to try half of the keys.  Also assume that trying the key to
+see if it works can be pipelined, so that it doesn't add time to the
+estimate.  Based on these assumptions (reasonable for major governments), and
+rounding to two significant digits, the following key length versus cracking
+time estimates result:
+
+    Key length, bits    Time to crack
+    ----------------    -------------
+                  32    35 minutes (exportable in qcrypt)
+		  33    1.2 hours (not exportable in qcrypt)
+		  40    6.4 days
+		  56    1,100 years (kind of like DES's key)
+		  64    290,000 years (good enough for most things)
+		  80    19 billion years (kind of like Skipjack's key)
+		 128    5.4E24 years (good enough for the clinically paranoid)
+
+Naturally, the above estimates can vary by several orders of magnitude based
+on what you assume for attacker's hardware, budget, and motivation.
+
+In the range listed above, the probability of spare keys (two keys resulting
+in the same initial permutation vector) is small enough to ignore.  The proof
+is left to the reader.
+
+
+INTERNAL STATE SPACE
+
+For a stream cipher, internal state space should be at least as big as the
+number of possible keys to be considered strong.  The state associated with
+the permutation vector alone (256!) constitutes overkill.
+
+
+PREDICTABILITY OF THE STATE
+
+If you have a history of stream output from initialization (or equivalently,
+previous known plaintext and ciphertext), then rotor, last_plain, and
+last_cipher are known to an attacker.  The other two index values, flipper
+and avalanche, cannot be solved for without knowing the contents of parts of
+the permutation vector that change with each byte encrypted.  Solving for the
+contents of the permutation vector by keeping track of the possible positions
+of the index variables and possible contents of the permutation vector at
+each byte position is not possible, since more variables than known values
+are generated at each iteration.  Indeed, fewer index variables and swaps
+could be used to achieve security, here, if it were not for the hash
+requirements.
+
+
+CRYPTOGRAPHIC CHECK VALUE
+
+The relatively large portion of the state altered with each byte encrypted
+(relative to alledged RC-4) contributes to a rapid avalanche of generated
+check values -- probably more than is needed.  A single bit change in a
+message causes a radical change in the check value generated (about half of
+the bits change).  This is one good feature of a cryptographic check value.
+
+Another good property of a cryptographic check value is that it is too hard
+to compute a message that results in a certain check value.  In this case, we
+assume the attacker knows the key and the contents of a message that has the
+desired check value, and wants to compute a bogus message having the same
+check value.  There are two obvious ways to do this attack.  One is to solve
+for a sequence that will restore the state of the permutation vector and
+indices back to what it was before the alteration.  The other one is the
+so-called "birthday" attack that is to cryptographic hash functions what
+brute force is to key search.
+
+To generate a sequence that restores the state of the cipher to what it was
+before the alteration probably requires at least 256 bytes, since the index
+"rotor" marches steadily on its cycle, one by one.  The values to do this
+cannot easily be computed, due to the nonlinearity of the feedback, so there
+would probably have to be lots of trial and error involve.  In practical
+applications, this would leave a gaping block of binary garbage in the middle
+of a document, and would be quite obvious, so this is not a practical attack,
+even if you could figure out how to do it (and I haven't).  If anyone has a
+method to solve for such a block of data, though, I would be most interested
+in finding out what it is.  Please email me at m.p.johnson@ieee.org if you
+find one.
+
+The "birthday" attack just uses the birthday paradox to find a message that
+has the same check value.  With a 20 byte check value, you would have to find
+at least 80 bits to change in the text such that they wouldn't be noticed (a
+plausible situation), then try the combinations until one matches.  2 to the
+80th power is a big number, so this isn't practical either.  If this number
+isn't big enough, you are free to generate a longer check value with this
+algorithm.  Someone who likes 16 byte keys might prefer 32 byte check values
+for similar stringth.
+
+
+OTHER HOLES
+
+Are there any?  Take you best shot and let me know if you see any.  I offer
+no challenge text with this algorithm, but you are free to use it without
+royalties to me if it is any good.
+
+
+LEGAL STUFF
+
+The intention of this document is to share some research results on an
+informal basis.  You may freely use the algorithm and code listed above as
+far as I'm concerned, as long as you don't sue me for anything, but there may
+be other restrictions that I am not aware of to your using it.  The C++ code
+fragment above is just intended to illustrate the algorithm being discussed,
+and is not a complete application.  I understand this document to be
+Constitutionally protected publication, and not a munition, but don't blame
+me if it explodes or has toxic side effects.
+

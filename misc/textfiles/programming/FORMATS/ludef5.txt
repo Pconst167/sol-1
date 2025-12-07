@@ -1,0 +1,391 @@
+ File:	LUDEF5.DOC		Date:	84-08-19
+ Replaces: LUDEF4.DOC		Dated:	84-08-04
+
+ From:	Gary P. Novosielski
+ To:	All LU users
+
+ Subj:	.LBR format definition
+
+	This file is a revision of and obsoletes the previous
+	version.  Revised material is indicated by a vertical
+	bar (|) to the left of the text.
+
+ 0. Introduction
+|   This is the fifth revision of the formal definition of
+ the format of library (.LBR) files as used by the LU Library
+ Utility program and the LRUN command-file load-and-go utility.
+|   Many thanks to all of those who have taken the time to
+|make suggestions for improvements to this definition.  Purely
+|voluntary compliance with this standard by scores of program-
+|mers on many differing operating systems has allowed the .LBR
+|format to evolve into a successful exchange tool in many
+|segments of the computing community.  Additional suggestions
+|are encouraged.
+|   Please note that the current version of LU does not support
+|the full directory format as defined here.  This revision has
+|been distributed as an aid to programmers working on various
+|other programs on non-CP/M operating systems, to allow support
+|for new features in a standardized manner.
+ 
+ 1. Library Overview
+|   A library is a data file which is assumed to be logically
+ divided into one or more subparts called members.  The library
+ may have any filename and filetype, except that ".LBR" is
+ considered to be the default filetype.  Programs must assume
+ and may optionally require the .LBR extension on any file
+ which is to be treated as a library.
+
+ 2. Disk Access Method
+    Libraries are usually treated as Random Record files by
+ programs, but must never contain unallocated "holes" which
+ are normally allowed in Random Record files.  A library can
+ therefore be safely treated as a sequential file if desired.
+    This allows copy programs, compacting programs, and remote
+ transfer programs to process the library sequentially, and to
+ safely make the assumption that the first occurrence of a
+ no-record-found condition truly indicates the physical end of
+ the library.
+
+ 3. Internal Organization
+    A library must contain at least one member, the directory,
+ and may contain an arbitrary number of other members, up to
+ the limits of file size imposed by the operating system.  The
+ library may also contain unused sectors which are not assigned
+ to any member.  These sectors may occur as a result of the
+ deletion of members, or of an unsuccessful add operation.
+    There are no constraints on the contents of members, except
+ for the directory, which is always the first member in the
+|library, and has a specific format defined later.  The entire
+|library file and each of its members are conceptually
+|organized into "sectors", each sector being 128 bytes long.
+ Each sector of the file belongs to at most one library member.
+|Each member comprises a whole number of sectors.  The last
+|sector of a member may, however, be logically declared as a
+|"Short Sector".  Although it physically contains 128 bytes,
+|a Short Sector contains one or more "pad" bytes at the end
+|for the purpose of maintaining the structure of the library
+ file as a whole.  A member may have as few as 0 sectors.
+
+    Members may be referred to by a name of up to 8 characters,
+ and an extension of up to 3 characters.  The naming rules
+ are identical to those for the naming of CP/M-80 disk files.
+|Members must be uniquely named; any given combination of name
+|and extension may identify at most one member.
+
+    The start and end points of each member are defined by the
+ pointers in a "directory entry" for the member.  There are no
+ embedded start or end marks separating the members.  All
+ sectors between the start and end sectors of a member belong
+|to that member.  The members need not appear in the library
+|in the same order that their directory entries appear in the
+|directory.  Thus the directory may be sorted, within certain
+|ordering constraints defined below, without physically moving
+|the members themselves.
+
+ 4. Directory Format
+    The directory is the first member of a library, and must
+ begin in sector 0 of the file.  It must contain at least one
+ sector, and may contain an arbitrary number of sectors.  The
+|directory may not contain a Short Sector.
+    The directory is composed of entries.  Each entry is 32
+ bytes in length, so that the number of entries is equal to
+ four times the number of sectors in the directory.  The
+|number of entries present determines the maximum number of
+|members in the library.  Each directory entry contains the
+|name, starting point, size, and other information for one
+|of the members in the library.
+    Each entry is initialized to one of three possible states:
+ Active, Deleted, or Unused.  The first entry is always active,
+ and is the entry corresponding to the directory itself.
+    Unused entries always occur after all active and deleted
+ entries.  If the directory is scanned beginning with the
+ first entry, and an unused entry is found, then all remaining
+ entries from there through the end of the directory must also
+ be tagged as unused.
+    However, active and deleted entries may be mixed in any
+ order.  Finding a deleted entry does not guarantee that all
+ active entries have been scanned.
+
+ 5. Directory Entry Format
+
+    The 32 bytes of each entry have the following significance:
+
+	Byte			Meaning
+	----	------------------------------------------
+	0	STATUS  Possible values (in hexadecimal) are:
+		00	Active Entry
+  		FE	Deleted Entry
+		FF	Unused Entry
+			Any other value should be treated as
+		a deleted entry.
+
+	1-8	NAME	Rules are identical with those which
+			govern the naming of disk files.  Names
+		shorter than the maximum are padded with
+		spaces.
+
+	9-11	EXTENSION  Rules are the same as for NAME.
+
+	12-13	INDEX	Pointer to the first sector of the
+			member within the library.  Stored as
+		a two-byte binary value, least significant byte
+|		first.  For example, an index of value of 9
+|		indicates that the first sector of the member
+|		occurs 9 sectors, or 9 * 128 = 1152 bytes from
+|		the beginning of the library.
+
+	14-15	LENGTH	The length of the member in sectors.
+			Stored as a two-byte binary value,
+		least significant byte first.  If this value is
+		zero, then the member is empty, and the Index
+		field (above) is meaningless.
+
+	16-17	CRC	The Cyclic Redundancy Check value for
+			the member.  Stored as a two-byte
+		binary value, least significant byte first.
+		This value is calculated using the CCITT
+		algorithm as used in the widely supported
+ 		XMODEM protocol.  If each of the bytes in the
+|		member (including any pad bytes inserted in the
+|		possibly "short" last sector) are processed by
+|		this algorithm, followed by the two bytes of
+		the CRC itself (high order first) the resulting
+		value will be zero.
+|		   Special-case processing is required for the
+|		CRC value of the directory member. See below.
+|
+|	The next four 16-bit words are reserved for library
+|	member time and date stamping.  They are all stored
+|	as two-byte binary values, least significant byte
+|	first.  Programs not implementing time and date
+|	stamping shall explicitly set any unused values to
+|	zero when creating a new entry.  Programs must convert
+|	the time and date formats, if any, defined by their own
+|	operating system into the given formats to insure
+|	transportability of the resulting library file.
+
+|	18-19   CREATION DATE	The date of creation of the
+|				file.  Its value may be prior
+|		to the date the file was added as a member of
+|		the library, if the operating system can supply
+|		the original creation date of the file.  On
+|		extracting the member from the library, this
+|		date may be passed to the operating system for
+|		its use in restoring the original creation
+|		date.  The format for the date conforms to
+|		Digital Research MP/M (and CP/M+) julian date
+|		format.  This is a binary 16-bit integer
+|		value representing the number of days since
+|		December 31, 1977.  For example:  Jan 1, 1978
+|		is day 1 (0001H), and July 4, 1984 is 2377
+|		(0949H).  A zero value indicates this date is
+|		not available.
+
+|	20-21   LAST CHANGE DATE  The date of last change to
+|				  the member.  Assumed to be
+|		no earlier than the creation date, and may
+|		pre-date the addition of the file as a member.
+|		Storage format is identical to creation date.
+|		If the operating system supplies only one file
+|		date, it should be stored in Creation Date,
+|		and Last Change Date left unused (set to zero.)
+|		A zero value is assumed to be equal to the
+|		creation date.  A program which makes any
+|		in-place changes to the member while it resides
+|		in the library should update the value of this
+|		field with the current date if known, or if
+|		not known, should overwrite with zeros.  For
+|		the purpose of this definition, the performing
+|		of a strictly reversable process, such as the
+|		encryption, compression, or translation of a
+|		member does not require a change of date.
+
+|	22-23	CREATION TIME	If available, the time-of-day
+|				corresponding to the creation
+|		date as defined above.  The storage format
+|		conforms to MS-DOS standards, wherein the 16-
+|		bit word comprises three sub-fields as follows:
+|
+|		byte:	<==23==> <==22==>
+|		bit:	76543210 76543210
+|		field:	hhhhhmmm mmmsssss
+|
+|		legend:
+|		h = Hours.  Treated as a 5-bit binary integer
+|			in the range 0..23
+|		m = Minutes.  Treated as a 6-bit binary integer
+|			in the range 0..59
+|		s = Seconds/2.  Treated as a 5-bit binary
+|			integer in the range 0..29, allowing
+|			resolution to the nearest 2-second
+|			interval.  May be zeros in a system
+|			supporting only hour/minutes.
+|
+|	24-25	LAST CHANGE TIME   If available, the time of
+|				   day corresponding to the
+|		Last Change Date defined above.  Format is the
+|		same as Creation Time.
+
+|	26      PAD COUNT	Valid range: 00H to 7FH.  This
+|				byte is for use with non-CP/M
+|		systems, such as MS-DOS and UNIX, where file
+|		lengths are not necessarily a multiple of 128
+|		bytes. It allows the exact size of the member
+|		to be expressed in the directory entry.  The
+|		value in PAD COUNT represents the number of pad
+|		bytes (from 0 to 127) which were inserted in
+|		the final sector of the member to bring its
+|		size up to the required 128 bytes.  The value
+|		of each pad byte inserted should be a hexi-
+|		decimal 1A (ASCII SUB character) which is
+|		a normal end-of-file mark under CP/M.
+|
+|		For example, a Pad Count of 10 hexidecimal (16
+|		decimal) implies that the last 16 bytes of the
+|		final sector of the member are pad characters,
+|		i.e. that only the first 112 bytes (128-16) are
+|		actually part of the member file.  The pad
+|		characters may be ignored when the member is
+|		extracted from the library.  The resulting file
+|		is then the same length as the original.
+|		Specifically, it is ((LENTH * 128) - PAD COUNT)
+|		bytes long.
+|		
+|		Note well, however, that the pad characters are
+|		in fact physically present in the library file,
+|		and are counted as significant characters in
+|		the CRC check value calculations discussed
+|		above.  This is necessary to provide downward
+|		compatibility with older libraries, and with
+|		programs which do not implement this feature,
+|		such as CP/M-only versions of LU.  Any program
+|		not implementing this feature shall explicitly
+|		set this byte to zero when creating a new
+|		entry.  (Libraries built by any program which
+|		properly adhered to prior versions of this
+|		standard have therefore been properly created.)
+|		In this case, the last sector of the member
+|		will be assumed to be a full 128 bytes long,
+|		which was always the case in the past.
+
+	27-31	FILLER 	Reserved for future use.  In unused
+  			and deleted entries, these bytes are
+ 	garbage.  In all active entries, they are explicitly
+	set to binary zero.
+	   Any future enhancements to the .LBR format which
+	make use of these bytes will recognize this zero
+	value as a non-error condition to allow a library
+	created with an old version of LU to be processed by
+	future versions.
+
+| 6. Directory Control Entry
+|    The Directory Control Entry is always the first entry in
+| the directory, and is the entry which corresponds to the
+| directory member itself.  This entry is similar in form to
+| any other entry, but is specified more completely here for
+| clarification.
+|
+| 	STATUS		Always 00, Active.  The directory must
+|			always be an active member.
+|
+|	NAME		Always 8 blanks.  This is the unique
+|			name of the directory member.
+|
+|	EXTENSION	Always 3 blanks.
+|   
+|	INDEX		Always 0000; the directory must be
+|			physically located at the beginning of
+|			the library file.
+|
+|	LENGTH		Never 0000.  The directory must contain
+|			at least one sector.  The actual length
+|			of the directory is found here.
+|
+| If any program finds, in the first sixteen bytes of a library
+| file, one or more values which conflict with the above
+| specifications, this fact shall be interpreted as a fatal
+| indication that the file is not a valid LBR-format library.
+| Errors in the following bytes are non-fatal:
+|
+|	CRC		Since the directory contains its own
+|			entry, and hence its own CRC value, a
+|	logical conflict would arise if the CRC value were
+|	calculated in the normal manner.  The act of storing
+|	the CRC value in the entry would render it invalid.
+|	For this reason, the CRC value of the directory member
+|	is calculated after explicitly storing a 0000 value
+|	in the CRC word of the first entry.  The resulting
+|	calculated value is then stored in this word before
+|	closing the library.
+|	    When checking the CRC of an existing directory, the
+|	old CRC value in the first entry is saved in temporary
+|	storage and replaced by 0000 before calculating the
+|	new CRC value.  The old and new values should then be
+|	compared for equality.
+
+	CREATION DATE	If used, the date of creation of the
+			library.  Reorganization of the library
+	to reclaim space may leave this date unchanged.
+
+	LAST CHANGE DATE  If used, the date of last change to
+			  the directory.  The directory is
+	changed by adding, deleting, or renaming members, and
+	by reorganizing the library.
+
+	CREATION TIME	If used, the time of creation of the
+			library.
+
+	LAST CHANGE TIME  If used, the time of last change to
+			  the directory.
+
+	PAD COUNT	Value ignored and assumed 0. Directory
+			sectors are always a full 128 bytes.
+	Set to 0 when library is created or reorganized.
+
+	FILLER		Set to 0 as in any other entry.
+
+ Notes:
+	In unused and deleted entries all bytes except the
+	Status byte are undefined.
+
+	   The contents of any data sectors which are not
+	assigned to an active member are not defined.
+	They remain allocated to the .LBR file, to provide
+	for sequential processing, as noted above, but no
+	assumptions should be made as to their contents.
+	These sectors are eliminated from the library when
+	it is reorganized.
+
+	For systems which do not implement the CRC validation
+	functions, the CRC value of member entries should
+|	be set to 0000.  Libraries created by very early
+|	versions of LU may have garbage in the last 16 bytes
+|	of the first directory entry, but all other entries
+|	will conform to this convention.  These old library
+|	files may generate spurious (but non-fatal) error
+|	messages caused by a garbage Directory CRC.  Attempts
+|	to support the detection of this condition, and the
+|	supression of these error messages has become more and
+|	more complex to implement, and more difficult to
+|	justify.  Beginning with this definition, such attempts
+|	are forsaken.  Users experiencing a problem with this
+|	are encouraged to make a minor change to such libraries
+|	with a version 3.0 or higher LU.  A dummy add/delete or
+|	reorganization will suffice.  My appologies for any
+|	inconvenience this may cause.
+
+ 6. Conclusion
+    If there are any further questions, comments, or requests
+ regarding library format, or if you note any ambiguities or
+ contradictions in these specifications, please feel free to
+ contact me.
+
+	Gary P. Novosielski
+
+	Voice phone: (201)935-4087   Evenings and weekends
+	MCI Mail:    GNOVOSIELSKI
+	CompuServe:  [70160,120]     EMAIL or CP-MIG
+	Telex:	     650-195-2395    6501952395 MCI
+
+ End of file.
+                                         

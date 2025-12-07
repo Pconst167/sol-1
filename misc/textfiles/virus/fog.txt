@@ -1,0 +1,585 @@
+
+
+
+
+
+
+
+
+
+
+				FOG
+
+		A polymorphic encryption algorithm
+
+			   by Eclipse
+
+
+
+
+
+
+
+
+
+
+
+	Disclaimer:
+
+	I have made this mutation engine for fun purposes only.
+	It is made for use in viruses, but not as to promote any
+	intentional harm or damage on computer systems.
+
+	This engine is dedicated to those of you out there who find the
+	concept of replicating programs fascinating. Trojan and
+	destructive virus writers: Get a life.
+
+
+
+
+
+
+
+	USAGE: CODE MODIFICATION INSTRUCTIONS
+
+	1.  Enter the statement "extrn fog:near, fog_init:near, rnd:near"
+	into your code in your code segment. Its not really necessary to
+	include the "rnd" part if you do not need a random number generator
+	in your code. You might also find it handy to include the switch
+	definition file (switches.inc) in your code.
+
+
+
+	Example (ideal mode):
+		......
+		.model tiny
+		.radix 16
+		ideal
+
+		segment code word
+		assume cs:code, ds:code, es:code, ss:code
+
+		org 100h
+
+		extrn fog:near, fog_init:near, rnd:near         ;here
+		include "switches.inc"                          ;and here
+		......
+
+
+	or (MASM simplified mode):
+		......
+		.model tiny
+		.radix 16
+		.code
+
+		org 100h
+
+		extrn fog:near, fog_init:near, rnd:near         ;here
+		include switches.inc                            ;and here
+		......
+
+	or (MASM mode):
+		......
+		.model tiny
+		.radix 16
+
+		code segment word
+		assume cs:code, ds:code, es:code, ss:code
+
+		org 100h
+
+		extrn fog:near, fog_init:near, rnd:near         ;here
+		include switches.inc                            ;and here
+		......
+
+
+
+	2.  Initialise fog. Do so by calling fog_init with the appropriate
+	parameters:
+	AH      :       Debugger hostility switches     (see below)
+	AL      :       Junk generation switches        ( ---"--- )
+	CL      :       General switches                ( ---"--- )
+
+	CS:DX   :       Code to encrypt
+	SI      :       Size of code to encrypt
+	DI      :       Where in the decrypted code control should be passed.
+			eg. if execution starts at the beginning of the code,
+			DI = 0.
+
+	Note that this initialization could be done only once, f.ex. at the
+	installation of a TSR virus, and later only be called when there was
+	need for updating the information, typically changing from COM to EXE
+	mutation mode.
+
+	On return from fog_init only one register will have changed;
+
+	CX      =       Max size of decryptor and encrypted code. This
+			will be the amount of bytes to stealth if you
+			are making a stealth virus and have specified
+			constant code size (sw_const_s) or if you want
+			a tip of how much memory you gonna need for 
+			encryption, otherwise ignore.
+
+
+
+	Example:
+
+		....
+		mov  ah, sw_prefetch or sw_int3
+		mov  al, sw_015_gi
+			;or more efficiently:
+			;mov  ax, (sw_prefetch or sw_int3) shl 8 or sw_015_gi
+		mov  cl, sw_const_s
+		mov  dx, cs:[myoffset]
+		mov  si, sizeofvirus
+		xor  di, di
+		call fog_init
+		....
+
+
+
+	3. Mutate by calling fog with the following parameters:
+
+	ES      : Free segment. This is where the mutated code will be put.
+		Must contain enough memory for the encrypted code
+		and decryptor. When you define high junk generation, the
+		decryptor can be rather ...errr... massive...
+
+
+	BP      : Offset of code. Eg. if you write the mutated code to the
+		end of a COM file, then BP should be set to filesize+100h.
+
+
+	Example:
+		....
+		mov  bp, ax
+		add  bp, 0100
+		mov  ax, cs
+		dec  ax, (bufferneeded+0fh)/10h
+		mov  es, ax
+		call fog
+		mov  ah, 40     ;CX = number of bytes, DS:DX = buffer
+		int  21
+		....
+
+
+
+	4. Take note of the register values on return from the
+	fog mutation algorithm:
+
+	DS:DX = ES:0 = Buffer where decryptor and encrypted code will
+		be found.
+
+	CX    = Length of decryptor and encrypted code.
+
+	All other registers are preserved.
+
+
+
+
+	USAGE: MEMORY REQUIREMENTS
+
+	When calling fog you should make sure that you have an
+	encryption buffer big enough to accomodate even the largest
+	decryptors + your encrypted code. On its most demanding setting
+	(sw_255_gi / sw_maxhostile) fog will require approximately 16k
+	of memory. If you use fixed file size, the memory required can
+	be even more massive. However, if you reduce the junk generation,
+	fog will need much less memory.
+
+	When you call fog_init, CX will return the maximum size (in bytes)
+	needed.
+
+	Note: Take a look on what I do in AirRaid. I steal a temporary
+	block of memory just to do the encryption, without allocating
+	it. This will work nicely most of the time.
+
+
+
+
+
+
+	USAGE: ASSEMBLY INSTRUCTIONS
+
+	Fog is written in TASM 3.0 (C) Borland Inc. and is designed
+	to work with tasm and tasm-compatible assemblers.
+	To use the fog object module in your code:
+
+	tasm /m3 myvir.asm
+	tlink (/t) myvir fog
+
+	If you select to assemble fog down from the source, you should
+	use
+
+	tasm /m3 fog.asm
+
+	before linking the resultant object module into your code.
+
+
+
+
+
+	-------------------------------------------------------------------
+	The code size of FOG in its present condition is 55Bh (1371) bytes.
+	-------------------------------------------------------------------
+	If you modify the source, assemble with TASM /m3 /l and take a
+	look on top of the lst file; there will be a constant named
+	fogsize - this is FOG's effective length.
+
+
+
+
+
+	TECHNICAL OVERVIEW:
+
+	Fog constructs its decryptor in a stepwise manner.
+	The flow of execution when encrypting can be summarised like this:
+
+	* Choose Initialization strategy
+	* Choose Crypt strategy
+	* Choose Base updating strategy
+	* Choose Loopback strategy
+
+	(Decryptor and encryptor are finished here !!!)
+
+	* Add a jump to starting point in code, often this will be just a JMP 0.
+	* Encrypt main code
+	* If some alignment or static code size is chosen, pad the encrypted
+	  code until it has the right size.
+	* Set all registers according to the correct feedback values, and
+	  return to caller.
+
+
+	STRATEGIES:
+
+	**** Init Strategy ****
+	This is done by randomly choosing registers for key, base and count
+	and generate MOV reg, imm16 instructions with the appropriate numbers.
+	Junk (if selected) will be filled in between these instructions.
+
+
+	**** Crypt strategy ****
+	The standard crypto instruction will be of the type:
+	( The / separates options that are used with equal probability )
+
+	RND 1..15 * (XOR/SUB/ADD  CS:/DS:/ES:/SS: [BX/SI/DI]/[BX/SI/DI+disp16], imm16/reg)
+	RND 0..7  * (ROL reg,1)
+
+	The segment overrides DS:/ES:/SS: will of course only be created in
+	COM file mode, in EXE mode only CS: will appear.
+
+	So decryptors can look like this:
+
+	XOR     SS:[SI+0490],FD81       + junk
+	XOR     CS:[SI+0490],DX           "
+	ADD     CS:[SI+0490],DX           "
+	SUB     CS:[SI+0490],8755         "
+	XOR     ES:[SI+0490],5886         "
+	ADD     SS:[SI+0490],770B         "
+	ADD     DS:[SI+0490],0322         "
+	ROL     DX,1                      "
+	ROL     DX,1                      "
+	ROL     DX,1                      "
+
+	or like this:
+
+	XOR     SS:[BX],DX              + junk
+
+	At the same time as the decryptor instructions are generated, the encryptor
+	is inversely built in the encryptor buffer.
+	As you will have noticed, the key is always word sized.
+
+
+	**** Base updating strategy ****
+	Base updating instructions can be of the type:
+	ADD  reg, 2/-2
+	or
+	SUB  reg, 2/-2
+	or
+	DEC  reg
+	DEC  reg
+	or
+	INC  reg
+	INC  reg
+
+
+	**** Loopback strategy ****
+	Loopbacks will look like this:
+
+	LOOP ...
+
+	or
+
+	DEC  reg
+	JNZ  .....
+
+	(The above will only be used if backwards jump is less than 128 bytes.)
+
+	or
+
+	DEC  reg
+	JZ   03
+	JMP  ....
+
+	or
+
+	DEC  reg
+	JZ   05
+	MOV  reg, offset ....
+	PUSH reg
+	RET
+
+
+	There are many more ways to do this, of course, use your
+	imagination and add some.
+
+
+	STRONG POINTS:
+
+	* Cryptographic toughness
+	FOG utilises a powerful mutation encryption algorithm, making
+	the encryptors very variable indeed. Cryptanalysis is going to
+	be hard on this one, as there is between 1 and 15 random
+	xor/sub/add/rol operations with different keys on each element
+	to be encrypted. With the change of just one constant in the
+	enclosed source this number can be much increased.
+
+
+	* Junk instruction generation
+	The junk instructions, generically generated by FOG, includes
+	instructions of 1, 2, 3, 4, 5 and even 2*7 bytes, and FOG can
+	generate up to 255 such junk instructions between *each*
+	good instruction. I've had test decryptors varying between
+	20 bytes and 10k (!).
+
+
+	* Configurable
+	FOG is configurable in most aspects. Based on what you tell it, it
+	will behave very differently from configuration to configuration.
+
+	Examples:
+
+	1.      mov     al, sw_nogarb
+		call    fog_init
+
+	This will cause FOG to generate short decryptors without any garbage
+	or debugger hostile instructions at all. Turning off garbage also turns
+	off debugger hostility, so any value in AH will be ignored. The
+	encryption will however be just as strong as before, and the decryptor
+	will still mutate.
+
+	2.      mov     al, sw_007_gi
+		mov     ah, sw_int3 or sw_prefetch
+		call    fog_init
+
+
+	This setting will cause FOG to generate between 1 and 7 junk
+	instructions between each good one. Randomly interspersed in
+	these junk instructions will be some debugger hostile instructions,
+	in this case int 3's and prefetch traps. The int 3's are just
+	bothersome when debugging, the prefetch traps will fool the unin-
+	telligent debuggers and some of those programs who try to auto-
+	matically decrypt the encrypted code; TbClean crashes spectacularly.
+
+
+	3.      mov     al, sw_255_gi
+		mov     ah, sw_debug
+		call    fog_init
+
+	This setting will cause FOG to generate medium to very big
+	decryptors, as there will be between 1 and 255 garbage instructions
+	between each good instruction. However, setting ah to sw_debug causes
+	the garbage generated to not contain any debugger hostility at all,
+	and *no encryption will be performed*.
+
+	4.      mov     cl, (sw_r_garb or sw_r_host)
+		call    fog_init
+
+	This will tell FOG to ignore any settings of AH or AL, and randomly
+	choose a setting for itself. Thus the setting may be one of extreme
+	garbage generation and/or hostility or the opposite. Note that FOG
+	will behave according to this until next time you call fog_init, and
+	another random setting will be chosen. If used in a virus, his would
+	have the effect that samples of one generation could be *totally*
+	different from samples of another generation
+
+
+	5.      mov     cl, sw_const_s
+		call    fog_init
+
+	This will cause FOG to generate decryptor+encrypted code of
+	constant size each time you encrypt. This will be of use for
+	stealth virus production. Fog manages this by padding all 
+	encryptions up to the point where it's very unlikely that a 
+	bigger decryptor will be created. Note that with high junk 
+	configuration there often will be a nauseatingly huge pad area 
+	at the end of files.
+
+	6.      mov     cl, sw_align16
+		call    fog_init
+
+	Some people make viruses that need to be padded up to a paragraph
+	border, for self recognition or other purposes. With this setting
+	FOG will do that.
+
+	7.      mov     cl, sw_align256
+		call    fog_init
+
+	Same as previous, but with 256 byte page borders.
+
+
+
+	* Generic programming
+
+	This engine is released with the commented original source code.
+	It's of course possible to improve the engine, and it's relatively
+	easy to do so around its current framework. For instance is the garbage
+	generation modular, by adding another module and updating the jump
+	addresses FOG will spew out the new instructions just as easy and
+	randomly as those included in the source. You may also note the
+	vacant switches, where you may add more configurable options.
+	One of FOG's strongest points is just this; by releasing the source
+	it will mutate not just decryptors, but with time also it's own
+	functionality.
+
+
+	WEAK POINTS:
+
+	* Decryptor obviousness
+
+	Decryptors generated with this engine do not have any mechanisms to
+	hide that they are decryptors (except junk). They do not generate
+	any codesequence to fool scanners into believing that this is a
+	legitimate program. Thus, heuristic scanners may smell a rat,
+	especially TbScan when FOG uses low junk/hostility settings.
+	TbScan detects the presence of a decryptor and sometimes succeed
+	to decrypt the encrypted program. On high junk/hostility settings,
+	however, TbScan mostly chokes and dies. The prefetch traps generate 
+	much noise, in the sense that they mess with memory and cause TbScan 
+	to whip out @, 1, D and U flags galore. On rare occasions they also
+	cause the program to terminate or even hang. I have included jmp
+	instructions in the standard set of functions from FOG, however
+	these sometimes generate TbScan @ and J flags.
+
+	* Scanning vulnerability
+
+	When high debugger hostility is chosen, FOG generates fixed
+	codesequences that might be scanned for, particularly the
+	prefetch traps. This might be something to have in mind.
+
+	* Huuuuuuge decryptors
+
+	As mentioned before, with high garbage settings FOG may generate
+	very large decryptors indeed. This may cause not only a considerable
+	file growth, but also a noticeable timelag upon decrypting.
+
+	* Statistical analysis vulnerability
+
+	There is a chance that FOG will be vulnerable to statistical analysis.
+	I have not performed any statistical computations on FOG's decryptors
+	myself, but I think this might be done. However, scanners will have
+	a hard time detecting *all* FOG encrypted viruses, due to FOG's
+	variability.
+
+
+
+
+
+
+	THE DEMO VIRUSES:
+
+	Enclosed you will find the source and executables of different
+	versions of AirRaid, which is the demo virus for this engine.
+
+	AirRaid is a non-destructive resident *.com infector, made
+	specifically for this purpose. Its lameness is also by intent.
+	It will infect any *.com file (of proper size) executed. Infection
+	marker is 'AR' at byte 4 and 5 in the file.
+
+	The different versions are made to demonstrate the easy way you
+	can configure the virus to do what you want.
+
+	Ver 1. Plain virus, Fog not attached.
+	Ver 2. Fog attached, configured to no garbage.
+	Ver 3. Fog attached, configured to 15 garbage instructions,
+	       max hostility, fixed length
+	Ver 4. Fog attached, configured to random garbage, random hostility.
+
+
+
+
+
+	SWITCHES (as defined in the switches.inc file):
+
+			       AH              AL
+   Debugger hostility   F E D C B A 9 8  7 6 5 4 3 2 1 0     Junk generation
+   Unused ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÙ ³ ³ ³ ³ ³ ³ ³  ³ ³ ³ ³ ³ ³ ³ À   1 junk instruction
+   Unused ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÙ ³ ³ ³ ³ ³ ³  ³ ³ ³ ³ ³ ³ ÀÄÄ   3 junk instructions
+   Unused ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÙ ³ ³ ³ ³ ³  ³ ³ ³ ³ ³ ÀÄÄÄÄ   7 junk instructions
+   Use dos interrupts ÄÄÄÄÄÄÄÄÙ ³ ³ ³ ³  ³ ³ ³ ³ ÀÄÄÄÄÄÄ  15 junk instructions
+   Unused ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÙ ³ ³ ³  ³ ³ ³ ÀÄÄÄÄÄÄÄÄ  31 junk instructions
+   Prefetch traps ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÙ ³ ³  ³ ³ ÀÄÄÄÄÄÄÄÄÄÄ  63 junk instructions
+   Unused ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÙ ³  ³ ÀÄÄÄÄÄÄÄÄÄÄÄÄ 127 junk instructions
+   Int 3 generation ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÙ  ÀÄÄÄÄÄÄÄÄÄÄÄÄÄÄ 255 junk instructions
+
+
+			       CH              CL
+   Internal switches    F E D C B A 9 8  7 6 5 4 3 2 1 0   General switches
+   Unused ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÙ ³ ³ ³ ³ ³ ³ ³  ³ ³ ³ ³ ³ ³ ³ À   random junk
+   Unused ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÙ ³ ³ ³ ³ ³ ³  ³ ³ ³ ³ ³ ³ ÀÄÄ   random hostility
+   Unused ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÙ ³ ³ ³ ³ ³  ³ ³ ³ ³ ³ ÀÄÄÄÄ   exe file
+   Unused ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÙ ³ ³ ³ ³  ³ ³ ³ ³ ÀÄÄÄÄÄÄ   constant size
+   Unused ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÙ ³ ³ ³  ³ ³ ³ ÀÄÄÄÄÄÄÄÄ   256 byte alignment
+   Down decryptor ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÙ ³ ³  ³ ³ ÀÄÄÄÄÄÄÄÄÄÄ   16  byte alignment
+   Use displacement ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÙ ³  ³ ÀÄÄÄÄÄÄÄÄÄÄÄÄ   Unused
+   No jumps allowed ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÙ  ÀÄÄÄÄÄÄÄÄÄÄÄÄÄÄ   Unused
+
+
+
+	That's all for now. Take a look at the enclosed demo virus, AirRaid,
+	to see how FOG can be used.
+
+
+	ABOUT THE AUTHOR:
+
+	I am a tertiary student from Australia's Sunshine State of
+	Queensland.  My interests include Rugby League, Cricket and
+	low-level programming.  Normally concentrating on visual and
+	audio demonstrations, I turned my hand to polymorphism due to
+	the unique challenge of that type of coding.  I will only
+	continue to pursue my virus programming career while the field
+	remains interesting.
+
+
+
+	HOW TO CONTACT THE AUTHOR:
+
+	You can only contact me via my friend Qark, who is has internet
+	access unlike myself.
+
+
+
+Included in the original package there should be 12 files:
+
+	 FOG     .ASM          Fog source code
+	 FOG     .DOC          This file
+	 FOG     .OBJ          Fog object module
+	 SWITCHES.INC          Switch definition include file
+
+	 AIRRAID1.ASM          AirRaid ver. 1 source
+	 AIRRAID2.ASM          AirRaid ver. 2 source
+	 AIRRAID3.ASM          AirRaid ver. 3 source
+	 AIRRAID4.ASM          AirRaid ver. 4 source
+
+	 AIRRV1.ZIP            AirRaid ver. 1 samples
+	 AIRRV2.ZIP            AirRaid ver. 2 samples
+	 AIRRV3.ZIP            AirRaid ver. 3 samples
+	 AIRRV4.ZIP            AirRaid ver. 4 samples
+
+
+Any other file is not acknowledged by me.
+
+Eclipse.
+Queensland, Australia, June 1995.
+
+

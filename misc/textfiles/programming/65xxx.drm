@@ -1,0 +1,911 @@
+
+This is a very long article (36k) of interest to hardware
+hackers, assembly language programmers, and machine
+architects.  It is a description of how I feel the
+65xxx family should evolve.  Don't count on anything
+you read here.  Nonetheless, you might find it interesting.
+If you're not one of the aforementioned types, you may
+want to skip the noise which follows...
+
+
+The 65C816 Dream Machine
+
+    This essay is an attempt to vent my frustrations.  
+While the 65C816 chip is, without question, better than 
+the 6502 and 65c02 chips that preceded it,  the 65c816 
+leaves a lot to be desired.  Unless you count 
+microcontrollers like the 8048, F8, or 8051, I've never 
+encountered a chip as difficult to program in assembly 
+language as the 65c816.  Those stupid M and X bits cause 
+so much trouble I wonder if they're worth the trouble of 
+using them.  Attempting to use the 65c816 in native mode 
+while attempting to coexist with other 6502 routines 
+(requiring emulation mode) such as ProDOS 8 can really 
+push one's patience.  But wait!  There's a small chance 
+things can be improved.  The WDM (William D. Mensch) 
+instruction is reserved by the Western Design Center for 
+instruction set expansion.  While I'm sure Mr. Mensch has 
+other plans for this opcode, the following treatise 
+provides my views on how this single opcode should be 
+used.
+
+    The WDM opcode should be used in the next version of 
+the 65c816 (let's call it the 65c820, just to be amusing) 
+to change the instruction set.  When the 65c820 resets,  
+it should come up in the 6502 emulation mode, just like 
+the 65c816 does now.  The XCE instruction could be used 
+to switch to 65c816 mode just like the existing 65c816 
+part.  The WDM opcode, which I'll call NAT (for NATive 
+mode) will be used to switch the processor to 65c820 
+native mode.  Once in the 65c820 mode, the 65c820 takes 
+on a completely different character.  The only bounds 
+I've placed on the new instruction set is that if you can 
+perform an operation with a single instruction on the 
+65c816, you can perform the same thing on the 65c820 with 
+a single instruction.  All other aspects (including 
+timing and instruction size) can vary.  I've also taken 
+some liberties with the way certain instructions affect 
+the flags.  For the most part however, 65c816 
+instructions have an identical counterpart on the 65c820.
+
+    Design Issues:  There are lot's of reasons for 
+designing a new instruction set. My criteria are as 
+follows:
+
+1) The instruction set must mirror the philosophy of the 
+6500 family.  A programmer    experienced with the 6502 
+instruction set must feel comfortable with the 65c820    
+instruction set.
+
+2) The new instruction set must support high level 
+language constructs better than    the 6502 and 65c816 
+processors.
+
+3) The new instruction set must be easy to learn and fun 
+to use.
+
+4) We must remember that fancy instructions are very 
+difficult to implement in    silicon.  Hence super fancy 
+instructions which provide limited functionality    must 
+be left out.  For example, the 65c820 doesn't support 
+floating point    instructions (although they could be 
+added via a coprocessor).
+
+5) The only (commercially popular) computer system that 
+would ever use the 65c820    is an upgrade of the Apple 
+IIGS.  Hence the instruction set should contain    
+instructions that enhance the operation of an Apple II 
+family machine.
+
+6) The original 6502 instruction set was designed with a 
+small set of basic    instructions complemented with a 
+large set of addressing modes.  The 65c816    strayed 
+from this philosophy, the 65c820 returns to it.
+
+Based on these design issues, I offer the following 
+machine; the 65c820:
+
+
+_________________________________________________________
+______________________
+
+Programmer's Model:
+
+    The 65c820 will contain several additional registers, 
+above and beyond those available on the 65c816.  All 
+registers are 16 bits.  The register bank includes:
+
+A, AX      -- Accumulator and accumulator extension 
+X -- X index register 
+Y -- Y index register           
+F -- Stack frame pointer 
+S -- Stack pointer           
+D -- Direct page register 
+P          -- Program status word 
+ABR        -- Auxillary bank register 
+SBR -- Stack bank register 
+DBR        -- Data bank register 
+PBR -- Program bank register 
+PC         -- Program counter 
+LBound     -- Low bounds register 
+HBound     -- High bounds register 
+
+A, X, Y, S, D, & PC are mostly identical to their 65c816 
+counterparts. AX is the accumulator extension used by the 
+multiply and divide instructions. F is a special index 
+register, useful for accessing local variables and 
+parameters. P differs from the 65c816 version in that it 
+is 16-bits wide.  Accessing the upper byte of this 
+register is a privileged operation (more on that later 
+on). DBR and PBR are similar to their 65c816 cousins, 
+except they are now 16-bits long and allow you to 
+position the program and data banks on any PAGE boundary 
+(rather than a bank [64K] boundary). ABR is an auxillary 
+data bank register. SBR lets you locate the stack 
+anywhere in the 16Mbyte address space. LBound and HBound 
+provide some rudimentary memory management functions.  
+All memory addresses are added to LBound to produce the 
+true physical address.  If the result- ing address is 
+greater than HBound, an ABORT trap will be issued.  This 
+allows you to load multiple programs into memory and 
+protect them from being walked on by other programs.
+
+    As I alluded to earlier, certain operations are 
+PRIVILEGED.  The 65c820's program status word takes the 
+following form:
+
+ 15 14 13 12 11 10  9  8  |  7  6  5  4  3  2  1  0 U/S  
+I  M fpc *  *  *  *  |  N  V  *  *  D dir  Z  C
+
+The low order 8 bits are identical to the 6502's P 
+register except the B bit isn't present (it's not 
+required) and the I bit has been moved to bit 14.  The 
+dir bit controls the direction of various string 
+instructions (ala 8086).  The low order 8 bits are called 
+the USRPSW (user program status word).  The upper 8 bits 
+are called tye SYSPSW (system program status word) and 
+can only be accessed while in the system mode.  Bit 15 
+(U/S) is the user/supervisor bit.  This bit determines 
+whether or not you are in the user or system (supervisor) 
+mode.  Bit 14 is the interrupt disable bit.  For 
+protection reasons, a user mode program cannot have 
+access to the interrupt disable bit (by turning off all 
+interrupts and not turning them back on, a user mode 
+program can cause all kinds of havoc). Bit 13 is the 
+memory management bit.  If set, the LBound the HBound 
+registers determine the location and extent of the 
+logical address space.  If clear, then the logical 
+address space and physical address space are the same.  
+The fpc bit determines if a floating point coprocessor is 
+installed.  If not, the floating point expansion 
+instructions will cause an illegal instruction trap, 
+otherwise, the FP instructions will be routed to the 
+floating point coprocessor. The remaining bits in the P 
+register are reserved for future use.
+
+
+Opcode Format:
+
+The 65c820's instruction set is broken down into 32 
+classes.  They are
+
+ 0-MOV,  1-LEA,  2-LEAA,  3-LEAD,  4-LEAS,  5-XCHG,  6-
+ADD,  7-ADC  8-SUB,  9-SBC,  A-CMP,   B-AND,   C-OR,    
+D-XOR,   E-ASH,  F-LSH 10-ROT, 11-BIT, 12-ADDQ, 13-CMPQ, 
+14-exp,  15-exp,  16-exp, 17-exp 18-exp, 19-Scc, 1A-Ccc,  
+1B-Icc,  1C-Brnch,1D-Brnch,1E-exp, 1F-exp
+
+"exp" refers to expansion.
+
+The "typical" instruction format (for opcodes $00..$11) 
+is
+
+15 14 13 12 11 10  9  8  |  7  6  5  4  3  2  1  0  a  a  
+a  a  a  a  s  d  |  r  r  r  o  o  o  o  o
+
+where       a = addressing mode bits       s = size 
+(0=byte, 1=word)       d = direction (0=to addressing 
+mode loc, 1=from addressing mode loc)       r = register       
+o = opcode (one of the group values above).
+
+There are 64 possible addressing modes (since there are 
+six "a" bits).  The register bits refer to the first 
+eight of these addressing modes (0..7).
+
+0- A        10- d,F        20- d,X        30- d,Y 1- X        
+11- a,F        21- a,X        31- a,Y 2- Y        12- 
+n(d,F)     22- a,FX       32- a,FY 3- S        13- n(a,F)     
+23- l,X        33- l,Y 4- F        14- n[d,F]     24- (X)        
+34- (Y) 5- TOS      15- n[a,F]     25- (d,X)      35- 
+(d),Y 6- Imm      16- (d,F)      26- n(d,X)     36- 
+n(d),Y 7- d        17- [d,F]      27- [d,X]      37- 
+[d],Y 8- a        18- (a,F)      28- n[d,X]     38- 
+n[d],Y 9- l        19- [a,F]      29- n(d,FX)    39- 
+n(d,F),Y A- d,S      1A- P          2A- n[a,FX]    3A- 
+n[a,F],Y B- (d,S),Y  1B- D          2B- [a,FX]     3B- 
+[a,F],Y C- (d)      1C- ABR        2C- (a,X)      3C- 
+(d),Y+ D- [d]      1D- SBR        2D- n(a,X)     3D- 
+(d),-Y E- n(d)     1E- DBR        2E- [a,X]      3E- 
+[d],Y+ F- n[d]     1F- PBR        2F- n[a,X]     3F- 
+[d],-Y
+
+where:
+
+A, X, Y, S, F, P, D, ABR, SBR, DBR, and PBR are the 
+corresponding 65c820 registers. Imm refers to an 
+immediate operand. d refers to an eight-bit value, 
+usually (but not always) a direct page address. a refers 
+to a 16-bit absolute address. l refers to a 24-bit long 
+address n is a displacement of the form    one byte, +/- 
+64 if the H.O. bit is zero.    two bytes, H.O. byte 
+first, +/- 16383 if the H.O. bit is one.
+
+All addressing mode containing F, FX, or FY are relative 
+to the SBR register. Any "d" address appearing in such an 
+addressing mode is simply an 8-bit displacement relative 
+to the frame pointer.  FX means add F and X and use the 
+result as the frame pointer.  FY is the same, but using 
+the Y register.
+
+Y+ and -Y are autoincrement and autodecrement addressing 
+modes.  For autoincrement, the Y register is incremented 
+after the value contained in Y is used.  For auto- 
+decrement, the Y register is decremented before the value 
+is used.  
+
+Addressing modes of the form  n[---]-- compute the 
+effective address specified by the indirect operation and 
+then add the specified offset to the effective address to 
+obtain the true effective address.  For example, if Y 
+contains 5 and location $00 points at $1000 in the DBR, 
+then  4(0),y refers to location $1009.
+
+The TOS addressing mode refers to the Top Of Stack, more 
+on this later.
+
+
+General Instructions:
+
+The general instructions (opcodes $00..$11) all take the 
+form:
+
+                      Instr  Source, Dest
+
+Where Instr is the instruction mnemonic,  Source is the 
+address of a source operand, and Dest is the address of a 
+destination operand.  At least one of the two operands 
+must be a "register" addressing mode.  The register 
+addressing modes are the first eight addressing modes 
+listed above.  If the source operand is a register 
+addressing mode, then the direction bit in the 
+instruction is zero, otherwise it is one. If the source 
+addressing mode is the immediate addressing mode, the 
+flags are set by the result of the operation, but nothing 
+else is changed.  For example, MOVB #0,#n  sets the zero 
+flag since a zero bit is moved, but the zero isn't 
+actually moved anywhere.  Note that a "B" or "W" suffix 
+is used on the mnemonics to specify the instruction size.
+
+Three important register addressing mode greatly enhance 
+the capabilities of the 65c820 processor: the TOS, Imm, 
+and d register addressing modes.  Since d is a register 
+addressing mode, any direct page memory location can be 
+used as a "register".  This greatly enhances the 
+flexibility of the 65c820.  This effectively gives you 
+256 registers to play around with.  
+
+    The Imm addressing mode, since it is a register 
+addressing mode, lets you perform operations between any 
+register or memory location in the machine (addressable 
+by a single instruction) with an immediate operand.  For 
+example, CMPB  #5,2[3,D],Y   is perfectly legal.  For a 
+few instructions, immediate operands don't make much 
+sense, such instructions will cause an illegal 
+instruction trap (for example, you cannot load the 
+effective address of an immediate operand into a 
+register).  
+
+    The TOS addressing mode is extremely powerful.  If 
+you've looked ahead at the expansion instructions, you'd 
+have noticed that there aren't any specific push or pop 
+instructions (unless you count ENTER, EXIT, SAVE, and 
+RESTORE).  The TOS addressing mode handles all of this 
+for you.  You want to push the accumulator onto the 
+stack?  No problem,  MOVW A,TOS will do the job.  You 
+want to pop the X register off of the stack?  Use MOVW 
+TOS,X.  You want to add the item on the top of stack to 
+the item below it on the stack (a VERY common operation 
+performed by compilers), just use ADDW TOS,TOS.  This 
+instruction will pop two words off of the stack, add 
+them, and push their sum back onto the stack (leaving two 
+bytes on the stack rather than the original four).   With 
+the TOS addressing mode, you can push (or pop) any value 
+anywhere in addressable memory onto the stack with a 
+single instruction.
+
+
+Special (but not expansion) Instructions:
+
+There are seven groups of instructions in this category: 
+ADDQ, CMPQ, Scc, Ccc, Icc, and the branch instructions.
+
+ADDQ (add quick) appears in place of the ubiquitous INC 
+and DEC instructions. ADDQ lets you add a four-bit signed 
+value to any addressable item.  The register bits, along 
+with the direction bit, let you specify a signed four-bit 
+value.  This value is added to the specfied address.  The 
+immediate operand MUST be the source operand.
+
+The CMPQ (compare quick) is similar except a compare 
+operation is performed rather than an addition.  
+Furthermore, the immediate operand is the destination 
+operand rather than the source operand.
+
+The Scc (set on condition), Ccc (clear on condition), and 
+Icc (invert on condition) instructions are used to set 
+boolean values based on the condition codes.  These go 
+hand in hand with the branch instructions so I'll 
+describe them all at once.
+
+There are 16 possible conditions, the register and 
+direction bits are used to specify the condition.  These 
+conditions are
+
+0- RA/A      4- HI       8- GT        C- PL 1- CC/LO     
+5- LT       9- EQ        D- VC 2- CS/HS     6- GE       
+A- NE        E- VS 3- LS        7- LE       B- MI        
+F- SR/N
+
+LO (lower) = unsigned less than HS (higher/same) = 
+unsigned greater than or equal LS (lower/same) = unsigned 
+less than or equal HI (higher) = unsigned greater than LT 
+= signed less than GE = signed greater than or equal LE = 
+signed greater than or equal GT = signed greater than
+
+The Scc, Ccc, and Icc instructions take the form:
+
+         Scc{b|w}  #Imm, Dest          Ccc{b|w}  #Imm, 
+Dest          Icc{b|w}  #Imm, Dest
+
+If the immediate operand is zero, then Scc will store a 
+one into the specified location if the condition code is 
+met, otherwise a one will be stored.  Ccc does just the 
+opposite, it stores a zero if the condition is met, one 
+otherwise. The Icc instruction will complement the 
+specified location (logical NOT) if the condition code is 
+met.  If the immediate operand is not zero, the the Scc 
+in- struction will set the specified bits in the 
+destination operand if the condition code is met, the Scc 
+instruction will have no effect if the condition is not 
+met. The Ccc instruction clears the specified bits in the 
+destination operand.  The Icc instruction inverts the 
+specified bits.  The destination bits are specified with 
+ones in the immediate operand.  For example, SCS #$88, 
+$00 will set bits three and seven in memory location zero 
+if the carry flag is set,  location $00 will be 
+unaffected if the carry flag is clear.
+
+The SA/CA/IA (Set always, Clear always, Invert always) 
+instructions always perform the specified operation.  The 
+SN/CN/IN (set never, clear never, invert never) behave as 
+though the condition code was not met.
+
+The branch instructions are unusual compared to those 
+encountered thus far.  The instruction is only one byte 
+long.  It takes the form:
+
+  7  6  5  4  3  2  1  0   o  o  o  --1C  or 1D-- 
+
+If the opcode is $1C, then the three "o" bits represent 
+condition codes 0..7 above. Note that the BRA instruction 
+uses opcode bits %000.
+
+If the opcode is $1D, then the three "o" bits represent 
+condition codes 8..$F above. There is no BN instruction,  
+Opcode %111 is the BSR (branch to subroutine) 
+instruction.
+
+Unlike the 65c816, branches are not limited to +/- 128 
+bytes.  A displacement value, similar to the used by the 
+general addressing modes allows a one-byte displacement 
+of +/- 64 bytes or +/- 16383 bytes.  More than enough for 
+most cases.
+
+
+
+Math expansion instructions:
+
+The math expansion instructions (opcode $14) use the 
+three register bits as an opcode expansion yield eight 
+additional instructions.  The instruction format is
+
+ 15 14 13 12 11 10  9  8  7  6  5  4  3  2  1  0   a  a  
+a  a  a  a  s  d  o  o  o  1  0  1  0  0   where "aaaaaa" 
+is a general addressing mode, "s" is the size (B/W), "d" 
+is the direction (load/store), and "ooo" is the sub-
+opcode, decode as follows:
+
+0- MUL    1- DIV    2- MOD   3- REM   4- INDX    5- CHK    
+6- DIVS   7- FPexp
+
+Sub-opcode 7 is reserved for floating point expansion via 
+a coprocessor.  If the FPC bit in the SYSPSW is not set, 
+then executing this opcode will cause an illegal 
+instruction trap.  If the FPC bit is set, then an 
+additional eight bit opcode follows this instruction.  
+This opcode value plus the physical address provided by 
+the addressing mode, bounds registers, and applicable 
+prefix(es) are passed along to the coprocessor.
+
+    All of these instructions use the 65c820 accumulator 
+as the register operand. MULW performs an unsigned 16x16 
+multiply, leaving the 32-bit result in A, AX. MULB 
+performs an unsigned 8x8 multiply, leaving the result in 
+A. DIVW performs an unsigned 32/16 division.  The value 
+in (A,AX) is divided by the specified operand and the 
+quotient is left in (A,AX).  DIVB divides the 16-bit 
+accumulator by an eight bit value, leaving the result in 
+A.  DIVS{W|B} perform signed divisions.  These two 
+instructions operate on the 16-bit accumulator or 8-bit 
+accumulator ONLY.  The AX register is not used. MOD and 
+REM compute the modulo and remainder functions (MOD is 
+unsigned, REM is signed).  Their register usage is 
+identical to DIV/DIVS.  There is no need for a signed 
+multiply instruction since signed and unsigned 
+multiplication produces the same result, assuming you 
+ignore the value in AX.
+
+    The INDX and CHK instructions are used to perform 
+array computations.  The operand of these two 
+instructions points at a pair of bytes or words.  The 
+INDX instruction multiplies the accumulator by the first 
+value and then adds the second value to the accumulator.  
+The direction bit in the opcode is ignored. The INDX 
+instruction takes two forms: INDXB and INDXW.
+
+    The CHK instruction compares the value in the 
+accumulator against the first and second values.  If the 
+accumulator lies within these two values (inclusive) then 
+the overflow flag is cleared.  If the accumulator is 
+outside the range of these two values, then the  overflow 
+flag is set.  The direction flag in the opcode is used to 
+determine whether a signed or unsigned comparison is 
+used. The CHK instruction takes four forms: CHKSB, CHKSW, 
+CHKUB, and CHKUW.  The "U" and "S" specify unsigned or 
+signed.
+
+
+
+String expansion instructions:
+
+    Opcode $15 is used for string operations.  The 65c820 
+processor provides four basic string operations: MOVS 
+(move), CMPS (compare), XLATS (translate), and FILLS 
+(fill).  The instruction format is as follows:
+
+ 15 14 13 12 11 10  9  8  7  6  5  4  3  2  1  0   s  s  
+s  d  d  d  l  l  l  o  o  1  0  1  0  1
+
+where "sss" is the source address, "ddd" is the 
+destination address, "lll" is the length address, and 
+"oo" is the opcode.  Since all of the addresses are three 
+bits, they must be register addresses.  The source 
+address is a sixteen bit value taken from one of the 
+register addressing modes.  The sixteen-bit value 
+obtained at said address is the start of the string 
+within the data bank (i.e., relative to the DBR 
+register).  The destination address is also a sixteen-bit 
+register addressing mode value, specifying the start of 
+the destination address within the auxillary bank (i.e., 
+relative to the ABR register).  The length value is a 
+sixteen-bit quantity obtained directly from the register 
+addressing mode location.  Prefix bytes (described later 
+on) are not allowed in front of a string instruction.
+
+Opcode assignments:
+
+0- MOVS 1- CMPS 2- XLATS 3- FILLS
+
+  The direction of the string operation is specified by 
+the "dir" bit in the USRPSW register.  If the bit is 
+clear, then the source and destination operands are 
+incremented after each string operation.  If the "dir" 
+bit is clear, then these operands are decremented after 
+each string operation.
+
+    The string instructions take the form:
+
+              MNEMONIC   src, dest, len
+
+where src, dest, and len are any of  A, X, Y, S, F, TOS, 
+#value, or a direct page address.   For the these 
+operands, the sixteen bit value specified by one of these 
+addresses is used, relative to the DBR, as the address 
+(or length) of the specified block.  An absolute address 
+can be specified by an immediate operand.  The direct 
+page address is the address of the 16-bit value within 
+the direct page, it does not mean that the address of the 
+block is that address in the direct page.  Same with the 
+TOS, the value on the top of stack contains the address, 
+the top of stack is not the block itself.  The len 
+operand is always a byte count.  Unless an immediate 
+operand is specified, the operands are always updated to 
+reflect their new value at the termination of the block 
+operation.
+
+    The MOVS instruction is used to move a string of 
+bytes from one location to another.  A block of "len" 
+bytes specified by DBR/src is moved to ABR/dest.
+
+    The MOVS operation is an example of an instruction 
+that does not exactly mirror its 65c816 counterpart.  It 
+may take two (or more) instructions to perform the same 
+operation as the 65c816 MVN and MVP instructions, since 
+the direction flag may require adjustment before 
+performing a MOVS instruction. Futhermore, the ABR and 
+DBR registers may need adjustment before and after the 
+MOVS instruction to simulate the MVN and MVP 
+instructions.  Finally, the actual count is specified by 
+length, not count-1 (as on the 65c816), so this may 
+require some adjustment if you are translating 65c816 
+code instruction by instruction.
+
+Example:
+
+	MVN  0,1
+
+  can be simulated by
+
+	MOVW #0,DBR         MOVW #1,ABR 	ADDQ #1, 
+A    ;Since MVN assumes A contains count-1         MOVS 
+X,Y,A 	MOVW #1,DBR
+
+
+    The CMPS operation compares the two specified 
+strings.  It does a byte by byte comparison until length 
+bytes are compared or a character in the source string is 
+not equal to the corresponding character in the 
+destination string. The condition codes are set to 
+reflect the ordinality of the two strings (so you can use 
+any of the branch, Scc, Ccc, or Icc instructions to test 
+the results). If the z flag is returned set, then the two 
+strings are equal (through the specified length), 
+otherwise the source and destination operands are updated 
+to point at the differing chars and the length operand is 
+updated to show the number of character processed thus 
+far (assuming, of course, that these operands weren't 
+immediate, in which case they would be ignored).
+
+    The XLATS instruction is used to translate values in 
+a string.  The source operand points at a table in the 
+DBR.  Each character in the dest string is used as an 
+index into this table and the value fetched from the 
+table is stored over the original character in the 
+destination string.
+
+    The FILLS instruction is used to initialize a string 
+with a fixed value.  The source operand is an eight-bit 
+value.  It is stored in successive locations at ABR/dest 
+for len bytes.  If an immediate value is specified, a 
+sixteen-bit value is encoded into the instruction, but 
+only the L.O. eight bits are used.
+
+
+
+
+Single byte expansion instructions:
+
+These instructions take the form:
+
+ 7  6  5  4  3  2  1  0  o  o  o  1  0  1  1  0
+
+Where "ooo" is decoded as:
+
+0- NOP 1- COP 2- BRK 3- SVC 4- RTS 5- RTL 6- RTI 7- EXIT
+
+    SVC is the "supervisor call" instruction.  Its 
+intended use is for making operating system calls.  It is 
+similar in function to the COP instruction.
+
+    EXIT is used to deallocate local variables in a 
+procedure.  It undoes the actions of the ENTER 
+instruction.  Basically it performs the following 
+operations:
+
+		MOV F,S                 MOV TOS, F
+
+    The remaining instructions in this group are 
+identical to their 65c816 counterparts, so they don't 
+require any futher elaboration.
+
+
+
+
+Single byte w/displacement expansion instructions:
+
+These instructions take the form:
+
+ 7  6  5  4  3  2  1  0  o  o  o  1  0  1  1  1
+
+Where "ooo" is decoded as:
+
+0- SAVE n 1- RESTORE n 2- reserved 3- reserved 4- RTS n 
+5- RTL n 6- ADJSP n 7- ENTER n
+
+    The "n" value immediately following these 
+instructions is a displacement value.  If bit seven of 
+the first byte following the opcode is zero, then the 
+remaining six bits are used to specify a signed value in 
+the range +/- 64.  If bit seven is one, then the 
+following 15 bits are used to specify a value in the 
+range +/-16383. Except possibly for ADJSP, none of these 
+instructions should ever require more than a single byte 
+displacement.
+
+    SAVE is used to quickly push registers from the set 
+[A,AX,X,Y,F,D,P] onto the stack.  The instruction is 
+followed by a single byte with bits 0..6 cor- responding 
+to these registers.  Bit seven must always be zero.
+
+    RESTORE does just the opposite of SAVE, it pops the 
+specified registers off of the stack.
+
+    RTS n and RTL n perform the specified return from 
+subroutine operations and then add the specified 
+displacement to the stack pointer after the return 
+address has been popped.  This provides a convenient 
+mechanism whereby parameters can be removed from the 
+stack.
+
+    The ADJSP n instruction adds the displacement value 
+to the stack pointer. This is a shorter version of the 
+ADD #value,S instruction.  A special case was created for 
+this instruction because it gets used all the time in 
+languages like "C" or "SDL/65" which allow a variable 
+number of parameters.
+
+    The ENTER n instruction is used to set up an 
+activation record when a procedure is initially entered.  
+It performs the following operations:
+
+	MOVW  F,TOS 	MOVW  S, F 	ADJSP n
+
+The EXIT instruction can be used to undo the effects of 
+this instruction.
+
+
+
+Prefix expansion instructions:
+
+These instructions take the form:
+
+ 7  6  5  4  3  2  1  0  o  o  o  1  1  0  0  0
+
+where "ooo" is decoded as:
+
+0-ABR prefix 1-SBR prefix 2-PBR prefix 3-word index 
+prefix 4-dword index prefix 5-qword index prefix 6-
+XBA/SWA 7-EMU
+
+    XBA and EMU aren't true prefix bytes, they're just 
+single byte instructions that didn't conveniently fit 
+anywhere else.  So I'll describe them first.  XBA is 
+identical to its 65c816 counterpart, it swaps the bytes 
+in the accumulator. EMU switches from 65c820 native mode 
+to 65c816 emulation mode.  EMU is a privileged 
+instruction and will cause a privileged instruction trap 
+if executed from the user mode.
+
+   The first three prefix bytes are used to modify the 
+bank used for data accesses. Addressing modes that 
+normally access memory through the data bank register 
+(which are all memory references except direct, long, 
+TOS, and those involving F) can be "tweaked" to access 
+memory through the auxillary, stack, or program bank 
+registers by prefixing the address with the appropriate 
+prefix.  For example,
+
+		MOVW  #275, ABR:$1000
+
+stores 275 into location $1000 in the auxillary bank 
+register rather than the data bank register.  Indirect 
+addresses of the form (a,X) and n(a,X)  present a minor 
+problem.  Does the prefix specify the bank address of the 
+absolute operand or the effective address?  I've opted 
+for requiring that the absolute operand reside in the 
+data bank and the prefix byte determines the effective 
+address bank.
+
+    Any addressing mode utilitizing the frame pointer 
+register (F) is always relative to the stack bank 
+register.  Prefixes are only allowed for the following 
+frame-based addressing modes: n(d,F),  n(a,F),  (d,F),  
+(a,F), n(d,FX), and n(d,F),Y.  The indirect address 
+always comes out of the stack bank, the prefix applies to 
+the computed effective address.
+
+    Although the ABR:/SBR:/PBR: lexemes immediately 
+precede the address expression to which they apply (on 
+the source line), in the object code, the prefix byte 
+always precedes the instruction to which the prefix 
+applies.  If more than one prefix byte precedes an 
+instruction, only the last one is used.  If a prefix byte 
+precedes an instruction to which the prefix doesn't make 
+sense (a branch, for example), then the prefix byte is 
+ignored.  Finally, the prefix byte will be ignored if 
+there isn't an applicable addressing mode in the current 
+instruction. E.G.: 		byt  $18  ;ABR prefix 
+byte 		MOVW A,X  ;ABR prefix has no meaning 
+here.
+
+
+    Three additional prefix bytes apply to the X and Y 
+index registers.  These are the word index prefix, dword 
+index prefix, and qword index prefix.  These prefix bytes 
+provide scaled indexed addressing modes for the 65c820.  
+Without one of these prefixes, the X and Y registers are 
+always byte offsets.  That is, when used as an index 
+register, the contents of X or Y is added directly to the 
+effective address being computed.  When accessing words, 
+pointers (double words), or eight byte values (e.g., 
+floating point) you have to manually adjust the index 
+registers by a factor of 2, 4, or 8.  The scaled index 
+addressing prefix bytes let you avoid this problem.  The 
+word prefix multiplies the X or Y register value by two 
+before using it in the effective address computation.  
+Likewise, the dword and qword prefixes multiply X or Y by 
+4 or 8 before using the value.  In the source code, these 
+prefix bytes are specified by the ":W", ":D", and ":Q" 
+suffixes:
+
+		MOVW   A,LBL,X:W 		MOVW   
+$0,(PTR),Y:D                 MOVW   $2, 2(PTR),Y:D 	
+	MOVW   F,(TBL,X:W) 		MOVW   A,LBL,Y:Q
+
+If multiple prefixes appear, only the last one is used.  
+If the prefix doesn't apply to the next instruction, it 
+is ignored.
+
+
+
+Single operand expansion instructions:
+
+    The $1E expansion instructions are dedicated to 
+instructions which require a single operand.  The format 
+for the opcodes is as follows:
+
+ 15 14 13 12 11 10  9  8  7  6  5  4  3  2  1  0   a  a  
+a  a  a  a  s  o  o  o  o  1  1  1  1  0
+
+where "aaaaaa" is a general addressing mode, "s" is the 
+size (B/W), and "oooo" is one of the following opcodes:
+
+0- NOT                  8- LAX    (load AX register) 1- 
+NEG                  9- SAX    (store AX register) 2- ABS                  
+A- XAX    (exchange AX register) 3- BOOL (0->0 else->1)  
+B- LLB    (load LBound register) 4- SEX                  
+C- LHB    (load HBound register) 5- ZEX                  
+D- SLB    (store LBound register) 6- JMP                  
+E- SHB    (store HBound register) 7- JSR                  
+F- VAL    (validate memory location)
+
+
+All of these instructions are followed by a single 
+general address expression. Immediate operands are not 
+allowed for any of these instructions.
+
+NOT- logically compliments the specified value. NEG- 
+takes the two's complement of the specified value. ABS- 
+takes the absolute value of the specified location. BOOL- 
+If the specified location is not zero, a one is stored 
+into it.
+
+SEX- (that's sign extension, not what you think).  SEXB 
+checks the high order bit of the specified byte and 
+copies it into the H.O. byte of the corresponding 
+address.  For example, if X contains $0082 then SEXB X 
+will store $FF82 into X. If X contains $0002, then SEXB X 
+will store $0002 into X.   SEXW sign extends the 
+specified location into the AX register.
+
+ZEX- zero extends the specified value.  ZEXW simply 
+stores a zero into AX. ZEXB stores a zero into the H.O. 
+byte of the specified word.
+
+JMP and JSR are like their 65c816 counterparts except any 
+valid addressing mode can be used.  Note that, unlike 
+most other instructions, the result is assumed to be in 
+the current program bank unless a long addressing mode is 
+specified.
+
+LAX, SAX, and XAX allow you to load, store, and exchange 
+the contents of the AX register.  Note that these three 
+instructions plus SEX, ZEX, MUL, DIV, and MOD are the 
+only instructions that deal with the AX register.
+
+LLB, LHB, SLB, and SHB let you load and save the contents 
+of the bounds registers. These are privileged 
+instructions which will cause a privilege trap if 
+executed from the user mode.
+
+VAL- This instruction is used to validate a memory 
+location.  That is, it tests the specified memory 
+location to see if it lies within the range specified by 
+the bounds register.  The address is a physical address, 
+not a translated address. The overflow flag is set if a 
+bounds violation would occur.  Note that the M bit in the 
+SYSPSW need not contain a particular value when using 
+this instruction. This is a privileged instruction which 
+will cause a privilege violation if executed in the user 
+mode.
+
+
+
+BIT expansion instructions:
+
+These instructions take the form:
+
+ 15 14 13 12 11 10  9  8  7  6  5  4  3  2  1  0   a  a  
+a  a  a  a  s  o  o  o  o  1  1  1  1  1
+
+"aaaaaa" is the destination addressing mode. "s" is the 
+size (applicable only to MAND, MOR, and MXOR). "oooo" is 
+the sub-opcode, decoded as:
+
+0- INS  dest, start, len 1- EXT  dest, start, len 2- FFS  
+dest, start, len 3- FFC  dest, start, len 4- MAND dest, 
+mask 5- MOR  dest, mask 6- MXOR dest, mask
+
+7..F- reserved.
+
+INS is used to insert a value into a bit field.  The 
+value in the accumulator is shifted to the left "start" 
+bits  and the the "len" following bits are stored into 
+the specified memory location.  For example, if memory 
+location $00 contains $F0 and the accumulator contains 
+$3,  then INS $00,2,4 would leave location $00 containing 
+$CC.  Note that you needn't specify byte or word size as 
+this is intrinsic from the length.
+
+EXT- extracts a bit field from some location and stores 
+the right justified value into the accumulator (zeroing 
+out any unused bits).  For example, if memory location 
+$00 contains $CC and the accumulator contains $FFFF, then 
+EXT $0,2,4 would leave the accumulator containing 3 and 
+location $00 containing $CC.
+
+
+FFS finds the first set bit in the specified location.  
+The bit position is returned in the accumulator.  If 
+there were no set bits, the accumulator contains "len"+1.
+
+FFC finds the first clear bit in a manner identical to 
+FFS.
+
+Some notes:  These four instructions are followed by a 
+single byte.  The low order four bits contain the start 
+value, the high order four bits contain the length-1. 
+"start" + "len" must always be less than or equal to 15.  
+FFS and FFC use the direction bit in the USRPSW to 
+determine which way to progress in the bit field when 
+searching for the set or clear bit.
+
+
+The MAND, MOR, and MXOR (masked AND, OR, and XOR) will 
+AND, OR, or XOR the accumulator into the specified memory 
+location.  The difference between these three 
+instructions and the standard AND, OR, and XOR 
+instructions is that they are followed by a byte or word 
+(depending on the instruction size) which contains a mask 
+for the operation.  Wherever a one bit appears in the 
+mask, the logical operation will take place,  wherever a 
+zero bit appears, the destination's bits will be 
+unaffected.
+
+
+_________________________________________________________
+__________________
+
+That wraps up my proposed instruction set for the 65c820.  
+I'll be happy to discuss my design decisions with anyone 
+who's interested.  The next step is to try and convince 
+someone to actually build this thing!  In the mean time, 
+I might try writing an interpreter and assembler for it.
+
+By the way.  Many of you have probably recognized certain 
+instructions from this processor or that processor 
+sprinkled throughout.  To set the record straight,  most 
+of my ideas have come from my own frustrations with the 
+65c816, the 8086 family, and the National Semiconductor 
+32000 family.  Despite that fact that a lot of you think 
+that Intel's parts stink because they're used by IBM, 
+don't let that prejudice you against many of the design 
+issues here.  The 8086 does have a resonable 
+archetecture, given the compromises it had to face.  It's 
+certainly better than the 65c816.  I've incorporated a 
+lot of the better ideas (like segment prefixes) into the 
+design of the 65c820.  Once again,  don't downplay these 
+powerful features just because you don't like IBM.
+
+*** Randy Hyde
+ 

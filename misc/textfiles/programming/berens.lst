@@ -1,0 +1,518 @@
+C PROCEDURE TABLES
+by Tim Berens
+
+[LISTING ONE]
+
+
+/****************************************************************************
+    Name : prompter.c
+
+    Description : A routine for prompting a user for a series of answers.
+****************************************************************************/
+#include<stdio.h>
+#include"prompter.h"
+
+struct group_stack group_stack[GROUP_STACK_SIZE];
+
+prompter(pc)
+    struct prcontrol * pc;
+{
+    int errstat;
+
+    pc->current_question = 0;
+    pc->group_stack_ptr = 0;
+
+    for(;;){
+        pc->errstat = 0;
+
+        display_current_question(pc);
+
+        gets(pc->response);
+
+        if(*pc->response == 0){
+            continue;
+        }
+
+        if(!(pc->errstat = 
+          (*pc->current_group[pc->current_question].validate)(pc))){
+
+            if(pc->errstat = 
+              (*pc->current_group[pc->current_question].doit)(pc)){
+                 if(pc->errstat == EXIT_NOW){
+                    return(0);
+                 }
+            }
+        }
+
+        if(pc->current_group[pc->current_question].response != NULL){
+            strcpy(pc->current_group[pc->current_question].response,
+                   pc->response);
+        }
+
+        (*pc->current_group[pc->current_question].set)(pc);
+
+        if(pc->current_group[pc->current_question].text == NULL){
+            return(0);
+        }
+
+        if(pc->errstat){
+            handle_error(pc->errstat,pc->errormess);
+        }
+
+    }
+
+}
+
+display_current_question(pc)    
+    struct prcontrol * pc;
+{
+    printf("\n%s\n",pc->current_group[pc->current_question].text);
+    printf("--->");
+
+}
+
+handle_error(errstat,errormess)
+    int errstat;
+    struct errormess * errormess;
+{
+    int i;
+    int emess_offset = -1;
+    char * message,messagebuff[100];
+    
+    for(i = 0 ; errormess[i].errstat != -1 ; ++i){
+        if(errormess[i].errstat == errstat){
+           emess_offset = i;
+            break;
+        }
+    }
+    message = messagebuff;
+    if(emess_offset != -1){
+        strcpy(message,errormess[emess_offset].message);
+        if(errormess[emess_offset].build){
+            (*errormess[emess_offset].build)(message);
+        }
+    }
+    else{
+        sprintf(message,"Error %d.",errstat);
+    }
+
+    puts("\n");
+    puts(message);
+    return(0);
+}
+
+
+/***************************************    
+    Flow control routines
+***************************************/
+no_op()
+{
+    return(0);
+}
+
+next_question(pc)
+    struct prcontrol * pc;
+{
+    ++pc->current_question;
+    return(0);
+}
+
+
+pop_group(pc)
+    struct prcontrol * pc;
+{
+    --pc->group_stack_ptr;
+    pc->current_group = group_stack[pc->group_stack_ptr].group; 
+    pc->current_question = group_stack[pc->group_stack_ptr].current_question;
+    return(0);
+}
+
+push_current_group(pc)
+    struct prcontrol * pc;
+{
+    group_stack[pc->group_stack_ptr].group = pc->current_group;
+    group_stack[pc->group_stack_ptr].current_question = pc->current_question;
+    ++pc->group_stack_ptr;
+    return(0);
+}
+
+start_group(newgroup,pc)
+    struct question * newgroup;
+    struct prcontrol * pc;
+{
+    push_current_group(pc);
+    pc->current_group = newgroup;
+    pc->current_question = 0;
+    return(0);
+}
+
+restart_group(pc)
+    struct prcontrol * pc;
+{
+    pc->current_question = 0;
+    return(0);
+}
+
+
+end_group(pc)   
+    struct prcontrol * pc;
+{
+    pop_group(pc);
+    ++pc->current_question;
+    return(0);
+}
+
+checkerror_end_group(pc)
+    struct prcontrol * pc;
+{   
+    if(pc->errstat){    
+        return(0);
+    }
+    end_group(pc);
+    return(0);
+}
+
+checkerror_next_question(pc)
+    struct prcontrol * pc;
+{   
+    if(pc->errstat){    
+        return(0);
+    }
+    next_question(pc);
+    return(0);
+}
+
+
+[LISTING TWO]
+
+/****************************************************************************
+    Name : prompter.h 
+
+    Description : Declarations for prompter
+****************************************************************************/
+
+struct prcontrol {
+    int current_question;
+    struct question * current_group;
+    int group_stack_ptr;
+    char response[121];
+    int errstat;
+    struct errormess * errormess;
+    };
+
+struct question {
+    char * text;
+    char * response;
+    int (*validate)();
+    int (*doit)();
+    int (*set)();
+    };
+
+struct group_stack {
+    struct question * group;
+    int current_question;
+    };
+
+/************************
+   errormess data structure
+************************/
+    
+struct errormess {
+    int errstat;
+    char * message;
+    int (*build)();
+    };
+
+#define GROUP_STACK_SIZE            50
+#define NO_ERROR                    0
+#define EXIT_NOW                    2001
+
+int pop_group(),end_group(),no_op(),next_question();
+int checkerror_end_group(),checkerror_next_question();
+
+
+[LISTING THREE]
+
+/****************************************************************************
+    Name : prsample.c
+
+    Description : A sample that uses the prompter() routine
+****************************************************************************/
+#include<stdio.h>
+#include"prompter.h"
+#include<ctype.h>
+
+/**************************
+    The report parameter variables 
+***************************/
+char report_destination[2];
+char dest_filename[30];
+char single_or_range[2];
+char start_account[20],end_account[20];
+int account_number;
+char display_parmname[50];
+char include_overshort[2];
+
+/*********************
+    Error Values
+*********************/
+#define ENTER_S_OR_R            1
+#define ENTER_Y_OR_N            2
+#define START_ACCOUNT_LARGER    3
+#define BAD_PARM_NAME           4
+#define BAD_ACCOUNT_NUMBER      5
+#define ENTER_P_S_OR_D          6
+#define FILE_EXISTS             7
+
+/************************
+  Report to printer, screen or disk routines
+************************/
+int filename_val();
+struct question report_filename[] = {   
+    { "What is the name of the disk file?",
+        dest_filename,filename_val,no_op,checkerror_end_group},
+    {   NULL,NULL,NULL,NULL,NULL }
+    };
+
+filename_val(pc)    
+    struct prcontrol * pc;
+{
+    FILE * fp,*fopen();
+    /* you should put a routine to validate that the response
+       entered is a legal file name here */
+    if(fp = fopen(pc->response,"r")){
+        fclose(fp);
+        return(FILE_EXISTS);
+    }
+    return(0);
+}
+
+reportdest_val(pc)
+    struct prcontrol * pc;
+{
+    char * strchr();
+    if((!strchr("PpSsDd",pc->response[0])) || (strlen(pc->response) != 1)){
+        return(ENTER_P_S_OR_D);
+    }
+    return(0);
+}
+
+reportdest_set(pc)
+    struct prcontrol * pc;
+{
+    char destination;
+    destination = islower(*pc->response) ? *pc->response-32 : *pc->response;
+    switch(destination){    
+        case 'P' :
+        case 'S' : next_question(pc);
+                   break;
+        case 'D' : start_group(report_filename,pc);
+                   break;
+   }
+   return(0);
+}
+
+/***************************
+    Account routines
+***************************/
+int account_val(),end_account_set(),end_account_val();
+
+struct question account_range[] = {
+    {"Enter the starting account.",
+        start_account,account_val,no_op,checkerror_next_question},
+    {"Enter the ending account.",
+        end_account,end_account_val,no_op,end_account_set},
+    { NULL,NULL,NULL,NULL,NULL }
+    };
+
+int save_account_doit(),account_set();
+struct question account[] = {
+    {"Enter the account.",
+        start_account,account_val,save_account_doit,checkerror_end_group},
+    {NULL,NULL,NULL,NULL,NULL}};
+
+account_or_range_val(pc)
+    struct prcontrol * pc;
+{
+    char * strchr();
+    if((!strchr("SsRr",pc->response[0])) || (strlen(pc->response) > 1)){
+        return(ENTER_S_OR_R);
+    }
+    return(0);
+}
+
+account_or_range_set(pc)
+    struct prcontrol * pc;
+{
+    char account_or_range;
+    account_or_range = islower(*pc->response) ? *pc->response-32 : 
+                        *pc->response;
+    if(pc->errstat){
+        return(0);
+    }    
+    if(account_or_range == 'S'){
+        start_group(account,pc);
+    }
+    if(account_or_range == 'R'){
+        start_group(account_range,pc);
+    }
+    return(0);
+}
+
+save_account_doit(pc)
+    struct prcontrol * pc;
+{
+    account_number = atoi(pc->response);
+    return(0);
+}
+
+account_val(pc)
+    struct prcontrol * pc;
+{
+    if((atoi(pc->response) < 100) || (atoi(pc->response) > 1000)){   
+        return(BAD_ACCOUNT_NUMBER);
+    }
+    return(0);
+}
+
+end_account_val(pc)
+    struct prcontrol * pc;
+{
+    int errstat;
+    if(errstat = account_val(pc)){
+        return(errstat);
+    }
+    if(atoi(start_account) >= atoi(pc->response)){
+        return(START_ACCOUNT_LARGER);
+    }
+    return(0);
+}
+
+end_account_set(pc)
+    struct prcontrol * pc;
+{
+    switch(pc->errstat){
+        case NO_ERROR             : end_group(pc);
+                                    break;
+        case START_ACCOUNT_LARGER : restart_group(pc);
+                                    break;
+        case BAD_ACCOUNT_NUMBER   : break;
+    }
+    return(0);
+}
+
+/***************************
+    Get display parameters routines
+****************************/
+char * legal_parmnames[] = {      /* In a "real" system, this table       */
+    "default",                    /* would probably be stored in a file   */
+    "daily",                      /* and parmname_val would check to see  */
+    "weekly",                     /* if the name entered is in this file. */
+    "yearly",
+    NULL
+    };
+
+parmname_val(pc)
+    struct prcontrol * pc;
+{
+    int i;
+    for(i = 0 ; legal_parmnames[i] != NULL ; ++i){
+        if(strcmp(pc->response,legal_parmnames[i]) == 0){
+            return(0);
+        }
+    }    
+    return(BAD_PARM_NAME);
+}
+
+bld_bad_parmname(message)
+    char * message;
+{
+    sprintf(message + strlen(message)," %s, %s, %s, or %s.",
+            legal_parmnames[0],legal_parmnames[1],legal_parmnames[2],
+            legal_parmnames[3]);
+    return(0);
+}
+
+/**************************
+    yesno validation
+***************************/
+yesno_val(pc)
+    struct prcontrol * pc;
+{
+    char * strchr();
+    if((!strchr("YyNn",pc->response[0])) || (strlen(pc->response) != 1)){
+        return(ENTER_Y_OR_N);
+    }
+    return(0);
+}
+
+/**************************************
+    Main question array procedure table
+***************************************/
+struct question account_parms[] = {
+    {"Do you want this report for a single account or a range of accounts? (S or R)",
+        single_or_range,account_or_range_val,no_op,account_or_range_set },
+    {"Enter the name of the display parameter record.",
+        display_parmname,parmname_val,no_op,checkerror_next_question},
+    {"Do you want to include the Over/Short Report? (Y/N)",
+        NULL,yesno_val,no_op,checkerror_next_question},
+    {"Do you want this report on the printer, screen, or saved to disk?(P,S or D)",
+        report_destination,reportdest_val,no_op,reportdest_set},
+    { NULL,NULL,NULL,NULL,NULL }
+    };
+
+struct errormess account_errormess[] = { 
+    { ENTER_S_OR_R,"Please enter S or R.",NULL },
+    { ENTER_Y_OR_N,"Please enter Y or N.",NULL },
+    { START_ACCOUNT_LARGER,"The starting account must be smaller than the ending account.",NULL },
+    { BAD_ACCOUNT_NUMBER,"The account number must be between 100 and 1000",NULL },
+    { BAD_PARM_NAME,"Choose one of the following :",bld_bad_parmname },
+    { ENTER_P_S_OR_D,"Please enter P, S or D",NULL },
+    { FILE_EXISTS,"That file already exists.",NULL },
+    { -1,NULL,NULL }
+    };
+
+main(argc,argv)
+    int argc;
+    char * argv[];
+{
+    int errstat;
+    struct prcontrol prcontrol;
+
+    prcontrol.current_group = account_parms;
+    prcontrol.errormess = account_errormess;
+
+    if(errstat = prompter(&prcontrol)){
+        handle_error(errstat,account_errormess);
+    }
+    /*  Print the report with the gathered parameters */
+}
+
+
+
+
+[EXAMPLE 1]
+
+
+		loop{
+			display current_question->text
+			
+			get response from user
+
+			execute current_question->validate
+
+			if(no error on validate){
+				execute current_question->doit
+			}
+
+			copy response to current_question->response
+
+			execute current_question->set
+
+			if(error from validate){
+				call error handler
+			}
+		}
+
+
+

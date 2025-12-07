@@ -1,0 +1,139 @@
+DeluxePaint Animation ".ANM" files consist of a large header and a series of
+structures that can be up to 64 KB long each.  The programmer refers to these
+structures as "Large Pages".  Large Pages are a format for dividing a file
+into 64 KB chunks that can be stored out-of-sequence in the file.  That is,
+a large page can be logically inserted into the file, without having to move
+all the following data out of the way.
+
+Each large page holds one or more "records".  A record represents one frame
+of the original animation.  A record is of any length from 0 to almost 64 KB.
+The records in a large page are sequential.  However, the first large page
+may not contain the first frames of the anim file.  Each large page contains
+a sequential set of records but the large pages themselves are not in
+sequential order.  It is possible for the first large page in a file to
+contain the last few frames of the animation.  When you process the anim file
+you must scan the large page structures to find which large page conatins the
+frame you wish to display or process next.
+
+A DeluxePaint Animation "ANM" ("Anim") file is built on this mechanism,
+so that as frames change in size, they can be maintained with a minimum
+of extra file i/o, yet without loss of playback performance.
+In addition, there is an optional special record which is the delta from
+the last frame to the first frame, for smooth playback of looping anims.
+
+The following is the structure of a DeluxeAnimate anim file header.
+Header size is exactly 2816 bytes.  The first large page structure can be
+reached by simply seeking to this location in the file.
+
+ ULONG id;		4 character ID == "LPF "
+
+ UWORD maxLps;		max # largePages allowed. 256 FOR NOW.  
+
+ UWORD nLps;		# largePages in this file.
+
+ ULONG nRecords;	# records in this file.  65534 is current limit plus
+			one for last-to-first delta for looping the animation
+
+ UWORD maxRecsPerLp;	# records permitted in an lp. 256 FOR NOW.  
+
+ UWORD lpfTableOffset;	Absolute Seek position of lpfTable.  1280 FOR NOW.
+			The lpf Table is an array of 256 large page structures
+			that is used to facilitate finding records in an anim
+			file without having to seek through all of the Large
+			Pages to find which one a specific record lives in.
+
+ ULONG contentType;	4 character ID == "ANIM"
+
+ UWORD width;		Width of screen in pixels.
+ UWORD height;		Height of screen in pixels.
+ UBYTE variant;		0==ANIM.
+ UBYTE version;		0==frame rate is multiple of 18 cycles/sec.
+			1==frame rate is multiple of 70 cycles/sec. 
+
+ UBYTE hasLastDelta;	1==Last record is a delta from last-to-first frame.
+
+ UBYTE lastDeltaValid;	0==The last-to-first delta (if present) hasn't been
+			updated to match the current first&last frames,	so it
+			should be ignored.
+
+ UBYTE pixelType;	0==256 color.
+
+ UBYTE CompressionType;	1==(RunSkipDump) Only one used FOR NOW.
+
+ UBYTE otherRecsPerFrm;	0 FOR NOW.
+
+ UBYTE bitmaptype;	1==320x200, 256-color.  Only one implemented so far.
+
+ UBYTE recordTypes[32];	Not yet implemented.
+
+ ULONG nFrames;		In case future version adds other records at end of
+			file, we still know how many actual frames.
+			NOTE: DOES include last-to-first delta when present.
+
+ UWORD framesPerSecond;	Number of frames to play per second.
+
+ UWORD pad2[29];	58 bytes of filler to round up to 128 bytes total.
+
+ Range cycles[16];	Color cycling info (128 bytes long).
+			This is the format of a cycle structure.
+			typedef struct {
+					WORD count;
+					WORD rate;
+					WORD flags;
+					UBYTE low, high; /* bounds of range */
+					} Range;
+
+
+	total is = 256 bytes.
+
+ Following the anim file header is the color palette
+
+ ULONG	palette[256]	Color palette arranged as 3 bytes each of Red Green
+			& Blue and one unused byte.
+
+ Following the palette is an array of structures that are copies of the
+ large page headers.  This array is loaded and used to find which large page
+ a given frame can be found in.
+
+ Large_page LParay[256]	Copies of all the Large Page structures in the anim
+			file.  Each Large Page structure is 6 bytes long so
+			the total length of this table is 1536 bytes.  Even if
+			the file only contains 1 large page there are still
+			256 entries of 6 bytes each.
+
+ The Large Pages follow the LParray and are in the sequence dictated by
+ their order of occurence in the LParray in the anim file header.
+
+ The following is the structure of a single Large Page in an anim file.  Each
+ Large Page is exactly 64k long in the anim file.  The only exception is the
+ last large page wich is truncated to be only as long as necessary.
+
+ UWORD baseRecord;	Number of first record in this large page.
+
+ UWORD nRecords;	Number of records in lp.
+			bit 15 of "nRecords" == "has continuation from previous lp".
+	    		bit 14 of "nRecords" == "final record continues on next lp".
+
+ UWORD nBytes;		Total number of bytes of contents, excluding header.
+
+ UWORD BytesContinued;	The number of bytes of the last record of the
+			previous large page that extend into this large page.
+			This was never implemented and is always 0.
+
+ UWORD RecordSizes[nRecords] Array of lengths of each record in the large page.
+
+ The actual records start here.  Each record has a variable length header that
+ is like the following structure.
+
+	typedef struct{
+		UBYTE IDnum;		always 66
+		UBYTE Flags;		0==no extra bytes field next
+
+		UWORD extrabytes;	if Flags is non zero this is # of bytes
+					to skip before compressed data starts
+					extrabytes does not include the size
+					of the 2 previous bytes.  Also make
+					sure you round the final address up to
+					an even byte boundry.
+		} record_header;
+

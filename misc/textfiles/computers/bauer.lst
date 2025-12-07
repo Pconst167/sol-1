@@ -1,0 +1,200 @@
+ 
+_OPTIMIZING IN A PARALLEL ENVIRONMENT_
+by Barr E. Bauer
+
+[LISTIN« ONE]
+
+      program test                                                      1
+*                                                                       2
+* purpose is to test SGI parallelization scheme for loop selection,     3
+* numerically-intensive calculations, and total reduction. See text     4
+* for details.                                                          5
+*                                                                       6
+      parameter (MAXFIRST=250, MAXSECOND=250, MAXTHIRD=10)              7
+      real*8 a(MAXTHIRD,MAXSECOND,MAXFIRST)                             8
+      real*8 b(MAXTHIRD,MAXSECOND,MAXFIRST)                             9
+      real*8 sub_total(MAXFIRST), partial_total(4)                      10
+      real*8 d(MAXTHIRD), c, tmp    ! local variables                   11
+      real*8 dist(MAXSECOND,MAXFIRST), grand_total                      12
+      real*8 grand_total      ! test for proper operation               13
+      logical parallel        ! selects 2-version loops                 14
+      integer*4 iflag         ! used to show LASTLOCAL value            15
+                                                                        16
+      data parallel /.false./                                           17
+      data sub_total, iflag /MAXFIRST*0.0, 0/                           18
+*                                                                       19
+* outer loop: contains both interior loops                              20
+*                                                                       21
+                                                                        22
+* C$doacross local(k,j,i,tmp,d,c), share(a,b,sub_total,dist),           23
+* C$&        lastlocal(iflag)                                           24
+                                                                        25
+      do i = 1, MAXFIRST                                                26
+*                                                                       27
+* first inner loop: fills arrays a and b                                28
+*                                                                       29
+                                                                        30
+* C$doacross local(j,k,c), share(i,a,b)                                 31
+                                                                        32
+        do j = 1, MAXSECOND                                             33
+          do k = 1, MAXTHIRD                                            34
+            a(k,j,i) = dsqrt(dfloat(i*j*k))                             35
+            c = 1.0 - a(k,j,i)                                          36
+            if (c .le. 0.0 .and. i .lt. j*k) then                       37
+              c = -c                                                    38
+            else                                                        39
+              c = c**2                                                  40
+            endif                                                       41
+            b(k,j,i) = 32*(dcos(c)**5)*dsin(c)-                         42
+     1                 32*(dcos(c)**3)*dsin(c)+                         43
+     2                  6*dcos(c)*dsin(c)                               44
+          enddo                                                         45
+        enddo                                                           46
+*                                                                       47
+* seond inner loop: determines distance and starts summation            48
+*                                                                       49
+                                                                        50
+* c$doacross local(j,k,d,tmp), share(i,a,b,dist,sub_total),             51
+* c$&        lastlocal(iflag)                                           52
+                                                                        53ä        do j=1, MAXSECOND                                               54
+          tmp = 0.0                                                     55
+          do k = 1, MAXTHIRD                                            56
+            d(k) = a(k,j,i) - b(k,j,i)                                  57
+          enddo                                                         58
+          do k = 1, MAXTHIRD                                            59
+            tmp = tmp + d(k)**2                                         60
+          enddo                                                         61
+          dist(j,i) = dsqrt(tmp)                                        62
+          if (dist(j,i) .le. 0.1) iflag = iflag + 1                     63
+          sub_total(j) = sub_total(j) + dist(j,i)                       64
+        enddo                                                           65
+      enddo                                                             66
+*                                                                       67
+* the next section is an example of sum reduction optimized to the      68
+* parallel environment and the use of a more efficient 2 loop summation 69
+*                                                                       70
+* if -mp option is active, parallel is set to .true. which then         71
+* selects the parallel version                                          72
+*                                                                       73
+                                                                        74
+C$    parallel = .true.                                                 75
+      grand_total = 0.0                                                 76
+      if (parallel) then                     ! parallel version         77
+C$      num_threads = mp_numthreads()                                   78
+        ichunk = (MAXFIRST + (num_threads - 1))/num_threads             79
+                                                                        80
+C$doacross local(k,j),                                                  81
+C$&        share(num_threads,partial_total,sub_total,ichunk)            82
+                                                                        83
+        do k = 1, num_threads ! this loop is parallelized               84
+          partial_total(k) = 0.0                                        85
+          do j = k*ichunk - ichunk + 1, min(k*ichunk,MAXFIRST)          86
+            partial_total(k) = partial_total(k) + sub_total(j)          87
+          enddo                                                         88
+        enddo                                                           89
+        do j = 1, num_threads   ! smaller loop handled as scalar        90
+          grand_total = grand_total + partial_total(j)                  91
+        enddo                                                           92
+      else                                   ! the scalar version       93
+        do j = 1, MAXFIRST                                              94
+          grand_total = grand_total + sub_total(j)                      95
+        enddo                                                           96
+      endif                                                             97
+                                                                        98
+      if (parallel) then                                                99
+C$      write (*,10) grand_total, num_threads                           100
+C$      write (*,20) iflag                                              101
+      else                                                              102
+        write (*,30) grand_total                                        103
+        write (*,40) iflag                                              104
+      endif                                                             105
+      stop                                                              106
+C$10  format(1x,'grand total = ',g10.3,'threads = ',i4)                 107
+C$20  format(1x,'parallel iflag = ',i10)                                108ä30    format(1x,'grand total = ',g10.3)                                 109
+40    format(1x,'scalar iflag = ',i10)                                  110
+      end                                                               111
+
+
+
+[LISTIN« TWO]
+
+
+(source code)
+
+      subroutine example(a, b, c, n)
+      integer*4 n
+      real*4 a(n), b(n), c(n)
+
+      (additional code)
+
+c$doacross local(i, x)
+      do i=1, n
+        x = a(n) * b(n)
+        c(n) = x**2
+      enddo
+
+      (additional code)
+
+      return
+      end
+
+(the loop is transformed to)
+
+      subroutine _example_1(
+     1  _local_start,             ! index starting valueä     2  _local_ntrip,             ! number of loop executions
+     3  _incr,                    ! index increment
+     4  _my_threadno)             ! unique process ID number
+
+      integer*4 _local_start, _local_ntrip, _incr, _my_threadno
+
+      integer*4  i                ! declared local
+      real*4     x                ! declared local
+
+      integer*4  _tmp             ! created local
+
+      i = _local_start
+      do _tmp = 1, _local_ntrip
+        x = a(i) * b(i)
+        c(i) = x**2
+        i = i + _incr
+      enddo
+      return
+      end
+
+
+ExamplÂ 1∫ A typical Dœ loop
+
+ 
+do i = 1, n
+   a(i) = x * b(i)
+enddo
+
+
+ExamplÂ 2∫ ¡ Dœ loo iÓ whicË thÂ arra˘ variablÂ referenceÛ · ç
+valuÂ thaÙ iÛ noÙ currenÙ witË ÙhÂ index
+ 
+do i = 2, n
+   arr(i) = b(i) - arr(i-1)
+enddo
+
+ExamplÂ 3∫ AÓ examplÂ oÊ loa‰ imbalance
+ 
+      do i = 1, n
+          do j = 1, i
+               a(j, i) = a(j, i) * xmult
+          enddo
+      enddo
+
+
+ExamplÂ 4∫ Loa‰ balancing
+
+      num_threads = mp_numthreads()
+c$doacross local(i, j, k)
+      do k = 1, num_threads
+          do i = k, n, num_threads
+               do j = 1, i
+                    a(j, i) = a(j, i) * xmult
+               enddo
+          enddo
+      enddo
+  

@@ -1,0 +1,203 @@
+                           PICTURE FILE FORMATS
+                         by Bob Montgomery 9-21-90
+
+Dr. Halo CUT files
+
+The DR. Halo CUT file header has the following content:
+        struct Halocut
+        {    int  width;
+             int  height;
+             int  dummy;
+        } ;
+The Dr. Halo CUT file picture data is run length encoded for each picture
+row as follows:
+    1. Get a code byte from the data stream.
+       If the code byte is 0, then this is the end of this row.
+       The 'count' is the 7 lsb's of the code byte, and can vary from 1 to 127.
+       The code byte msb determines if there is repeated data as follows:
+            a. msb = 1, get the next byte and repeat it 'count' times.
+            b. msb = 0, get the next 'count' bytes.
+
+The Dr. Halo Palette (PAL) file header has the following content (40 bytes):
+        struct Hpal
+        {    BYTE ID[2];                                 Should be AH
+             int  version, size;
+             char filetype, subtype;
+             WORD brdid, grmode;
+             int  maxindex, maxred, maxgreen, maxblue;   Colors = maxindex + 1
+             char signature[8], filler[12];              "Dr. Halo", 12 0's
+        } ;
+The palette data is integer triples (R, G, B) for each color in the palette.
+The palette file data (including the header) is in 512 byte blocks. If there
+     is not a full integer triple at the end of a block, the data should be
+     ignored and the next block started.
+
+Deluxe Paint II LBM & IFF files
+
+The Deluxe Paint LBM (and IFF) file header (40 bytes) has the following
+content:
+     struct dp2
+     {   char msg1[4];               "FORM"
+         BYTE a3, a2, a1, a0;        File length - 8  (read left to right)
+         char msg2[8];               "ILBMBMHD"
+         BYTE b3, b2, b1, b0;        Length of header (read left to right)
+         int  width, length, xoff, yoff;
+         BYTE planes, masking, compression, pad;
+         int  tansparent;
+         BYTE x_aspect, y_aspect;
+         int  screenwidth, screenheight;
+     } ;
+   There may be a color map following a string "CMAP" in the file. After CMAP
+        is the length of the color map (4 bytes, read left to right). The color
+        map is byte triples (R, G, B) for each colors. The number of colors is
+        1 shifted left by planes (1 << planes).
+   The actual picture data follows a string "BODY" and length of the picture
+        data (4 bytes read left to right). The picture data is organized on a
+        color plane basis for DP2, and on a pixel basis for DP2e (enhanced).
+        Thus, for DP2:
+            There are (width / 8) bytes per row.
+            The data stream for each row consists of all the bytes for plane 0,
+                followed by all the bytes for plane 1, etc.
+        and for DP2e:
+            There are (width) bytes/row, where each byte is a pixel color.
+   If the data is uncomperessed (compression flag = 0), the data stream bytes
+        are fed to the output unmodified. If it is compressed, it is run length
+        encoded as follows:
+            Get a code byte from the data stream.
+            If the msb is 1, the 'count' is (1 - code), max = 127. Get the next
+                byte from the data stream, and repeat it 'count' times.
+            If the msb is 0, the 'count' is (1 + code), max = 128. Get the next
+                'count' bytes from the data stream.
+
+MacIntosh MAC files
+
+The MAC file header (128 bytes) has the following content:
+If bytes 0, 74, and 82 are 0, and byte 1 is less than 64 the picture data
+     starts at byte 640; other wise it starts at byte 512.
+The picture is always 576 wide x 720 long, and 2 colors (black & white).
+The data has 8 pixels/byte, so there are 576/8 = 72 bytes/row.
+The picture data is run length encoded as follows:
+    Get a code byte from the data stream.
+    If the msb is 1, the 'count' is (1 - code), max = 127. Get the next
+        byte from the data stream, and repeat it 'count' times.
+    If the msb is 0, the 'count' is (1 + code), max = 128. Get the next
+        'count' bytes from the data stream.
+
+Pictor/ PC Paint files
+
+The Pictor/PC Paint header (17 bytes) has the following content:
+     struct PCPheader
+     {    int  ID;       ID for Pictor/PC Paint files, should be 0x1234
+          int  Hor;      Horizontal size
+          int  Vert;     Vertical size
+          int  Xoff;     X offset into pic
+          int  Yoff;     Y offset into pic
+          BYTE Bpp;      Lo nib=bits/pixel, Hi nib=additional planes
+          BYTE Ident;    Should be 0FFh for PC Paint 2.0+
+          BYTE Vmode;    Video mode for pic, G=EGA, L=VGA, M=640x480x16, etc.
+          int  Descr;    Descriptor for pic, 0=>B&W, 3=>EGA, (>=4)=>VGA
+          int  Bcount;   Number of bytes of info to follow, should be 0 if
+                         B&W, 16 if EGA, and (3 * colors) for VGA.
+     } ;
+The number of colors is determined by the Bpp byte. The palette info follows
+     and is Bcount bytes long. Then comes a 'block count' integer, which is
+     the number of blocks of picture info to follow. PC Paint only did EGA,
+     and the data was at 2 pixels/byte. Pictor EGA is on a plane basis (B, G,
+     R, I) where all the data for plane 0 is followed by all the data for
+     plane1, etc. Pictor B&W is at 8 pixels/byte. Pictor VGA is at 1
+     byte/pixel on a color basis.
+The picture data is broken into blocks of bytes with the following 5 byte
+header:
+     struct PCP_BLOCK_HDR
+     {    WORD packed;     Packed bytes this block, including header.
+          WORD unpacked;   Unpacked bytes the block expands to.
+          BYTE runmarker;  Byte which denotes a run of same data.
+     } ;
+The data is encoded inside a block into single bytes and runs as follows:
+1. Get a byte from the data stream.
+2. If the byte is not the runmarker, it is the data.
+3. If the byte is the runmarker, the next byte is the run count (255 max). If
+   the run count is 0, the next word (2 bytes) is the run count (65535 max).
+   The next byte is the data to repeat for the run count.
+
+EGA Paint & ColoRIX file
+
+The EGA Paint and ColoRIX files have the following headers:
+     1. EGA Paint files have a 16 byte EGA palette.
+     2. ColoRIX files have the following info:
+         struct RIXHDR
+         {   char id[4];             Should be RIX3
+             int  xres, yres;
+             int  mode;              Ignored
+         } ;
+EGA Paint files have extensions SCR (640x350; 112016 bytes long), and
+     SCP (640x480; 153616 bytes long). The data is uncompressed and on a
+     plane basis. The planes are ordered B, R, G, I.
+ColoRIX files are on a plane basis for EGA (B, G, R, I) and on a pixel color
+     basis for VGA. They have extensions:
+         SCI (320x200)
+         SCR (640x350)
+         SCP (640x480)
+         SCG (800x600)
+         SCU (1024x768)
+
+Targa Files
+
+Targa files have a header as follows
+     struct TGA {
+         BYTE idlen;       /* number of bytes in Ident Field */
+         BYTE colmptype;   /* color map type (0 for none) */
+         BYTE imagetype;   /* image type (2 is unmapped RGB) */
+         WORD cmorg;       /* color map origin */
+         WORD cmlen;       /* color map length in # of colors */
+         BYTE cmbits;      /* number of bits per color map entry */
+         WORD xoff;
+         WORD yoff;
+         WORD xsize;
+         WORD ysize;
+         BYTE bpix;       /* number of bits per pixel in pict */
+         BYTE imagedesc;  /* 0 for TGA and TARGA images */
+     } ;
+If the 2 lsb's of imagetype are 1, the data is for a greyscale image.
+For imagetype of 7 or less the file has uncompressed picture data. For
+imagetype of 8 or more it is RLE compressed as follows:
+     1. Get the code byte. The 'count' is {(code & 127) + 1} (1 thru 128).
+     2. If the msb = 0, output the next 'count' colors.
+     3. If the msb = 1, output the next color 'count' times.
+Targa 8 is usually gray scale. For Targa 16 there are 2 bytes/color; 5 lsb's are
+blue, next 5 bits are green, next 5 bits are red. For Targa 24, there are 3
+bytes/color; 1st is blue, next is green, last is red. For Targa 32, there are 4
+bytes/color; 1st is blue, next is green, next is red, and last throw away.
+
+ZSoft PCX files
+
+ZSoft PCX files have the following 68 byte header:
+     struct Zsheader
+     {    BYTE Mfg;           /* ID for ZSoft files, 0A hex */
+          BYTE Ver;           /* Version, 5 */
+          BYTE Encode;        /* Encoded pic data if 1 */
+          BYTE Bpp;           /* Bits/pixel */
+          int  X1;            /* Left col */
+          int  Y1;            /* Top row */
+          int  X2;            /* Right col */
+          int  Y2;            /* Bottom row */
+          int  Xres;          /* Horiz size of screen */
+          int  Yres;          /* Vert size of screen */
+          BYTE zpal[48];      /* 3 bytes/palette reg */
+          BYTE Vmode;         /* Video mode, ignored */
+          BYTE Planes;        /* # color planes in pic */
+          int  Bpl;           /* Bytes/line in pic */
+     } ;
+This is followed by 60 bytes of filler (0's), and then the picture data.
+The number of colors is 1 << (Bpp * Planes).
+If Ver = 5, go to the 769th byte from the end of the file. if this is 12, the
+     next 768 bytes are byte triples (R, G, B) of palette data.
+ZSoft files for VGA are 1 byte/pixel, and for EGA are on a plane basis
+     (B, G, R, I) for each row.
+ZSoft files are encoded as follows:
+ 1. Read a code byte. The 'count' is the 6 lsb's (63 max).
+ 2. If the 2 msb's of code = 1, the 'count' is the 6 lsb's (63 max).
+    Then read a data byte and repeat it 'count' times to the output.
+ 3. If the 2 msb's of code = 0, the code byte is written directly to the output.
+ 4. If an output data byte of C0 - FF is required, it is written as 'C1h,data'
+    where the C1h indicates a count of 1.

