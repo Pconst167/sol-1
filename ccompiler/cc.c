@@ -4202,14 +4202,14 @@ t_type parse_post_decrementing(t_type expr_in, char *temp_name){
     emitln("", "  mov a, b");
     emitln("", "  dec b");
     emitln("", "  dec b");
-    emit_var_addr_into_d(temp_name);
+    //emit_var_addr_into_d(temp_name);
     emitln("", "  mov [d], b");
     emitln("", "  mov b, a");
   }
   else if(size == 4){
     emitln("", "  mov a, b");
     emitln("", "  sub b, 4");
-    emit_var_addr_into_d(temp_name);
+    //emit_var_addr_into_d(temp_name);
     emitln("", "  mov [d], b");
     emitln("", "  mov b, a");
   }
@@ -4222,7 +4222,7 @@ t_type parse_post_decrementing(t_type expr_in, char *temp_name){
         emitln("", "  sub32 ga, cb");
         emitln("", "  mov c, g");
         emitln("", "  mov b, a");
-        emit_var_addr_into_d(temp_name);
+        //emit_var_addr_into_d(temp_name);
         emitln("", "  mov b, c");
         emitln("", "  mov [d+2], b");
         emitln("", "  mov [d], b");
@@ -4232,7 +4232,7 @@ t_type parse_post_decrementing(t_type expr_in, char *temp_name){
       else{
         emitln("", "  mov a, b");
         emitln("", "  dec b");
-        emit_var_addr_into_d(temp_name);
+        //emit_var_addr_into_d(temp_name);
         emitln("", "  mov [d], b");
         emitln("", "  mov b, a");
       }
@@ -4240,14 +4240,14 @@ t_type parse_post_decrementing(t_type expr_in, char *temp_name){
     else if(expr_in.primitive_type == DT_CHAR){
       if(expr_in.ind_level > 0){
         emitln("", "  dec b");
-        emit_var_addr_into_d(temp_name);
+        //emit_var_addr_into_d(temp_name);
         emitln("", "  mov [d], b");
         emitln("", "  inc b");
 
       }
       else{
         emitln("", "  dec b");
-        emit_var_addr_into_d(temp_name);
+        //emit_var_addr_into_d(temp_name);
         emitln("", "  mov [d], bl");
         emitln("", "  inc b");
       }
@@ -4257,7 +4257,7 @@ t_type parse_post_decrementing(t_type expr_in, char *temp_name){
     emitln("", "  mov a, b");
     emitln("", "  dec b");
     emitln("", "  dec b");
-    emit_var_addr_into_d(temp_name);
+    //emit_var_addr_into_d(temp_name);
     emitln("", "  mov [d], b");
     emitln("", "  mov b, a");
   }
@@ -4276,14 +4276,14 @@ t_type parse_post_incrementing(t_type expr_in, char *temp_name){
     emitln("", "  mov a, b");
     emitln("", "  inc b");
     emitln("", "  inc b");
-    emit_var_addr_into_d(temp_name);
+    //emit_var_addr_into_d(temp_name);
     emitln("", "  mov [d], b");
     emitln("", "  mov b, a");
   }
   else if(size == 4){
     emitln("", "  mov a, b");
     emitln("", "  add b, 4");
-    emit_var_addr_into_d(temp_name);
+    //emit_var_addr_into_d(temp_name);
     emitln("", "  mov [d], b");
     emitln("", "  mov b, a");
   }
@@ -4294,7 +4294,7 @@ t_type parse_post_incrementing(t_type expr_in, char *temp_name){
         emitln("", "  add32 cb, ga");
         emitln("", "  mov a, b");
         emitln("", "  mov g, c");
-        emit_var_addr_into_d(temp_name);
+        //emit_var_addr_into_d(temp_name);
         emitln("", "  mov [d], b");
         emitln("", "  mov b, c");
         emitln("", "  mov [d+2], b");
@@ -4306,7 +4306,7 @@ t_type parse_post_incrementing(t_type expr_in, char *temp_name){
       else{
         emitln("", "  mov a, b");
         emitln("", "  inc b");
-        emit_var_addr_into_d(temp_name);
+        //emit_var_addr_into_d(temp_name);
         emitln("", "  mov [d], b");
         emitln("", "  mov b, a");
       }
@@ -4314,14 +4314,14 @@ t_type parse_post_incrementing(t_type expr_in, char *temp_name){
     else if(expr_in.primitive_type == DT_CHAR){
       if(expr_in.ind_level > 0){
         emitln("", "  inc b");
-        emit_var_addr_into_d(temp_name);
+        //emit_var_addr_into_d(temp_name);
         emitln("", "  mov [d], b");
         emitln("", "  dec b");
 
       }
       else{
         emitln("", "  inc b");
-        emit_var_addr_into_d(temp_name);
+        //emit_var_addr_into_d(temp_name);
         emitln("", "  mov [d], bl");
         emitln("", "  dec b");
       }
@@ -4331,7 +4331,7 @@ t_type parse_post_incrementing(t_type expr_in, char *temp_name){
     emitln("", "  mov a, b");
     emitln("", "  inc b");
     emitln("", "  inc b");
-    emit_var_addr_into_d(temp_name);
+    //emit_var_addr_into_d(temp_name);
     emitln("", "  mov [d], b");
     emitln("", "  mov b, a");
   }
