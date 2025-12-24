@@ -5,6 +5,8 @@
 #include <stdlib.h>
 
 /*
+  NOTE: NUM_FREE_BLOCKS is 65528 instead of 65536, because the variable that holds that value is 2bytes, and cannot hold the number 65536,
+  hence the number of blocks was shortened to 65528 so it fits in.  this is better than increasing the size of the "Number of Blocks" parameter to 3 bytes.
   ------------------------------------------------------------------------------------------------------------------;
   DISK LAYOUT:
   Metadata               | Size (bytes)      | Blocks (2048 bytes)              |Start Block |  Comment
@@ -46,8 +48,8 @@
   | free_blocks_count   | Number of free blocks                     | 2                    | 16-bit unsigned int             |
   | block_bitmap        | Block ID of the **block bitmap**          | 2                    | 16-bit unsigned int
   | inode_bitmap        | Block ID of the **inode bitmap**          | 2                    | 16-bit unsigned int
-  | inode_table         | Starting block of **inode table**         | 2                    | 16-bit unsigned int
-  | first_data_block    | Block number of the first data block      | 2                    | 16-bit unsigned int             |
+  | inode_table         | Block ID of **inode table**               | 2                    | 16-bit unsigned int
+  | first_data_block    | Block ID of the data blocks area          | 2                    | 16-bit unsigned int             |
   | used_dirs_count     | Number of inodes allocated to directories | 2
   | log_block_size      | Block size = 1024 << `s_log_block_size    | 2                    | 16-bit unsigned int             |
   | mtime               | Last mount time                           | 4                    | 32-bit unsigned int (Unix time) |
@@ -84,6 +86,10 @@
   uint16_t inode;      // Inode number (0 if entry is unused)
   char     name[62];   // File name (null terminated)
 
+
+  NOTE:
+
+  START BY LOADING BOOTLOADER, THEN INSIDE LOADER, READ FS INFO LIKE SUPERBLOCK ETC.
 */
 
 #define MAX_ID_LEN                    512
@@ -112,7 +118,7 @@
 #define SUPERBLOCK_START              1024 // starts at block 0, position 1024
 #define SUPERBLOCK_SIZE               1024  // 1024 bytes long
 #define BLOCK_GROUP_DESCRIPTOR_START (1 * 2048) // starts a block 1
-#define BLOCK_GROUP_DESCRIPTOR_SIZE  32          // 32 bytes long
+#define BLOCK_GROUP_DESCRIPTOR_SIZE  2048          // should be 32 bytes long, but taking whole block for now
 #define BLOCKS_BITMAP_START          (2 * 2048) // starts at block 2
 #define BLOCKS_BITMAP_SIZE           (4 * 2048)  // 4 blocks long
 #define INODE_BITMAP_START           (6 * 2048) // starts at block 6
@@ -123,7 +129,7 @@
 #define DATA_BLOCKS_START            (1031 * 2048) // start of disk data blocks
 #define DATA_BLOCKS_SIZE             (65536 * 2048)
 #define TOTAL_DISK_SIZE              (BOOTLOADER_SIZE + MBR_SIZE + SIGNATURE_SIZE + 512\
-                                    + SUPERBLOCK_SIZE + BLOCK_GROUP_DESCRIPTOR_SIZE + 2016\
+                                    + SUPERBLOCK_SIZE + BLOCK_GROUP_DESCRIPTOR_SIZE\
                                     + BLOCKS_BITMAP_SIZE + INODE_BITMAP_SIZE\
                                     + INODE_TABLE_SIZE\
                                     + DATA_BLOCKS_SIZE)
@@ -318,7 +324,6 @@ int main(int argc, char **argv){
     strcpy(superblock.volume_name, "Sol-1 Volume"); // Label of the filesystem               
     superblock.feature_flags     = 0; // Compatibility flags                  
     *(struct superblock *)(superblock_p) = superblock;
-
     
     // BLOCK BITMAP
     // start block: 2
@@ -373,20 +378,20 @@ int main(int argc, char **argv){
     // allocate inode bitmap and set inode table entry for root
     create_inode(root_inode); // this will allocate inode #2 for root
     // ADD . AND .. ENTRIES TO ROOT DIRECTORY
-    init_directory(root_inode.block[0], 2, 2);
-    printf("> root directory created: %d\n", 2);
+    init_directory(root_inode.block[0], ROOT_INODE, ROOT_INODE);
+    printf("> root directory created: %d\n", ROOT_INODE);
 
     // create /usr directory
-    uint16_t usr_inode  = create_directory("usr",   2); // create /usr directory
-    uint16_t tmp_inode  = create_directory("tmp",   2); // create /usr directory
-    uint16_t etc_inode  = create_directory("etc",   2); // create /usr directory
-    uint16_t bin_inode  = create_directory("bin",   2); // create /usr directory
-    uint16_t sbin_inode = create_directory("sbin",  2); // create /usr directory
-    uint16_t boot_inode = create_directory("boot",  2); // create /usr directory
-    uint16_t asm_inode  = create_directory("asm",   2); // create /usr directory
-    uint16_t cc_inode   = create_directory("cc",    2); // create /usr directory
-    uint16_t home_inode = create_directory("home",  2); // create /usr directory
-    uint16_t src_inode  = create_directory("src",   2); // create /usr directory
+    uint16_t usr_inode  = create_directory("usr",   ROOT_INODE); // create /usr directory
+    uint16_t tmp_inode  = create_directory("tmp",   ROOT_INODE); // create /usr directory
+    uint16_t etc_inode  = create_directory("etc",   ROOT_INODE); // create /usr directory
+    uint16_t bin_inode  = create_directory("bin",   ROOT_INODE); // create /usr directory
+    uint16_t sbin_inode = create_directory("sbin",  ROOT_INODE); // create /usr directory
+    uint16_t boot_inode = create_directory("boot",  ROOT_INODE); // create /usr directory
+    uint16_t asm_inode  = create_directory("asm",   ROOT_INODE); // create /usr directory
+    uint16_t cc_inode   = create_directory("cc",    ROOT_INODE); // create /usr directory
+    uint16_t home_inode = create_directory("home",  ROOT_INODE); // create /usr directory
+    uint16_t src_inode  = create_directory("src",   ROOT_INODE); // create /usr directory
 
     uint16_t usr_bin_inode   = create_directory("bin", usr_inode);
     uint16_t usr_sbin_inode  = create_directory("sbin",  usr_inode);
@@ -750,7 +755,7 @@ void init_directory(uint16_t block_index, uint16_t self_inode, uint16_t parent_d
   strcpy(dot->name, ".");
 
   // Entry 2: ".."
-  struct directory_entry *dotdot = (struct directory_entry *)(block_p + DIR_ENTRY_LEN);
+  struct directory_entry *dotdot = (struct directory_entry *)block_p + 1; // jump to next dir entry
   dotdot->inode = parent_dir_inode;
   strcpy(dotdot->name, "..");
 }
