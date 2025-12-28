@@ -185,8 +185,8 @@ uint16_t inode_bitmap_alloc();
 uint16_t block_bitmap_alloc();
 uint16_t create_inode(struct inode_table_entry inode_entry);
 void init_directory(uint16_t block_index, uint16_t self_inode, uint16_t parent_inode);
-uint16_t create_directory(char *name, uint16_t parent_dir_inode);
-uint16_t create_file(char *name, char * filename, uint16_t parent_dir_inode);
+uint16_t create_directory(char *name, uint16_t parent_inode);
+uint16_t create_file(char *name, char * filename, uint16_t parent_inode);
 void print_directory(uint16_t dir_inode);
 void navigate(void);
 char *name_from_inode(char *name, uint16_t inode, uint16_t parent_inode);
@@ -263,6 +263,7 @@ int main(int argc, char **argv){
   struct superblock superblock;
   struct inode_table_entry inode_table_entry;
   struct inode_table_entry root_inode;
+  uint16_t kernel_inode;
   
   fs_state.curr_inode = 2; // #2 is root
   strcpy(fs_state.directory_str, "/"); // clear directory name
@@ -419,7 +420,8 @@ int main(int argc, char **argv){
     create_file("shell", "../software/obj/shell.obj", usr_sbin_inode);
 
     create_file("boot", "../software/obj/boot.obj", boot_inode);
-    create_file("kernel1.0", "../software/obj/kernel.obj", boot_inode);
+    kernel_inode = create_file("kernel1.0", "../software/obj/kernel.obj", boot_inode);
+    *(uint16_t *)(disk + 510) = kernel_inode; // write inode number of the kernel to last word of bootloader
 
     create_file("shell.cfg", "../solarium/etc/shell.cfg", etc_inode);
     create_file(".shellrc", "../solarium/etc/.shellrc", etc_inode);
@@ -661,7 +663,7 @@ void print_inode_table(){
   for(int i = 0; i < NUM_INODES / 8; i++){
     inode_byte = *(inode_bitmap_p + i); // read byte
     for(int j = 0; j < 8; j++){ 
-      if((inode_byte & (0x01 << j))){
+      if(inode_byte & (0x01 << j)){
         inode_entry_p = inode_table_p + i * 8 + j;
         printf("inode: %d, num blocks: %d( ", i * 8 + j, inode_entry_p->blocks);
         for(int i = 0; i < inode_entry_p->blocks; i++){
@@ -674,15 +676,6 @@ void print_inode_table(){
   }
 
   printf("\ndisk used: %d bytes\n", total_num_bytes_used);
-//  printf("\n\n*** inode table bit layout ***\n");
-//  // run through inode bitmap bytes 0 to 2047 (NUM_INODES / 8) == (16384 / 8) == 2048
-//  for(int i = 0; i < NUM_INODES / 8; i++){
-//    inode_byte = *(inode_bitmap_p + i); // read byte
-//    for(int j = 0; j < 8; j++){ 
-//      printf("%1d", (inode_byte & (0x01 << j)) == 0 ? 0 : 1);
-//    }
-//  }
-
 }
 
 void print_bitmap_table(){
@@ -704,7 +697,7 @@ uint16_t inode_bitmap_alloc(){
     for(int j = 0; j < 8; j++){ 
       if((inode_byte & (0x01 << j)) == 0){
         *(inode_bitmap_p + i) = *(inode_bitmap_p + i) | (0x01 << j); // set inode as used
-        return i * 8 + j; // check each bit inside the byte
+        return i * 8 + j; 
       }
     }
   }
@@ -722,7 +715,7 @@ uint16_t block_bitmap_alloc(){
       if((block_byte & (0x01 << j)) == 0){
         *(blocks_bitmap_p + i) = *(blocks_bitmap_p + i) | (0x01 << j); // set block as used
         superblock_free_blocks_dec();
-        memset(data_blocks_p + (i * 8 + j), 0, BLOCK_SIZE); // fill the data b,ock with 0's
+        memset(data_blocks_p + (i * 8 + j), 0, BLOCK_SIZE); // fill the data block with 0's
         return i * 8 + j; // return block number
       }
     }
@@ -743,8 +736,8 @@ uint16_t create_inode(struct inode_table_entry inode_entry){
   return -1;
 }
 
-  // ADD . AND .. ENTRIES TO DATA BLOCK
-void init_directory(uint16_t block_index, uint16_t self_inode, uint16_t parent_dir_inode){
+// ADD . AND .. ENTRIES TO DATA BLOCK
+void init_directory(uint16_t block_index, uint16_t self_inode, uint16_t parent_inode){
   uint8_t *block_p = (uint8_t *)(data_blocks_p + block_index);
 
   memset(block_p, 0, BLOCK_SIZE);
@@ -756,7 +749,7 @@ void init_directory(uint16_t block_index, uint16_t self_inode, uint16_t parent_d
 
   // Entry 2: ".."
   struct directory_entry *dotdot = (struct directory_entry *)block_p + 1; // jump to next dir entry
-  dotdot->inode = parent_dir_inode;
+  dotdot->inode = parent_inode;
   strcpy(dotdot->name, "..");
 }
 
@@ -766,7 +759,7 @@ void init_directory(uint16_t block_index, uint16_t self_inode, uint16_t parent_d
 // add new directory entry to parent directory
 //   search through block pointer list in parent inode
 //   for each block, search for space to add new entry
-uint16_t create_directory(char *name, uint16_t parent_dir_inode){
+uint16_t create_directory(char *name, uint16_t parent_inode){
   struct inode_table_entry new_inode;
   uint16_t inode_num;
   uint16_t block_num;
@@ -782,21 +775,21 @@ uint16_t create_directory(char *name, uint16_t parent_dir_inode){
   new_inode.gid         = 0;
   new_inode.size        = 2048;     // one block for the directory
   new_inode.atime       = new_inode.ctime = new_inode.mtime = time(NULL);
-  new_inode.links_count = 1;        // "."
+  new_inode.links_count = 1;        // "."  TODO: should it be 2 links since the parent directory also contains a link to this directory?
   new_inode.blocks      = 1; 
   new_inode.block[0]    = block_num; // set index of block #0 to new found block
   inode_num = create_inode(new_inode); // create and insert new inode into inode table
-  init_directory(block_num, inode_num, parent_dir_inode); // initialize new block as an empty directory
+  init_directory(block_num, inode_num, parent_inode); // initialize new block as an empty directory
 
   struct superblock *sp = (struct superblock *)superblock_p;
   sp->used_dirs_count++;
 
   // inode(2) | name(62) |   total size = 64
-  // add new entry to parent directory based on parent_dir_inode
+  // add new entry to parent directory based on parent_inode
   for(int i = 0; i < NUM_INODE_BLOCK_POINTERS; i++){ // loop through each of the direct pointer blocks
-    parent_block_num = (inode_table_p + parent_dir_inode)->block[i];
+    parent_block_num = (inode_table_p + parent_inode)->block[i];
     if(parent_block_num == 0){ // if the block we are working with does not actually exist, then allocate it
-      (inode_table_p + parent_dir_inode)->block[i] = parent_block_num = block_bitmap_alloc();
+      (inode_table_p + parent_inode)->block[i] = parent_block_num = block_bitmap_alloc();
       printf("> block pointer %d empty. allocating new data block: %d\n", i, parent_block_num);
     }
     // pointer to the directory block
@@ -814,7 +807,7 @@ uint16_t create_directory(char *name, uint16_t parent_dir_inode){
   }
 }
 
-uint16_t create_file(char *name, char * filename, uint16_t parent_dir_inode){
+uint16_t create_file(char *name, char * filename, uint16_t parent_inode){
   struct inode_table_entry new_inode;
   struct directory_entry *curr_entry;
   uint16_t inode_num;
@@ -849,18 +842,18 @@ uint16_t create_file(char *name, char * filename, uint16_t parent_dir_inode){
   superblock_free_inodes_dec(); // decrease total number of free inodes in superblock
 
   // now copy the file contents into the data blocks
-  for(int i = 0; i < num_blocks_needed; i++){ // allocate data blocks for file
+  for(int i = 0; i < num_blocks_needed; i++){ 
     data_block_p = (uint8_t *)(data_blocks_p + new_inode.block[i]);
     memcpy((void *)(data_block_p + i), (void *)(&file_image[i * BLOCK_SIZE]), BLOCK_SIZE);
   }
 
   // now add an entry for this file into the parent directory
   // inode(2) | name(62) |   total size = 64
-  printf("  new inode for file: %d. now adding file entry into directory with inode: %d\n", inode_num, parent_dir_inode);
+  printf("  new inode for file: %d. now adding file entry into directory with inode: %d\n", inode_num, parent_inode);
   for(int i = 0; i < NUM_INODE_BLOCK_POINTERS; i++){ // loop through each of the direct pointer blocks
-    parent_block_num = (inode_table_p + parent_dir_inode)->block[i];
+    parent_block_num = (inode_table_p + parent_inode)->block[i];
     if(parent_block_num == 0){ // if the block we are working with does not actually exist, then allocate it
-      (inode_table_p + parent_dir_inode)->block[i] = parent_block_num = block_bitmap_alloc();
+      (inode_table_p + parent_inode)->block[i] = parent_block_num = block_bitmap_alloc();
       printf("  block pointer %d empty. allocating new data block: %d\n", i, parent_block_num);
     }
     // pointer to the directory block
@@ -877,14 +870,14 @@ uint16_t create_file(char *name, char * filename, uint16_t parent_dir_inode){
   }
 }
 
-char *name_from_inode(char *name, uint16_t inode, uint16_t parent_dir_inode){
+char *name_from_inode(char *name, uint16_t inode, uint16_t parent_inode){
   uint8_t *curr_data_block_p;
   uint16_t curr_block_num;
   struct directory_entry *curr_entry;
 
   // inode(2) | name(62) |   total size = 64
   for(int i = 0; i < NUM_INODE_BLOCK_POINTERS; i++){ // loop through each of the direct pointer blocks
-    curr_block_num = (inode_table_p + parent_dir_inode)->block[i];
+    curr_block_num = (inode_table_p + parent_inode)->block[i];
     if(curr_block_num == 0) continue; // if block not allocated, skip it
     // pointer to the directory block
     curr_data_block_p = (uint8_t *)(data_blocks_p + curr_block_num); 

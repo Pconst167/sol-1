@@ -2,7 +2,6 @@
 #include <WiFiClient.h>
 #include <ESP8266WebServer.h>
 #include <ESP8266HTTPClient.h>
-#include <LittleFS.h>
 
 // WiFi credentials (insert your SSID and password)
 const char* ssid = "";
@@ -11,7 +10,7 @@ const char* password = "";
 uint16_t baud = 38400;  // Change if needed
 
 // Telnet settings
-const int MAX_CLIENTS = 1;
+const int MAX_CLIENTS = 5;
 WiFiServer server(51515);
 WiFiClient serverClients[MAX_CLIENTS];
 
