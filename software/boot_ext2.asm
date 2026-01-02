@@ -22,17 +22,6 @@ _ide_r5          .equ _ide_base + 5    ; sector address lba 2 [16:23]
 _ide_r6          .equ _ide_base + 6    ; sector address lba 3 [24:27 (lsb)]
 _ide_r7          .equ _ide_base + 7    ; read: status, write: command
 
-boot_start:
-  mov d, s_read_super
-  call _puts
-
-; read Superblock
-  mov b, 2
-  mov c, 0                    ; LBA = 2 = byte 1024
-  mov d, ide_buffer           ; we read into the bios ide buffer
-  mov a, $0202                ; disk read, 2 sectors. Superblock
-  syscall bios_ide            ; read sector
-
 ;  SUPERBLOCK:
 ;  | Field               | Description                               | Typical Size (bytes) | Notes                           |
 ;  | ------------------- | ----------------------------------------- | -------------------- | ------------------------------- |
@@ -51,6 +40,17 @@ boot_start:
 ;  | uuid                | Unique ID of the filesystem               | 16                   | 128-bit UUID                    |
 ;  | volume_name         | Label of the filesystem                   | 16                   | Usually ASCII, padded           |
 ;  | feature_flags       | Compatibility flags                       | 4                    | 32-bit unsigned int             |
+boot_start:
+  mov d, s_read_super
+  call _puts
+
+; read Superblock
+  mov b, 2
+  mov c, 0                    ; LBA = 2 = byte 1024
+  mov d, ide_buffer           ; we read into the bios ide buffer
+  mov a, $0202                ; disk read, 2 sectors. Superblock
+  syscall bios_ide            ; read sector
+
 ; print Superblock information
   mov d, s_total_inodes
   call _puts
@@ -116,7 +116,6 @@ boot_start:
   call _puts
   mov d, ide_buffer + 44
   call _puts
-
 
 loop1:
   jmp loop1
