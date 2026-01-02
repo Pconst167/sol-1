@@ -11,7 +11,7 @@
   DISK LAYOUT:
   Metadata               | Size (bytes)      | Blocks (2048 bytes)              |Start Block |  Comment
   ---------------------- | ----------------- | -------------------------------- |------------|-----------------------------------
-  Bootloader/MBR         | 512 bytes         | 0.25 (1 sector)                  |  0         |
+  Bootloader/MBR         | 1024 bytes        | 0.5 (2 sectors)                  |  0         |
   Superblock             | 1024 bytes        | 1 block (2048 bytes, must align) |  0         |
                          |                   | 1 block (2048 bytes)             |  1         | reserved
   Block Bitmap           | 8,192 bytes       | 4 blocks                         |  2         | 4*2048*8 = 4*16384 = 65536 raw data blocks.  65536*2048 bytes = 134217728 bytes of disk space = 128MB
@@ -19,7 +19,7 @@
   Inode Table            | 2,097,152 bytes   | 1024 blocks                      |  7         | 128bytes per inode entry. 2097152 / 128 = 16384 inodes
   Data Blocks            | 134,217,728 bytes | 65528 blocks                     | 1031       | 65528 blocks = 134,201,344 bytes
   
-  first 512 bytes: bootloader from 0 to 445, MBR partition table from 446 to 511 (64 bytes)
+  first 960 bytes: bootloader from 0 to 959, MBR partition table from 960 to 1023 (64 bytes)
   up to 4 partitions, each 16 bytes long
   MBR:
   Byte | Description
@@ -110,11 +110,9 @@
 #define NUM_DIR_ENTRIES               (BLOCK_SIZE / DIR_ENTRY_LEN)
 
 #define BOOTLOADER_START              0
-#define BOOTLOADER_SIZE               446  
-#define MBR_START                     446
+#define BOOTLOADER_SIZE               960  
+#define MBR_START                     960
 #define MBR_SIZE                      64
-#define SIGNATURE_START               510
-#define SIGNATURE_SIZE                2 
 #define SUPERBLOCK_START              1024 // starts at block 0, position 1024
 #define SUPERBLOCK_SIZE               1024  // 1024 bytes long
 #define BLOCK_GROUP_DESCRIPTOR_START (1 * 2048) // starts a block 1
@@ -128,7 +126,7 @@
 #define INODE_TABLE_SIZE             (1024 * 2048)      // 1024 blocks long
 #define DATA_BLOCKS_START            (1031 * 2048) // start of disk data blocks
 #define DATA_BLOCKS_SIZE             (65536 * 2048)
-#define TOTAL_DISK_SIZE              (BOOTLOADER_SIZE + MBR_SIZE + SIGNATURE_SIZE + 512\
+#define TOTAL_DISK_SIZE              (BOOTLOADER_SIZE + MBR_SIZE\
                                     + SUPERBLOCK_SIZE + BLOCK_GROUP_DESCRIPTOR_SIZE\
                                     + BLOCKS_BITMAP_SIZE + INODE_BITMAP_SIZE\
                                     + INODE_TABLE_SIZE\
@@ -249,7 +247,6 @@ typedef uint8_t datablock_t[BLOCK_SIZE]; // type for data blocks
 
 unsigned char *p = disk;
 unsigned char *mbr_p = disk + MBR_START;
-unsigned char *signature_p = disk + SIGNATURE_START;
 unsigned char *superblock_p = disk + SUPERBLOCK_START;
 datablock_t *data_blocks_p = (datablock_t *)(disk + DATA_BLOCKS_START);
 struct inode_table_entry *inode_table_p = (struct inode_table_entry *)(disk + INODE_TABLE_START);
@@ -292,7 +289,7 @@ int main(int argc, char **argv){
     // generate disk image
   if(!strcmp(argv[1], "-w")){
     // LOAD BOOTLOADER AND WRITE TO BOOT SECTOR
-    if(loadfile_bootloader("../software/obj/boot.obj", disk) == -1){
+    if(loadfile_bootloader("../software/obj/boot_ext2.obj", disk) == -1){
       printf("> exiting...\n");
       return 0;
     };
@@ -301,9 +298,6 @@ int main(int argc, char **argv){
     for(int i = 0; i < sizeof(mbr_data); i++){
       *(mbr_p + i) = mbr_data[i];
     }
-
-    // SET BOOTLOADER SIGNATURE
-    *(uint16_t *)(signature_p) = 0x55AA;
 
     // SUPERBLOCK
     // start block: 0
@@ -421,7 +415,7 @@ int main(int argc, char **argv){
 
     create_file("boot", "../software/obj/boot.obj", boot_inode);
     kernel_inode = create_file("kernel1.0", "../software/obj/kernel.obj", boot_inode);
-    *(uint16_t *)(disk + 510) = kernel_inode; // write inode number of the kernel to last word of bootloader
+    *(uint16_t *)(disk + 1022) = kernel_inode; // write inode number of the kernel to last word of bootloader
 
     create_file("shell.cfg", "../solarium/etc/shell.cfg", etc_inode);
     create_file(".shellrc", "../solarium/etc/.shellrc", etc_inode);
@@ -452,7 +446,7 @@ size_t loadfile_bootloader(const char *filename, uint8_t *dest) {
       printf("> error: file '%s' not found.\n", filename);
       exit(1);
   }
-  size_t size = fread(dest, 1, 446, fp); // only read up to bootloader size
+  size_t size = fread(dest, 1, 960, fp); // only read up to bootloader size
   fclose(fp);
   return size;
 }

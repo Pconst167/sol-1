@@ -64,7 +64,7 @@ _global_base     .equ $8000       		 ; base of global variable block
 
 boot_origin:     .equ _global_base + 2 + 2
 
-ide_buffer:      .equ _global_base + 2 + 2 + 512
+ide_buffer:      .equ _global_base + 2 + 2 + 1024
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; global system variables
@@ -125,6 +125,10 @@ bios_ide   .equ 3
 .export boot_origin
 .export bios_uart
 .export bios_ide
+.export _puts
+.export print_u16d
+.export printnl
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; external interrupts' code block
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -410,50 +414,6 @@ ide_wait:
   jnz ide_wait
   ret
 
-; ************************************************************
-; get hex file
-; di = destination address
-; return length in bytes in c
-; ************************************************************
-_load_hex:
-  push bp
-  mov bp, sp
-  push a
-  push b
-  push d
-  push si
-  push di
-  sub sp, $6000        ; string data block
-  mov c, 0
-  
-  mov a, sp
-  inc a
-  mov d, a        ; start of string data block
-  call _getse        ; get program string
-  mov si, a
-
-__load_hex_loop:
-  lodsb          ; load from [SI] to AL
-  cmp al, 0        ; check if ASCII 0
-  jz __load_hex_ret
-  mov bh, al
-  lodsb
-  mov bl, al
-  call _atoi        ; convert ASCII byte in B to int (to AL)
-  stosb          ; store AL to [DI]
-  inc c
-  jmp __load_hex_loop
-__load_hex_ret:
-  add sp, $6000
-  pop di
-  pop si
-  pop d
-  pop b
-  pop a
-  mov sp, bp
-  pop bp
-  ret
-  
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; bios entry point
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -479,7 +439,7 @@ bios_reset_vector:
   mov c, 0
   mov b, 0          ; start at disk sector 0
   mov d, boot_origin    ; we read into the bios ide buffer
-  mov a, $0102        ; disk read, 1 sector
+  mov a, $0202        ; disk read, 2 sectors
   syscall bios_ide      ; read sector  
   
   mov d, s_boot2
@@ -745,20 +705,6 @@ _getse_end:
   ret
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-; PRINT NEW LINE
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-put_nl:
-  pushf
-  push a
-  mov a, $0A01
-  syscall bios_uart
-  mov a, $0D01
-  syscall bios_uart
-  pop a
-  popf
-  ret
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; CONVERT ASCII 'O'..'F' TO INTEGER 0..15
 ; ASCII in BL
 ; result in AL
@@ -891,32 +837,43 @@ _to_upper_ret:
 print_decimal:
   ret
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-; GET HEX FILE
-; di = destination address
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-load_hex:
-  enter $6000
-  
-  mov a, $9000          ; destination
-  mov di, a  
-            ; string data block
-  lea d, [bp + -24575]      ; start of string data block
-  call _getse          ; get program string
-  mov a, d
-  mov si, a
-load_hex_loop:
-  lodsb          ; load from [SI] to AL
-  cmp al, 0        ; check if ASCII 0
-  jz load_hex_ret
-  mov bh, al
-  lodsb
-  mov bl, al
-  call _atoi        ; convert ASCII byte in B to int (to AL)
-  stosb          ; store AL to [DI]
-  jmp load_hex_loop
-load_hex_ret:
-  leave
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; print 16bit decimal number
+; input number in a
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+print_u16d:
+  push a
+  push b
+  push g
+  mov b, 10000
+  div a, b      ; get 10000's coeff.
+  call print_number
+  mov a, b
+  mov b, 1000
+  div a, b      ; get 1000's coeff.
+  call print_number
+  mov a, b
+  mov b, 100
+  div a, b
+  call print_number
+  mov a, b
+  mov b, 10
+  div a, b
+  call print_number
+  mov al, bl      ; 1's coeff in bl
+  call print_number
+  pop g
+  pop b
+  pop a
+  ret
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; print al
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+print_number:
+  add al, $30
+  mov ah, al
+  call _putchar
   ret
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -937,6 +894,16 @@ _hex_to_int_L1:
   jmp _hex_to_int_L1
 _hex_to_int_ret:
   ret  
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; print new line
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+printnl:
+  push al
+  mov ah, $0A
+  call _putchar
+  pop al
+  ret
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; data block
