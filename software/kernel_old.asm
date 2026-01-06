@@ -78,7 +78,7 @@ _timer_ctrl       .equ $ffe3         ; timer control register
 _stack_begin      .equ $f7ff         ; beginning of stack
 _fifo_size        .equ 4096
 
-_mbr                     .equ 446
+_mbr                     .equ 960
 _superblock              .equ 1024
 _block_group_descriptor  .equ 2048
 

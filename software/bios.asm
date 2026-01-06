@@ -125,9 +125,9 @@ bios_ide   .equ 3
 .export boot_origin
 .export bios_uart
 .export bios_ide
-.export _puts
-.export print_u16d
-.export printnl
+.export __puts
+.export __print_u16d
+.export xput_u8
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; external interrupts' code block
@@ -159,7 +159,7 @@ int_7:
 trap_privilege:
   push d
   mov d, s_priv1
-  call _puts
+  call __puts
   pop d
               ; enable interrupts
   sysret
@@ -173,7 +173,7 @@ trap_breakpoint:
   pushf
   
   mov d, s_bkpt
-  call _puts
+  call __puts
   
   popf
   pop d
@@ -190,7 +190,7 @@ trap_div_zero:
   pushf
   
   mov d, s_divzero
-  call _puts
+  call __puts
   
   popf
   pop d
@@ -429,12 +429,12 @@ bios_reset_vector:
   syscall bios_uart
   
   mov d, s_welcome
-  call _puts          ; print welcome msg
+  call __puts          ; print welcome msg
 
   call bios_peripherals_setup
   
   mov d, s_boot1
-  call _puts
+  call __puts
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;  
   mov c, 0
   mov b, 0          ; start at disk sector 0
@@ -443,7 +443,7 @@ bios_reset_vector:
   syscall bios_ide      ; read sector  
   
   mov d, s_boot2
-  call _puts
+  call __puts
 
   jmp boot_origin
 
@@ -451,15 +451,15 @@ bios_reset_vector:
 
 bios_peripherals_setup:
   mov d, s_init
-  call _puts
+  call __puts
   
   mov d, s_bios3
-  call _puts
+  call __puts
   mov al, 0            ; reset ide
   syscall bios_ide  
   
   mov d, s_bios4
-  call _puts
+  call __puts
   
   mov al, %00110000          ; counter 0, load both bytes, mode 0, binary
   mov [_timer_ctrl], al
@@ -468,7 +468,7 @@ bios_peripherals_setup:
   mov [_timer_c_0], al        ; load counter 0 high byte
   
   mov d, s_bios5
-  call _puts
+  call __puts
   mov al, $80
   mov [_bios_post_ctrl], al      ; set pio_a to output mode
   mov al, 0
@@ -563,23 +563,23 @@ xput_u8:
 ; print null terminated string
 ; pointer in d
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-_puts:
+__puts:
   push a
   push d
   pushf
-_puts_l1:
+__puts_l1:
   mov al, [d]
   cmp al, 0
-  jz _puts_end
-_puts_l2:
+  jz __puts_end
+__puts_l2:
   mov al, [_uart0_lsr]      ; read line status register
   test al, $20          ; isolate transmitter empty
-  jz _puts_l2    
+  jz __puts_l2    
   mov al, [d]
   mov [_uart0_data], al      ; write char to transmitter holding register
   inc d  
-  jmp _puts_l1
-_puts_end:
+  jmp __puts_l1
+__puts_end:
   popf
   pop d
   pop a
@@ -841,7 +841,7 @@ print_decimal:
 ; print 16bit decimal number
 ; input number in a
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-print_u16d:
+__print_u16d:
   push a
   push b
   push g
@@ -894,16 +894,6 @@ _hex_to_int_L1:
   jmp _hex_to_int_L1
 _hex_to_int_ret:
   ret  
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-; print new line
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-printnl:
-  push al
-  mov ah, $0A
-  call _putchar
-  pop al
-  ret
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; data block

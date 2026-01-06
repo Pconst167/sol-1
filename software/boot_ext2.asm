@@ -22,6 +22,41 @@ _ide_r5          .equ _ide_base + 5    ; sector address lba 2 [16:23]
 _ide_r6          .equ _ide_base + 6    ; sector address lba 3 [24:27 (lsb)]
 _ide_r7          .equ _ide_base + 7    ; read: status, write: command
 
+INODE_TABLE_START .equ 2048 * 7
+INODE_TABLE_SECT_START .equ 28 ; inode table starts at sector 28
+
+;  ------------------------------------------------------------------------------------------------------------------;
+;  DISK LAYOUT:
+;  Metadata               | Size (bytes)      | Blocks (2048 bytes)              |Start Block |  Comment
+;  ---------------------- | ----------------- | -------------------------------- |------------|-----------------------------------
+;  Bootloader/MBR         | 1024 bytes        | 0.5 (2 sectors)                  |  0         |
+;  Superblock             | 1024 bytes        | 1 block (2048 bytes, must align) |  0         |
+;                         |                   | 1 block (2048 bytes)             |  1         | reserved
+;  Block Bitmap           | 8,192 bytes       | 4 blocks                         |  2         | 4*2048*8 = 4*16384 = 65536 raw data blocks.  65536*2048 bytes = 134217728 bytes of disk space = 128MB
+;  Inode Bitmap           | 2,048 bytes       | 1 block                          |  6         | 2048*8=16384. total of 16384 bits, meaning 16384 inodes, which is 1 inode per 8KB of disk space
+;  Inode Table            | 2,097,152 bytes   | 1024 blocks                      |  7         | 128bytes per inode entry. 2097152 / 128 = 16384 inodes
+;  Data Blocks            | 134,217,728 bytes | 65528 blocks                     | 1031       | 65528 blocks = 134,201,344 bytes
+;  
+;  first 960 bytes: bootloader from 0 to 959, MBR partition table from 960 to 1023 (64 bytes)
+;  up to 4 partitions, each 16 bytes long
+;  MBR:
+;  Byte | Description
+;  -----|----------------------------
+;  0    | Boot flag (0x80 active, 0x00 inactive)
+;  1-3  | Start CHS (head, sector, cylinder)
+;  4    | Partition type (filesystem ID)
+;    0x83 = Linux native (ext2/3/4)
+;    0x07 = NTFS/exFAT
+;    0x0B = FAT32 CHS
+;    0x0C = FAT32 LBA
+;    0x05 = Extended partition
+;    0x86 = Sol-1 partition
+;  5-7  | End CHS
+;  8-11 | Start LBA (little endian)
+;  12-15| Size in sectors (little endian)
+;  
+;  
+;  the superblock describers the filesystem as a whole such as inode count, free inode count, location of the raw data bitmap, inode table, etc.  
 ;  SUPERBLOCK:
 ;  | Field               | Description                               | Typical Size (bytes) | Notes                           |
 ;  | ------------------- | ----------------------------------------- | -------------------- | ------------------------------- |
@@ -40,9 +75,38 @@ _ide_r7          .equ _ide_base + 7    ; read: status, write: command
 ;  | uuid                | Unique ID of the filesystem               | 16                   | 128-bit UUID                    |
 ;  | volume_name         | Label of the filesystem                   | 16                   | Usually ASCII, padded           |
 ;  | feature_flags       | Compatibility flags                       | 4                    | 32-bit unsigned int             |
+;  
+;  inode for root dir is #2, #0 and #1 not used
+;  raw data block #0 is not used. because 0 as a block ID means not used
+;  block size: 2048
+;  inode-table format:
+;  | Field         | Size (bytes) | Description                                                                                  |
+;  | ------------- | ------------ | -------------------------------------------------------------------------------------------- |
+;  | `mode`        | 2            | File type and permissions                                                                    |
+;  | `uid`         | 2            | Owner user ID                                                                                |
+;  | `size`        | 4            | Size of the file in bytes                                                                    |
+;  | `atime`       | 4            | Last access time (timestamp)                                                                 |
+;  | `ctime`       | 4            | Creation time (timestamp)                                                                    |
+;  | `mtime`       | 4            | Last modification time (timestamp)                                                           |
+;  | `dtime`       | 4            | Deletion time (timestamp)                                                                    |
+;  | `gid`         | 2            | Group ID                                                                                     |
+;  | `links_count` | 2            | Number of hard links                                                                         |
+;  | `blocks`      | 2            | Number of 2048-byte blocks allocated                                                         |
+;  | `flags`       | 4            | File flags                                                                                   |
+;  | `block`       | 47 * 2 = 94  | Pointers to data blocks (47 direct only) 
+;
+;
+;  DIRECTORY ENTRY
+;  this is the structure for file entries inside a directory.
+;  2048 / 64 = 32 entries
+;
+;  each entry is 64 bytes wide
+;  uint16_t inode;      // Inode number (0 if entry is unused)
+;  char     name[62];   // File name (null terminated)
+
 boot_start:
   mov d, s_read_super
-  call _puts
+  call __puts
 
 ; read Superblock
   mov b, 2
@@ -53,81 +117,93 @@ boot_start:
 
 ; print Superblock information
   mov d, s_total_inodes
-  call _puts
+  call __puts
   mov d, ide_buffer
   mov a, [d]
-  call print_u16d
+  call __print_u16d
 
   mov d, s_total_blocks
-  call _puts
+  call __puts
   mov d, ide_buffer + 2
   mov a, [d]
-  call print_u16d
+  call __print_u16d
 
   mov d, s_free_inodes
-  call _puts
+  call __puts
   mov d, ide_buffer + 4
   mov a, [d]
-  call print_u16d
+  call __print_u16d
 
   mov d, s_free_blocks
-  call _puts
+  call __puts
   mov d, ide_buffer + 6
   mov a, [d]
-  call print_u16d
+  call __print_u16d
 
   mov d, s_block_bitmap
-  call _puts
+  call __puts
   mov d, ide_buffer + 8
   mov a, [d]
-  call print_u16d
+  call __print_u16d
 
   mov d, s_inode_bitmap
-  call _puts
+  call __puts
   mov d, ide_buffer + 10
   mov a, [d]
-  call print_u16d
+  call __print_u16d
 
   mov d, s_inode_table
-  call _puts
+  call __puts
   mov d, ide_buffer + 12
   mov a, [d]
-  call print_u16d
+  call __print_u16d
 
-;  mov d, s_first_data_block
-;  call _puts
-;  mov d, ide_buffer + 14
-;  mov a, [d]
-;  call print_u16d
+  mov d, s_first_data_block
+  call __puts
+  mov d, ide_buffer + 14
+  mov a, [d]
+  call __print_u16d
 
   mov d, s_used_dirs
-  call _puts
+  call __puts
   mov d, ide_buffer + 16
   mov a, [d]
-  call print_u16d
+  call __print_u16d
 
-;  mov d, s_uuid
-;  call _puts
-;  mov d, ide_buffer + 28
-;  mov bl, [d]
-;  call xput_u8
+  mov d, s_uuid
+  call __puts
+  mov d, ide_buffer + 43
+uuid_loop:
+  mov bl, [d]
+  call xput_u8
+  dec d
+  cmp d, ide_buffer + 27
+  jne uuid_loop
 
   mov d, s_vol_name
-  call _puts
+  call __puts
   mov d, ide_buffer + 44
-  call _puts
+  call __puts
 
-loop1:
-  jmp loop1
+  mov a, [boot_origin + 1022] ; get kernel inode number from bootloader chunk in ram
+  mov [kernel_inode], a       ; and save in variable
+
+
+
+  mov c, 0
+  mov b, 0          ; start at disk sector 0
+  mov d, boot_origin    ; we read into the bios ide buffer
+  mov a, $0202        ; disk read, 2 sectors
+  syscall bios_ide      ; read sector  
 
 ; interrupt masks  
   mov al, $ff
   stomsk                      ; store masks
   mov d, s_masks
-  call _puts
+  call __puts
   
   mov d, s_bios2
-  call _puts
+  call __puts
 
 ; now we start the kernel.
   mov a, g                    ; retrieve kernel reset vector
@@ -136,6 +212,8 @@ loop1:
   push byte %00001000         ; mode =supervisor, paging=on
   push a                      ; pc
   sysret
+
+kernel_inode: .dw 0
 
 s_boot1:         .db "executing bootloader\n", 0
 s_kernel_setup:  .db "mapping kernel page-table to physical RAM\n", 0
@@ -146,17 +224,17 @@ s_bios2:         .db "entering protected-mode\n"
 
 s_hex_digits:   .db "0123456789ABCDEF"
 
-s_read_super:      .db "\nreading superblock\n", 0
-s_total_inodes:    .db "\ntotal inodes: ", 0
-s_total_blocks:    .db "\ntotal blocks: ", 0
-s_free_inodes:     .db "\nfree inodes: ", 0
-s_free_blocks:     .db "\nfree blocks: ", 0
-s_block_bitmap:    .db "\nblock bitmap: ", 0
-s_inode_bitmap:    .db "\ninode bitmap: ", 0
-s_inode_table:     .db "\ninode table: ", 0
-s_used_dirs:       .db "\nnumber of used directories: ", 0
-s_used_dirs_count: .db "\nused dirs count: ", 0
-s_uuid:            .db "\nuuid: ", 0
-s_vol_name:        .db "\nvolume name: ", 0
+s_read_super:       .db "\nreading superblock\n", 0
+s_total_inodes:     .db "\ntotal inodes: ", 0
+s_total_blocks:     .db "\ntotal blocks: ", 0
+s_free_inodes:      .db "\nfree inodes: ", 0
+s_free_blocks:      .db "\nfree blocks: ", 0
+s_block_bitmap:     .db "\nblock bitmap: ", 0
+s_inode_bitmap:     .db "\ninode bitmap: ", 0
+s_inode_table:      .db "\ninode table: ", 0
+s_first_data_block: .db "\nfirst data block: ", 0
+s_used_dirs:        .db "\nnumber of used directories: ", 0
+s_uuid:             .db "\nuuid: ", 0
+s_vol_name:         .db "\nvolume name: ", 0
 
 .end

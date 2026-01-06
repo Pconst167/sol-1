@@ -315,8 +315,16 @@ int main(int argc, char **argv){
     superblock.log_block_size    = 1; // Block size = 1024 << `s_log_block_size` 
     superblock.mtime             = 0; // Last mount time (unix time)              
     superblock.wtime             = 0; // Last write time (unix time)              
-    memset(superblock.uuid, 0, 16); // Unique ID of the filesystem            
-    strcpy(superblock.volume_name, "Sol-1 Volume"); // Label of the filesystem               
+    ((uint16_t *)superblock.uuid)[0] = 0x1100;
+    ((uint16_t *)superblock.uuid)[1] = 0x3322;
+    ((uint16_t *)superblock.uuid)[2] = 0x5544;
+    ((uint16_t *)superblock.uuid)[3] = 0x7766;
+    ((uint16_t *)superblock.uuid)[4] = 0x9988;
+    ((uint16_t *)superblock.uuid)[5] = 0xBBAA;
+    ((uint16_t *)superblock.uuid)[6] = 0xDDCC;
+    ((uint16_t *)superblock.uuid)[7] = 0xFFEE;
+    //memset(superblock.uuid, 0, 16); // Unique ID of the filesystem            
+    strcpy(superblock.volume_name, "Sol-1 Disk A"); // Label of the filesystem               
     superblock.feature_flags     = 0; // Compatibility flags                  
     *(struct superblock *)(superblock_p) = superblock;
     
