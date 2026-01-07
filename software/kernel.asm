@@ -78,12 +78,20 @@ _timer_ctrl       .equ $ffe3         ; timer control register
 _stack_begin      .equ $f7ff         ; beginning of stack
 _fifo_size        .equ 4096
 
-_mbr                     .equ 960
-_superblock              .equ 1024
-_block_group_descriptor  .equ 2048
+_mbr                    .equ 960
+_superblock             .equ 1024
+_block_group_descriptor .equ 2048
 
-text_org          .equ $400          ; code origin address for all user processes
+text_org                .equ $400          ; code origin address for all user processes
 
+block_bitmap_start      .equ 2048 * 2
+block_bitmap_sec_start  .equ 8
+inode_bitmap_start      .equ 2048 * 6
+inode_bitmap_sect_start .equ 24
+inode_table_start       .equ 2048 * 7
+inode_table_sect_start  .equ 28 ; inode table starts at sector 28
+data_blocks_start       .equ 2111488
+data_blocks_sect_start  .equ 4124
 
 ;  ------------------------------------------------------------------------------------------------------------------;
 ;  DISK LAYOUT:
