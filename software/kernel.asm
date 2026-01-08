@@ -949,6 +949,18 @@ fs_cd:
 ; ls
 ;------------------------------------------------------------------------------------------------------;
 ; inode in a
+pseudo:
+  we need to calculate the sector in which the inode entry is located.
+  for that, we need to multiply the index by 128, and then divide by 512 and that gives the integer sector value.
+  that division can be made by a shift left by 7, and then a shift right by 9,
+  which is equivalent to a total shift right by 2.
+  that gives the sector number.
+  but then inside that sector we need to find the actual location of the entry,
+  and that is equal to the remainder of the division.
+  this remainder is calculated by subtracting:
+    (integer_result << 8) - (original_index << 7)
+  we now have the sector number AND the position inside the sector.
+
 fs_ls:
   mov d, inode_table_sect_start
   mov b, a                     ; save inode in b
