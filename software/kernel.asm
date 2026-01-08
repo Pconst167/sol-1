@@ -942,14 +942,23 @@ fs_mkdir:
 ;------------------------------------------------------------------------------------------------------;
 ; cd
 ;------------------------------------------------------------------------------------------------------;
-; new dirid in b
 fs_cd:
   sysret  
 
 ;------------------------------------------------------------------------------------------------------;
 ; ls
 ;------------------------------------------------------------------------------------------------------;
+; inode in a
 fs_ls:
+  mov d, inode_table_sect_start
+  mov b, a                     ; save inode in b
+  shr a, 2                     ; multiplying the inode by 128(to find entry position), and then dividing by 512(to find sector in disk)
+                               ; is equivalent to a shift by 7-9 = -2 = shr by 2.  this gives the LBA value of the inode entry (the sector it lies in)
+  mov c, a                     ; save result in c
+  shl a, 2                     ; invert result so we have the original inode number
+  sub b, a                     ; subtract 
+  mov [inode_table_index_0], a ; move inode index into inode variable for calculation
+
   sysret
 
 ;------------------------------------------------------------------------------------------------------;
@@ -1175,6 +1184,11 @@ s_week:
 s_fdc_irq: .db "\nIRQ0 Executed.\n", 0
 s_fdc_config:
   .db "selecting diskette drive 0, side 0, single density, head loaded\n", 0
+
+; indices used to navigate the inode table in disk
+inode_table_index_0: .dw 0
+inode_table_index_1: .dw 0
+inode_table_index_2: .dw 0
 
 fifo:
   .fill _fifo_size
