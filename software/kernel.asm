@@ -958,7 +958,7 @@ pseudo:
   but then inside that sector we need to find the actual location of the entry,
   and that is equal to the remainder of the division.
   this remainder is calculated by subtracting:
-    (integer_result << 8) - (original_index << 7)
+    (integer_result << 8) - (original_index << 7)  ==  (integer_result * 512) - (original_index * 128)
   we now have the sector number AND the position inside the sector.
 
 fs_ls:
