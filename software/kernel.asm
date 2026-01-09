@@ -949,27 +949,29 @@ fs_cd:
 ; ls
 ;------------------------------------------------------------------------------------------------------;
 ; inode in a
-pseudo:
-  we need to calculate the sector in which the inode entry is located.
-  for that, we need to multiply the index by 128, and then divide by 512 and that gives the integer sector value.
-  that division can be made by a shift left by 7, and then a shift right by 9,
-  which is equivalent to a total shift right by 2.
-  that gives the sector number.
-  but then inside that sector we need to find the actual location of the entry,
-  and that is equal to the remainder of the division.
-  this remainder is calculated by subtracting:
-    (integer_result << 8) - (original_index << 7)
-  we now have the sector number AND the position inside the sector.
+; pseudo:
+;   we need to calculate the sector in which the inode entry is located.
+;   for that, we need to multiply the index by 128, and then divide by 512 and that gives the integer sector value.
+;   that division can be made by a shift left by 7, and then a shift right by 9,
+;   which is equivalent to a total shift right by 2.
+;   that gives the sector number.
+;   but then inside that sector we need to find the actual location of the entry,
+;   and that is equal to the remainder of the division.
+;   this remainder is calculated by subtracting:
+;     (integer_result << 8) - (original_index << 7)
+;   we now have the sector number AND the position inside the sector.
 
 fs_ls:
   mov d, inode_table_sect_start
   mov b, a                     ; save inode in b
   shr a, 2                     ; multiplying the inode by 128(to find entry position), and then dividing by 512(to find sector in disk)
                                ; is equivalent to a shift by 7-9 = -2 = shr by 2.  this gives the LBA value of the inode entry (the sector it lies in)
-  mov c, a                     ; save result in c
-  shl a, 2                     ; invert result so we have the original inode number
-  sub b, a                     ; subtract 
-  mov [inode_table_index_0], a ; move inode index into inode variable for calculation
+  
+
+  mov [inode_table_index_0], a
+  mov al, gl
+  mov [inode_table_index_2], al
+
 
   sysret
 
