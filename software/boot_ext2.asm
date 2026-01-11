@@ -22,8 +22,8 @@ _ide_r5          .equ _ide_base + 5    ; sector address lba 2 [16:23]
 _ide_r6          .equ _ide_base + 6    ; sector address lba 3 [24:27 (lsb)]
 _ide_r7          .equ _ide_base + 7    ; read: status, write: command
 
-INODE_TABLE_START .equ 2048 * 7
-INODE_TABLE_SECT_START .equ 28 ; inode table starts at sector 28
+inode_table_start .equ 2048 * 7
+inode_table_sect_start .equ 28 ; inode table starts at sector 28
 
 ;  ------------------------------------------------------------------------------------------------------------------;
 ;  DISK LAYOUT:
@@ -105,96 +105,23 @@ INODE_TABLE_SECT_START .equ 28 ; inode table starts at sector 28
 ;  char     name[62];   // File name (null terminated)
 
 boot_start:
-  mov d, s_read_super
-  call __puts
-
-; read Superblock
-  mov b, 2
-  mov c, 0                    ; LBA = 2 = byte 1024
-  mov d, ide_buffer           ; we read into the bios ide buffer
-  mov a, $0202                ; disk read, 2 sectors. Superblock
-  syscall bios_ide            ; read sector
-
-; print Superblock information
-  mov d, s_total_inodes
-  call __puts
-  mov d, ide_buffer
-  mov a, [d]
-  call __print_u16d
-
-  mov d, s_total_blocks
-  call __puts
-  mov d, ide_buffer + 2
-  mov a, [d]
-  call __print_u16d
-
-  mov d, s_free_inodes
-  call __puts
-  mov d, ide_buffer + 4
-  mov a, [d]
-  call __print_u16d
-
-  mov d, s_free_blocks
-  call __puts
-  mov d, ide_buffer + 6
-  mov a, [d]
-  call __print_u16d
-
-  mov d, s_block_bitmap
-  call __puts
-  mov d, ide_buffer + 8
-  mov a, [d]
-  call __print_u16d
-
-  mov d, s_inode_bitmap
-  call __puts
-  mov d, ide_buffer + 10
-  mov a, [d]
-  call __print_u16d
-
-  mov d, s_inode_table
-  call __puts
-  mov d, ide_buffer + 12
-  mov a, [d]
-  call __print_u16d
-
-  mov d, s_first_data_block
-  call __puts
-  mov d, ide_buffer + 14
-  mov a, [d]
-  call __print_u16d
-
-  mov d, s_used_dirs
-  call __puts
-  mov d, ide_buffer + 16
-  mov a, [d]
-  call __print_u16d
-
-  mov d, s_uuid
-  call __puts
-  mov d, ide_buffer + 43
-uuid_loop:
-  mov bl, [d]
-  call xput_u8
-  dec d
-  cmp d, ide_buffer + 27
-  jne uuid_loop
-
-  mov d, s_vol_name
-  call __puts
-  mov d, ide_buffer + 44
-  call __puts
 
   mov a, [boot_origin + 1022] ; get kernel inode number from bootloader chunk in ram
   mov [kernel_inode], a       ; and save in variable
 
-
-
+  call get_ino_entry_sect_ofst ; sector in a, remainder in bl
+  add a, inode_table_sect_start  ; add start lba of inode table
+  push bl                        ; save entry offset
+  mov b, a
   mov c, 0
-  mov b, 0          ; start at disk sector 0
-  mov d, boot_origin    ; we read into the bios ide buffer
-  mov a, $0202        ; disk read, 2 sectors
-  syscall bios_ide      ; read sector  
+  mov d, ide_buffer    ; we read into the ide buffer
+  mov a, $0102        ; disk read, 1 sector
+  syscall bios_ide      ; read sector 
+
+  mov d, ide_buffer
+  pop bl
+  mov bh, 0
+  shl b, 7          ; multiply the offset integer by 128
 
 ; interrupt masks  
   mov al, $ff
@@ -212,6 +139,19 @@ uuid_loop:
   push byte %00001000         ; mode =supervisor, paging=on
   push a                      ; pc
   sysret
+
+; inputs:
+; a: inode number
+; outputs:
+; bl: offset/remainder
+; a: sector
+get_ino_entry_sect_ofst:
+  push a                       ; save inode in stack
+  and al, %00000011            ; he least 2 bits are the remainder mod 128
+  mov bl, al
+  pop a
+  shr a, 2                     ; shifting right by 2, gives the multiple of 512 which represents the sector number
+  ret
 
 kernel_inode: .dw 0
 
@@ -236,5 +176,12 @@ s_first_data_block: .db "\nfirst data block: ", 0
 s_used_dirs:        .db "\nnumber of used directories: ", 0
 s_uuid:             .db "\nuuid: ", 0
 s_vol_name:         .db "\nvolume name: ", 0
+
+s_nl: .db "\n", 0
+
+inode_entry_offset: .db 0
+inode_entry_sect:   .dw 0
+
+
 
 .end
