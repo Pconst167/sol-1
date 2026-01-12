@@ -123,7 +123,13 @@ boot_start:
   mov bh, 0
   shl b, 7          ; multiply the offset integer by 128
   add d, b          ; inode entry plus entry offset: points at kernel inode entry
+  push d
 
+  mov d, s_filesize
+  call __puts
+  pop d
+  mov a, [d + 4]
+  call __print_u16d
 
 
 ; interrupt masks  
@@ -181,6 +187,9 @@ s_uuid:             .db "\nuuid: ", 0
 s_vol_name:         .db "\nvolume name: ", 0
 
 s_nl: .db "\n", 0
+s_filesize: .db "file size: ", 0
+s_blocks: .db "number of blocks: ", 0
+s_block: .db "block links: ", 0
 
 inode_entry_offset: .db 0
 inode_entry_sect:   .dw 0
