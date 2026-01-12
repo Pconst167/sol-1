@@ -949,70 +949,10 @@ fs_cd:
 ; ls
 ;------------------------------------------------------------------------------------------------------;
 ; inode in a
-; pseudo:
-;   we need to calculate the sector in which the inode entry is located.
-;   for that, we need to multiply the index by 128, and then divide by 512 and that gives the integer sector value.
-;   that division can be made by a shift left by 7, and then a shift right by 9,
-;   which is equivalent to a total shift right by 2. that gives the sector number.
-;   but then inside that sector we need to find the actual location of the entry,
-;   and that is equal to the remainder of the division.
-;   this remainder is calculated by subtracting:
-;     (integer_result << 8) - (original_index << 7)
-;   we now have the sector number AND the position inside the sector.
-
 fs_ls:
   mov d, inode_table_sect_start
-  push a                       ; save inode in stack
-  shr a, 2                     ; multiplying the inode by 128(to find entry position), and then dividing by 512(to find sector in disk)
-                               ; is equivalent to a shift by 7-9 = -2 = shr by 2.  this gives the LBA value of the inode entry (the sector it lies in)
-  ; now multiply by 512 again to obtain original offset but without the remainder mod 512
-  ; maximum possible value is 2097152 which needs 22 bits, so we need 24 bits of space
-  
-  ; shift left 9 times, equivalent to multiplying by 512
-  ; by inserting 9 zeroes before value in 'a', then store result in variables
-  mov byte [inode_offset_normdr_0], $00
-  shl al
-  mov [inode_offset_normdr_1], al
-  mov al, ah
-  mov cl, 1
-  rlc al, cl
-  mov [inode_offset_normdr_2], al
-
-  ; recover original inode, and then multiply by 128 to obtain offset
-  ; we use this value to do a subtraction and find the remainder
-  pop a             ; recover inode number
-  push al
-  push ah
-  mov ah, al        ; transfer al to ah, so we can shift right
-  mov al, $00       ; 
-  shr a             ; now right shift by 1
-  mov [inode_offset_rmdr_0], al
-
-  pop ah
-  pop al
-  shr a
-  mov [inode_offset_rmdr_1], al
-  mov al, ah
-  mov [inode_offset_rmdr_2], al
-
-  ; now subtract offset without remainder from offset with remainder, to find the remainder
-  mov a, [inode_offset_rmdr_0]
-  mov b, [inode_offset_normdr_0]
-  sub a, b
-  mov [inode_rmdr_0], a
-
-
-
 
   sysret
-
-inode_offset_rmdr_0: .db 0
-inode_offset_rmdr_1: .db 0
-inode_offset_rmdr_2: .db 0
-inode_offset_normdr_0: .db 0
-inode_offset_normdr_1: .db 0
-inode_offset_normdr_2: .db 0
-inode_rmdr: .dw 0
 
 ;------------------------------------------------------------------------------------------------------;
 ; pwd - print working directory

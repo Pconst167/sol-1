@@ -122,6 +122,9 @@ boot_start:
   pop bl
   mov bh, 0
   shl b, 7          ; multiply the offset integer by 128
+  add d, b          ; inode entry plus entry offset: points at kernel inode entry
+
+
 
 ; interrupt masks  
   mov al, $ff
