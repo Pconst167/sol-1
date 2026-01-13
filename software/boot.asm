@@ -22,91 +22,168 @@ _ide_r5          .equ _ide_base + 5    ; sector address lba 2 [16:23]
 _ide_r6          .equ _ide_base + 6    ; sector address lba 3 [24:27 (lsb)]
 _ide_r7          .equ _ide_base + 7    ; read: status, write: command
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-; setting up kernel process.
-; map kernel memory to bios 64kb
-; 32 pages of 2kb = 64kb
-; bl = ptb
-; bh = page number (5bits)
-; a = physical address
-; for kernel, a goes from 0 to 31, but for the last page, bit '11' must be 1 for device space
-; bl = 0
-; bh(ms 5 bits) = 0 to 31
-; a = 0000_1000_000_00000
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-setup_kernel_mem:
-  mov d, s_boot1
-  call _puts
-  
-  mov d, s_kernel_setup
-  call _puts
-; map pages 0 to 30 to normal kernel ram memory.
-  mov bl, 0             ; set ptb = 0 for kernel
-  mov bh, 0             ; start at page 0
-  mov a, 0              ; set mem/io bit to memory.  this means physical address starting at 0, but in memory space as opposed to device space.
-map_kernel_mem_l1:
-  pagemap               ; write page table entry
-  add b, $0800          ; increase page number (msb 5 bits of bh only)
-  inc al                ; increase both 
-  cmp al, 31            ; check to see if we reached the end of memory for kernel
-  jne map_kernel_mem_l1
-  
-; here we map the last page of kernel memory, to device space, or the last 2kb of bios memory so that the kernel has access to io devices.
-  or a, $0800           ; set mem/io bit to device, for physical address
-  pagemap               ; write page table entry
-  
-  mov al, 0
-  setptb                ; set process number to 0 (strictly not needed since we are in supervisor mode)
-                        ; which forces the page number to 0
-  mov d, s_boot
-  call _puts
+inode_table_start .equ 2048 * 7
+inode_table_sect_start .equ 28 ; inode table starts at sector 28
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;  
-; we read sector 0, in order to obtain the lba location of the kernel in the disk
-; this kernel lba is actually the second sector because the first sector is the usual file block
-; header and has no useful kernel data.
-  mov c, 0
-  mov b, 0                   ; start at disk sector 1
-  mov d, ide_buffer          ; we read into the bios ide buffer
-  mov a, $0102               ; disk read, 1 sector
-  syscall bios_ide           ; read sector
-  mov a, [ide_buffer + 510]  ; here we now have the kernel's lba location in disk
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-  mov b, a                   ; transfer the sector number into register b for use below
-  push a                     ; also, save the lba value for later
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;  
-; having obtained the first kernel sector address,
-; we read the first kernel sector, in order to obtain the reset vector at location $10
-  mov c, 0
-  mov d, ide_buffer           ; we read into the bios ide buffer
-  mov a, $0102                ; disk read, 1 sector
-  syscall bios_ide            ; read sector
-  mov a, [ide_buffer + $10]   ; here we now have the kernel reset vector
-  mov g, a                    ; save reset vector in g  
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-  
-; read operating system into kernel memory
-  pop b                       ; pop the kernel's starting lba address that we pushed into the stack earlier
-                              ; as we now need to load the kernel from disk, from that lba address
-  mov c, 0
-  mov d, ide_buffer           ; we read into the bios ide buffer
-  mov a, $3102                ; disk read, 31 sectors. 31 sectors because the first sector of the kernel is just a file block header
-                              ; used to tell whether that block is taken. so the file really has 31 sectors 
-                              ; in this current file system (which is a hack and is temporary)
-  syscall bios_ide            ; read sector
-  mov c, 512 * 31             ; 31 sectors to copy
-  mov si, ide_buffer
-  mov di, 0                   ; start at kernel memory address 0
-  supcpy                      ; now copy data from bios mem to kernel mem
+;  ------------------------------------------------------------------------------------------------------------------;
+;  DISK LAYOUT:
+;  Metadata               | Size (bytes)      | Blocks (2048 bytes)              |Start Block |  Comment
+;  ---------------------- | ----------------- | -------------------------------- |------------|-----------------------------------
+;  Bootloader/MBR         | 1024 bytes        | 0.5 (2 sectors)                  |  0         |
+;  Superblock             | 1024 bytes        | 1 block (2048 bytes, must align) |  0         |
+;                         |                   | 1 block (2048 bytes)             |  1         | reserved
+;  Block Bitmap           | 8,192 bytes       | 4 blocks                         |  2         | 4*2048*8 = 4*16384 = 65536 raw data blocks.  65536*2048 bytes = 134217728 bytes of disk space = 128MB
+;  Inode Bitmap           | 2,048 bytes       | 1 block                          |  6         | 2048*8=16384. total of 16384 bits, meaning 16384 inodes, which is 1 inode per 8KB of disk space
+;  Inode Table            | 2,097,152 bytes   | 1024 blocks                      |  7         | 128bytes per inode entry. 2097152 / 128 = 16384 inodes
+;  Data Blocks            | 134,217,728 bytes | 65528 blocks                     | 1031       | 65528 blocks = 134,201,344 bytes
+;  
+;  first 960 bytes: bootloader from 0 to 959, MBR partition table from 960 to 1023 (64 bytes)
+;  up to 4 partitions, each 16 bytes long
+;  MBR:
+;  Byte | Description
+;  -----|----------------------------
+;  0    | Boot flag (0x80 active, 0x00 inactive)
+;  1-3  | Start CHS (head, sector, cylinder)
+;  4    | Partition type (filesystem ID)
+;    0x83 = Linux native (ext2/3/4)
+;    0x07 = NTFS/exFAT
+;    0x0B = FAT32 CHS
+;    0x0C = FAT32 LBA
+;    0x05 = Extended partition
+;    0x86 = Sol-1 partition
+;  5-7  | End CHS
+;  8-11 | Start LBA (little endian)
+;  12-15| Size in sectors (little endian)
+;  
+;  
+;  the superblock describers the filesystem as a whole such as inode count, free inode count, location of the raw data bitmap, inode table, etc.  
+;  SUPERBLOCK:
+;  | Field               | Description                               | Typical Size (bytes) | Notes                           |
+;  | ------------------- | ----------------------------------------- | -------------------- | ------------------------------- |
+;  | inodes_count        | Total number of inodes in the filesystem  | 2                    | 16-bit unsigned int             |
+;  | blocks_count        | Total number of data blocks               | 2                    | 16-bit unsigned int             |
+;  | free_inodes_count   | Number of free inodes                     | 2                    | 16-bit unsigned int             |
+;  | free_blocks_count   | Number of free blocks                     | 2                    | 16-bit unsigned int             |
+;  | block_bitmap        | Block ID of the **block bitmap**          | 2                    | 16-bit unsigned int
+;  | inode_bitmap        | Block ID of the **inode bitmap**          | 2                    | 16-bit unsigned int
+;  | inode_table         | Block ID of **inode table**               | 2                    | 16-bit unsigned int
+;  | first_data_block    | Block ID of the data blocks area          | 2                    | 16-bit unsigned int             |
+;  | used_dirs_count     | Number of inodes allocated to directories | 2
+;  | log_block_size      | Block size = 1024 << `s_log_block_size    | 2                    | 16-bit unsigned int             |
+;  | mtime               | Last mount time                           | 4                    | 32-bit unsigned int (Unix time) |
+;  | wtime               | Last write time                           | 4                    | 32-bit unsigned int (Unix time) |
+;  | uuid                | Unique ID of the filesystem               | 16                   | 128-bit UUID                    |
+;  | volume_name         | Label of the filesystem                   | 16                   | Usually ASCII, padded           |
+;  | feature_flags       | Compatibility flags                       | 4                    | 32-bit unsigned int             |
+;  
+;  inode for root dir is #2, #0 and #1 not used
+;  raw data block #0 is not used. because 0 as a block ID means not used
+;  block size: 2048
+;  inode-table format:
+;  | Field         | Size (bytes) | Description                                                                                  |
+;  | ------------- | ------------ | -------------------------------------------------------------------------------------------- |
+;  | `mode`        | 2            | File type and permissions                                                                    |
+;  | `uid`         | 2            | Owner user ID                                                                                |
+;  | `size`        | 4            | Size of the file in bytes                                                                    |
+;  | `atime`       | 4            | Last access time (timestamp)                                                                 |
+;  | `ctime`       | 4            | Creation time (timestamp)                                                                    |
+;  | `mtime`       | 4            | Last modification time (timestamp)                                                           |
+;  | `dtime`       | 4            | Deletion time (timestamp)                                                                    |
+;  | `gid`         | 2            | Group ID                                                                                     |
+;  | `links_count` | 2            | Number of hard links                                                                         |
+;  | `blocks`      | 2            | Number of 2048-byte blocks allocated                                                         |
+;  | `flags`       | 4            | File flags                                                                                   |
+;  | `block`       | 47 * 2 = 94  | Pointers to data blocks (47 direct only) 
+;
+;
+;  DIRECTORY ENTRY
+;  this is the structure for file entries inside a directory.
+;  2048 / 64 = 32 entries
+;
+;  each entry is 64 bytes wide
+;  uint16_t inode;      // Inode number (0 if entry is unused)
+;  char     name[62];   // File name (null terminated)
+
+boot_start:
+
+  mov a, [boot_origin + 1022] ; get kernel inode number from bootloader chunk in ram
+  mov [kernel_inode], a       ; and save in variable
+
+  call get_ino_entry_sect_ofst ; sector in a, remainder in bl
+  add a, inode_table_sect_start  ; add start lba of inode table
+  push bl                        ; save entry offset  
+  mov b, a                       
+  mov c, 0                       ; set sector number
+  mov d, ide_buffer    ; we read into the ide buffer
+  mov a, $0102        ; disk read, 1 sector
+  syscall bios_ide      ; read sector 
+
+  mov d, ide_buffer
+  pop bl
+  mov bh, 0
+  shl b, 7          ; multiply the offset integer by 128
+  add d, b          ; inode entry plus entry offset: points at kernel inode entry
+  push d
+
+  mov d, s_mode
+  call __puts
+  pop d
+  mov b, [d]
+  push d
+  call print_u16x
+  mov d, s_nl
+  call __puts
+
+  mov d, s_filesize
+  call __puts
+  pop d
+  mov b, [d + 4]
+  push d
+  call print_u16x
+  mov d, s_nl
+  call __puts
+
+  mov d, s_blocks
+  call __puts
+  pop d
+  mov b, [d + 28]
+  push d
+  call print_u16x
+  mov d, s_nl
+  call __puts
+
+  mov d, s_block
+  call __puts
+  pop d
+  add d, 34
+  mov a, 0
+loop_block:
+  mov b, [d]
+  call print_u16x
+  push d
+  mov d, s_sp
+  call __puts
+  pop d
+  add d, 2
+  inc a
+  cmp a, 47
+  jne loop_block
+
+loop_block_end:
+  mov d, s_nl
+  call __puts
+
+loop:
+  jmp loop
 
 ; interrupt masks  
   mov al, $ff
   stomsk                      ; store masks
   mov d, s_masks
-  call _puts
+  call __puts
   
   mov d, s_bios2
-  call _puts
+  call __puts
 
 ; now we start the kernel.
   mov a, g                    ; retrieve kernel reset vector
@@ -116,55 +193,53 @@ map_kernel_mem_l1:
   push a                      ; pc
   sysret
 
-  
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-; print null terminated string
-; pointer in d
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-_puts:
-  push a
-  push d
-  pushf
-_puts_l1:
-  mov al, [d]
-  cmp al, 0
-  jz _puts_end
-_puts_l2:
-  mov al, [_uart0_lsr]      ; read line status register
-  test al, $20              ; isolate transmitter empty
-  jz _puts_l2    
-  mov al, [d]
-  mov [_uart0_data], al     ; write char to transmitter holding register
-  inc d  
-  jmp _puts_l1
-_puts_end:
-  popf
-  pop d
+; inputs:
+; a: inode number
+; outputs:
+; bl: offset/remainder
+; a: sector
+get_ino_entry_sect_ofst:
+  push a                       ; save inode in stack
+  and al, %00000011            ; he least 2 bits are the remainder mod 128
+  mov bl, al
   pop a
-  ret
-  
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-; _putchar
-; char in ah
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-_putchar:
-  push a
-  pushf
-_putchar_l1:
-  mov al, [_uart0_lsr]    ; read line status register
-  test al, 20h            ; isolate transmitter empty
-  jz _putchar_l1    
-  mov al, ah
-  mov [_uart0_data], al   ; write char to transmitter holding register
-  popf
-  pop a
+  shr a, 2                     ; shifting right by 2, gives the multiple of 512 which represents the sector number
   ret
 
-s_boot1:         .db "executing bootloader\n\r", 0
-s_kernel_setup:  .db "mapping kernel page-table to physical RAM\n\r", 0
-s_masks:         .db "\n\rinterrupt masks register set to 0xFF\n\r", 0
-s_boot:          .db "loading kernel from disk ", 0
-s_bios2:         .db "entering protected-mode\n\r"
-                 .db "starting kernel\n\r", 0
+kernel_inode: .dw 0
+
+s_boot1:         .db "executing bootloader\n", 0
+s_kernel_setup:  .db "mapping kernel page-table to physical RAM\n", 0
+s_masks:         .db "\n\rinterrupt masks register set to 0xFF\n", 0
+s_boot:          .db "loading kernel from disk", 0
+s_bios2:         .db "entering protected-mode\n"
+                 .db "starting kernel\n", 0
+
+s_hex_digits:   .db "0123456789ABCDEF"
+
+s_read_super:       .db "\nreading superblock\n", 0
+s_total_inodes:     .db "\ntotal inodes: ", 0
+s_total_blocks:     .db "\ntotal blocks: ", 0
+s_free_inodes:      .db "\nfree inodes: ", 0
+s_free_blocks:      .db "\nfree blocks: ", 0
+s_block_bitmap:     .db "\nblock bitmap: ", 0
+s_inode_bitmap:     .db "\ninode bitmap: ", 0
+s_inode_table:      .db "\ninode table: ", 0
+s_first_data_block: .db "\nfirst data block: ", 0
+s_used_dirs:        .db "\nnumber of used directories: ", 0
+s_uuid:             .db "\nuuid: ", 0
+s_vol_name:         .db "\nvolume name: ", 0
+
+s_sp: .db " ", 0
+s_nl: .db "\n", 0
+s_mode: .db "mode: ", 0
+s_filesize: .db "file size: ", 0
+s_blocks: .db "number of blocks: ", 0
+s_block: .db "block links: ", 0
+
+inode_entry_offset: .db 0
+inode_entry_sect:   .dw 0
+
+
 
 .end
