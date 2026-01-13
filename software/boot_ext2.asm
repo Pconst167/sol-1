@@ -111,9 +111,9 @@ boot_start:
 
   call get_ino_entry_sect_ofst ; sector in a, remainder in bl
   add a, inode_table_sect_start  ; add start lba of inode table
-  push bl                        ; save entry offset
-  mov b, a
-  mov c, 0
+  push bl                        ; save entry offset  
+  mov b, a                       
+  mov c, 0                       ; set sector number
   mov d, ide_buffer    ; we read into the ide buffer
   mov a, $0102        ; disk read, 1 sector
   syscall bios_ide      ; read sector 

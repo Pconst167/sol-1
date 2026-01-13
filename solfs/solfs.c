@@ -163,7 +163,7 @@ struct inode_table_entry{
   uint16_t blocks     ; // Number of blocks allocated (2048 blocks)
   uint32_t flags      ; // File flags
   uint16_t block[NUM_INODE_BLOCK_POINTERS]; // Pointers to data blocks (47 direct)
-};
+} __attribute__((packed)); // prevent padding being added!
 
 // each entry 64 bytes wide
 struct directory_entry {
