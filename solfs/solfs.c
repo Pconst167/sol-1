@@ -131,7 +131,8 @@
                                     + INODE_TABLE_SIZE\
                                     + DATA_BLOCKS_SIZE)
 
-struct superblock{
+// using __attribute__((packed)) to prevent padding to be added to the structs
+struct __attribute__((packed)) superblock{
   uint16_t inodes_count     ; // Total number of inodes in the filesystem  
   uint16_t blocks_count     ; // Total number of data blocks         
   uint16_t free_inodes_count; // Number of free inodes                 
@@ -149,7 +150,7 @@ struct superblock{
   uint32_t feature_flags    ; // Compatibility flags                  
 };
 
-struct inode_table_entry{
+struct __attribute__((packed)) inode_table_entry{
   uint16_t mode       ; // File type and permissions 
   uint16_t uid        ; // Owner user ID
   uint32_t size       ; // Size of the file in bytes
@@ -162,10 +163,10 @@ struct inode_table_entry{
   uint16_t blocks     ; // Number of blocks allocated (2048 byte long blocks)
   uint32_t flags      ; // File flags
   uint16_t block[NUM_INODE_BLOCK_POINTERS]; // Pointers to data blocks (47 direct)
-} __attribute__((packed)); // prevent padding being added!
+};
 
 // each entry 64 bytes wide
-struct directory_entry {
+struct __attribute__((packed)) directory_entry {
   uint16_t inode;                      // Inode number (0 if entry is unused)
   char     name[DIR_ENTRY_NAME_LEN];   // File name (null-terminated)
 };
