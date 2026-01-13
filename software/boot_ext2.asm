@@ -128,7 +128,7 @@ boot_start:
   mov d, s_mode
   call __puts
   pop d
-  mov a, [d]
+  mov b, [d]
   push d
   call print_u16x
   mov d, s_nl
@@ -137,7 +137,7 @@ boot_start:
   mov d, s_filesize
   call __puts
   pop d
-  mov a, [d + 4]
+  mov b, [d + 4]
   push d
   call print_u16x
   mov d, s_nl
@@ -146,7 +146,7 @@ boot_start:
   mov d, s_blocks
   call __puts
   pop d
-  mov a, [d + 28]
+  mov b, [d + 28]
   push d
   call print_u16x
   mov d, s_nl
@@ -156,17 +156,17 @@ boot_start:
   call __puts
   pop d
   add d, 34
-  mov b, 0
+  mov a, 0
 loop_block:
-  mov a, [d]
+  mov b, [d]
   call print_u16x
   push d
   mov d, s_sp
   call __puts
   pop d
   add d, 2
-  inc b
-  cmp b, 47
+  inc a
+  cmp a, 47
   jne loop_block
 
 loop_block_end:
