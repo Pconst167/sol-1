@@ -169,9 +169,11 @@ loop_block:
   cmp a, 47
   jne loop_block
 
-loop_block_end:
   mov d, s_nl
   call __puts
+
+  ; now using the pointers to the kernel blocks, load the kernel file into ram
+  
 
 loop:
   jmp loop
