@@ -92,18 +92,17 @@
   START BY LOADING BOOTLOADER, THEN INSIDE LOADER, READ FS INFO LIKE SUPERBLOCK ETC.
 */
 
+#define BLOCK_SIZE                    2048
 #define MAX_ID_LEN                    512
 #define NUM_INODES                    16384
 #define ROOT_INODE                    2
 #define NUM_DATA_BLOCKS               65528
 #define NUM_INODE_BLOCK_POINTERS      47 // 0 .. 46
-#define NUM_BLOCK_POINTERS_PER_BLOCK  (2048 / 2)
+#define NUM_BLOCK_POINTERS_PER_BLOCK  (BLOCK_SIZE / 2)
 #define BLOCK_BITMAP_BLOCK_NUM        2
 #define INODE_BITMAP_BLOCK_NUM        6
 #define INODE_TABLE_BLOCK_NUM         7
 #define PARTITION_0_FIRST_DATA_BLOCK  0
-
-#define BLOCK_SIZE                    2048
 
 #define DIR_ENTRY_LEN                 64
 #define DIR_ENTRY_NAME_LEN            62
@@ -115,17 +114,17 @@
 #define MBR_SIZE                      64
 #define SUPERBLOCK_START              1024 // starts at block 0, position 1024
 #define SUPERBLOCK_SIZE               1024  // 1024 bytes long
-#define BLOCK_GROUP_DESCRIPTOR_START (1 * 2048) // starts a block 1
-#define BLOCK_GROUP_DESCRIPTOR_SIZE  2048          // should be 32 bytes long, but taking whole block for now
-#define BLOCKS_BITMAP_START          (2 * 2048) // starts at block 2
-#define BLOCKS_BITMAP_SIZE           (4 * 2048)  // 4 blocks long
-#define INODE_BITMAP_START           (6 * 2048) // starts at block 6
-#define INODE_BITMAP_SIZE            2048        // 1 block long
-#define INODE_TABLE_START            (7 * 2048)  // starts at block 7
+#define BLOCK_GROUP_DESCRIPTOR_START (1 * BLOCK_SIZE) // starts a block 1
+#define BLOCK_GROUP_DESCRIPTOR_SIZE  BLOCK_SIZE          // should be 32 bytes long, but taking whole block for now
+#define BLOCKS_BITMAP_START          (2 * BLOCK_SIZE) // starts at block 2
+#define BLOCKS_BITMAP_SIZE           (4 * BLOCK_SIZE)  // 4 blocks long
+#define INODE_BITMAP_START           (6 * BLOCK_SIZE) // starts at block 6
+#define INODE_BITMAP_SIZE            BLOCK_SIZE        // 1 block long
+#define INODE_TABLE_START            (7 * BLOCK_SIZE)  // starts at block 7
 #define INODE_TABLE_NUM_ENTRIES      16384 // 16384 entries of 128bytes
-#define INODE_TABLE_SIZE             (1024 * 2048)      // 1024 blocks long
-#define DATA_BLOCKS_START            (1031 * 2048) // start of disk data blocks
-#define DATA_BLOCKS_SIZE             (65536 * 2048)
+#define INODE_TABLE_SIZE             (1024 *  BLOCK_SIZE) // 1024 blocks long
+#define DATA_BLOCKS_START            (1031 *  BLOCK_SIZE) // start of disk data blocks
+#define DATA_BLOCKS_SIZE             (65536 * BLOCK_SIZE)
 #define TOTAL_DISK_SIZE              (BOOTLOADER_SIZE + MBR_SIZE\
                                     + SUPERBLOCK_SIZE + BLOCK_GROUP_DESCRIPTOR_SIZE\
                                     + BLOCKS_BITMAP_SIZE + INODE_BITMAP_SIZE\
@@ -160,7 +159,7 @@ struct inode_table_entry{
   uint32_t dtime      ; // Deletion time (timestamp) 
   uint16_t gid        ; // Group ID         
   uint16_t links_count; // Number of hard links
-  uint16_t blocks     ; // Number of blocks allocated (2048 blocks)
+  uint16_t blocks     ; // Number of blocks allocated (2048 byte long blocks)
   uint32_t flags      ; // File flags
   uint16_t block[NUM_INODE_BLOCK_POINTERS]; // Pointers to data blocks (47 direct)
 } __attribute__((packed)); // prevent padding being added!
@@ -373,7 +372,7 @@ int main(int argc, char **argv){
     root_inode.mode        = 0x41ED;   // directory (0x4000) + rwxr-xr-x (0x1ED)
     root_inode.uid         = 0;        // root user
     root_inode.gid         = 0;
-    root_inode.size        = 2048;     // one block for the directory
+    root_inode.size        = BLOCK_SIZE;     // one block for the directory
     root_inode.atime       = root_inode.ctime = root_inode.mtime = time(NULL);
     root_inode.links_count = 2;        // "." and parent ("..")
     root_inode.blocks      = 1; 
@@ -775,7 +774,7 @@ uint16_t create_directory(char *name, uint16_t parent_inode){
   new_inode.mode        = 0x41ED;   // directory (0x4000) + rwxr-xr-x (0x1ED)
   new_inode.uid         = 0;        // root user
   new_inode.gid         = 0;
-  new_inode.size        = 2048;     // one block for the directory
+  new_inode.size        = BLOCK_SIZE;     // one block for the directory
   new_inode.atime       = new_inode.ctime = new_inode.mtime = time(NULL);
   new_inode.links_count = 1;        // "."  TODO: should it be 2 links since the parent directory also contains a link to this directory?
   new_inode.blocks      = 1; 
