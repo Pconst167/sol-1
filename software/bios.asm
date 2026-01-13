@@ -127,6 +127,7 @@ bios_ide   .equ 3
 .export bios_ide
 .export __puts
 .export __print_u16d
+.export print_u16x
 .export xput_u8
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

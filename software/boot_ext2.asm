@@ -125,12 +125,56 @@ boot_start:
   add d, b          ; inode entry plus entry offset: points at kernel inode entry
   push d
 
+  mov d, s_mode
+  call __puts
+  pop d
+  mov a, [d]
+  push d
+  call print_u16x
+  mov d, s_nl
+  call __puts
+
   mov d, s_filesize
   call __puts
   pop d
   mov a, [d + 4]
-  call __print_u16d
+  push d
+  call print_u16x
+  mov d, s_nl
+  call __puts
 
+  mov d, s_blocks
+  call __puts
+  pop d
+  mov a, [d + 28]
+  push d
+  call print_u16x
+  mov d, s_nl
+  call __puts
+
+  mov d, s_block
+  call __puts
+  pop d
+  add d, 34
+  mov b, 0
+loop_block:
+  mov a, [d]
+  call print_u16x
+  push d
+  mov d, s_sp
+  call __puts
+  pop d
+  add d, 2
+  inc b
+  cmp b, 47
+  jne loop_block
+
+loop_block_end:
+  mov d, s_nl
+  call __puts
+
+loop:
+  jmp loop
 
 ; interrupt masks  
   mov al, $ff
@@ -186,7 +230,9 @@ s_used_dirs:        .db "\nnumber of used directories: ", 0
 s_uuid:             .db "\nuuid: ", 0
 s_vol_name:         .db "\nvolume name: ", 0
 
+s_sp: .db " ", 0
 s_nl: .db "\n", 0
+s_mode: .db "mode: ", 0
 s_filesize: .db "file size: ", 0
 s_blocks: .db "number of blocks: ", 0
 s_block: .db "block links: ", 0
