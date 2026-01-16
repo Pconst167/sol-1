@@ -104,7 +104,45 @@ inode_table_sect_start .equ 28 ; inode table starts at sector 28
 ;  uint16_t inode;      // Inode number (0 if entry is unused)
 ;  char     name[62];   // File name (null terminated)
 
-boot_start:
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; setting up kernel process.
+; 32 pages of 2kb = 64kb
+; bl = ptb
+; bh = page number (5bits)
+; a = physical address
+; for kernel, a goes from 0 to 31, but for the last page, bit '11' must be 1 for device space
+; bl = 0
+; bh(ms 5 bits) = 0 to 31
+; a = 0000_1000_000_00000
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+setup_kernel_mem:
+  mov d, s_boot1
+  call __puts
+  
+  mov d, s_kernel_setup
+  call __puts
+; map pages 0 to 30 to normal kernel ram memory.
+  mov bl, 0             ; set ptb = 0 for kernel
+  mov bh, 0             ; start at page 0
+  mov a, 0              ; set mem/io bit to memory.  this means physical address starting at 0, but in memory space as opposed to device space.
+map_kernel_mem_l1:
+  pagemap               ; write page table entry
+  add b, $0800          ; increase page number (msb 5 bits of bh only)
+  inc al                ; increase both 
+  cmp al, 31            ; check to see if we reached the end of memory for kernel
+  jne map_kernel_mem_l1
+  
+; here we map the last page of kernel memory, to device space, or the last 2kb of bios memory so that the kernel has access to io devices.
+  or a, $0800           ; set mem/io bit to device, for physical address
+  pagemap               ; write page table entry
+  
+  mov al, 0
+  setptb                ; set process number to 0 (strictly not needed since we are in supervisor mode)
+                        ; which forces the page number to 0
+  mov d, s_boot
+  call __puts
+
+
 
   mov a, [boot_origin + 1022] ; get kernel inode number from bootloader chunk in ram
   mov [kernel_inode], a       ; and save in variable
@@ -114,69 +152,61 @@ boot_start:
   push bl                        ; save entry offset  
   mov b, a                       
   mov c, 0                       ; set sector number
-  mov d, ide_buffer    ; we read into the ide buffer
+  mov d, inode_buffer    ; we read into the inode buffer
   mov a, $0102        ; disk read, 1 sector
   syscall bios_ide      ; read sector 
 
-  mov d, ide_buffer
+  mov d, inode_buffer
   pop bl
   mov bh, 0
   shl b, 7          ; multiply the offset integer by 128
   add d, b          ; inode entry plus entry offset: points at kernel inode entry
   push d
 
-  mov d, s_mode
-  call __puts
-  pop d
-  mov b, [d]
-  push d
-  call print_u16x
-  mov d, s_nl
-  call __puts
-
   mov d, s_filesize
   call __puts
   pop d
   mov b, [d + 4]
   push d
-  call print_u16x
-  mov d, s_nl
+  call __print_u16x
+  mov d, s_comma
   call __puts
 
-  mov d, s_blocks
-  call __puts
   pop d
   mov b, [d + 28]
   push d
-  call print_u16x
+  call __print_u16x
   mov d, s_nl
   call __puts
 
-  mov d, s_block
-  call __puts
+  ; now read the block numbers from the inode entry
   pop d
   add d, 34
-  mov a, 0
+  mov b, 0
 loop_block:
-  mov b, [d]
-  call print_u16x
+  mov a, [d]
+  cmp a, 0       ; if a block pointer is 0, we exit.  all block pointers must be continuously non zero.
+  je loop_block_end
+  call __print_u16d
   push d
-  mov d, s_sp
+  mov d, s_colon
   call __puts
   pop d
+  ; now using the pointers to the kernel blocks, load the kernel file into ram
+  ; Data Blocks            | 134,217,728 bytes | 65528 blocks                     | 1031       | 65528 blocks = 134,201,344 bytes
+  push d
+  push b
+  call load_block_and_copy  ; copy the block from disk to kernel memory
+  pop b
+  pop d
   add d, 2
-  inc a
-  cmp a, 47
+  inc b
+  cmp b, 32      ; for kernel file, the maximum number of blocks possible is 32. 32*2048 = 65536 bytes. so a kernel file cannot be larger than 65536 bytes
+                 ; so we only process block numbers from 0 to 31 here.
   jne loop_block
 
-  mov d, s_nl
-  call __puts
-
-  ; now using the pointers to the kernel blocks, load the kernel file into ram
-  
-
-loop:
-  jmp loop
+loop_block_end:
+  jmp loop_block_end
 
 ; interrupt masks  
   mov al, $ff
@@ -194,6 +224,46 @@ loop:
   push byte %00001000         ; mode =supervisor, paging=on
   push a                      ; pc
   sysret
+
+; inputs:
+;   a: block number in disk
+;   b: block cycle number for loading blocks into kernel memory in sequence
+load_block_and_copy:
+  push b
+  ;          CH       CL       BH       BL
+  ;form:  00000000 000000bb bbbbbbbb bbbbbb00
+  mov b, 0
+  mov cl, 1
+  shl a
+  rlc b, cl
+  shl a
+  rlc b, cl
+  mov c, b
+  mov b, a
+  add b, 4124 ; add to c|b the start LBA offset of the data blocks section of the disk. 1031 * 2048 / 512 = 4124
+  adc c, 0
+  mov d, ide_buffer           ; we read into the bios ide buffer
+  mov a, $0402                ; disk read, 4 sectors = 1 block
+  syscall bios_ide            ; read sector
+
+  mov d, ide_buffer           ; we read into the bios ide buffer
+loop1:
+  mov bl, [d]
+  call __xput_u8
+  inc d
+  cmp d, ide_buffer + 2048
+  jne loop1
+  mov d, s_nl
+  call __puts
+  call __puts
+
+  mov c, 2048                 ; 4 sectors = 1 block to copy
+  mov si, ide_buffer
+  pop a                       ; pop 'b' that we pushed earlier into 'a'
+  shl a, 11                   ; multiply cycle number by 2048
+  mov di, a                  
+  supcpy                      ; now copy data from bios mem to kernel mem
+  ret
 
 ; inputs:
 ; a: inode number
@@ -232,12 +302,12 @@ s_used_dirs:        .db "\nnumber of used directories: ", 0
 s_uuid:             .db "\nuuid: ", 0
 s_vol_name:         .db "\nvolume name: ", 0
 
+s_colon: .db ": ", 0
+s_comma: .db ", ", 0
 s_sp: .db " ", 0
 s_nl: .db "\n", 0
 s_mode: .db "mode: ", 0
-s_filesize: .db "file size: ", 0
-s_blocks: .db "number of blocks: ", 0
-s_block: .db "block links: ", 0
+s_filesize: .db "kernel file size, number of blocks: ", 0
 
 inode_entry_offset: .db 0
 inode_entry_sect:   .dw 0

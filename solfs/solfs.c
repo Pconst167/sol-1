@@ -289,7 +289,7 @@ int main(int argc, char **argv){
     // generate disk image
   if(!strcmp(argv[1], "-w")){
     // LOAD BOOTLOADER AND WRITE TO BOOT SECTOR
-    if(loadfile_bootloader("../software/obj/boot_ext2.obj", disk) == -1){
+    if(loadfile_bootloader("../software/obj/boot.obj", disk) == -1){
       printf("> exiting...\n");
       return 0;
     };

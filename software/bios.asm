@@ -63,8 +63,8 @@ _global_base     .equ $8000       		 ; base of global variable block
 
 
 boot_origin:     .equ _global_base + 2 + 2
-
 ide_buffer:      .equ _global_base + 2 + 2 + 1024
+inode_buffer:    .equ _global_base + 2 + 2 + 1024 + 2048
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; global system variables
@@ -122,13 +122,14 @@ bios_ide   .equ 3
 
 .export bios_reset_vector
 .export ide_buffer
+.export inode_buffer
 .export boot_origin
 .export bios_uart
 .export bios_ide
 .export __puts
 .export __print_u16d
-.export print_u16x
-.export xput_u8
+.export __print_u16x
+.export __xput_u8
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; external interrupts' code block
@@ -480,7 +481,7 @@ bios_peripherals_setup:
 ; print 16bit hex integer
 ; integer value in reg b
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-print_u16x:
+__print_u16x:
   pushf
   push a
   push b
@@ -542,7 +543,7 @@ scan_u16x:
 ; print 8bit hex integer
 ; byte value in reg bl
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-xput_u8:
+__xput_u8:
   push a
   push bl
   pushf

@@ -24,7 +24,6 @@ _ide_r7          .equ _ide_base + 7    ; read: status, write: command
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; setting up kernel process.
-; map kernel memory to bios 64kb
 ; 32 pages of 2kb = 64kb
 ; bl = ptb
 ; bh = page number (5bits)
