@@ -75,12 +75,8 @@ _timer_c_1        .equ $ffe1         ; timer counter 1
 _timer_c_2        .equ $ffe2         ; timer counter 2
 _timer_ctrl       .equ $ffe3         ; timer control register
 
-_stack_begin      .equ $f7ff         ; beginning of stack
+_stack_top        .equ $f7ff         ; beginning of stack
 _fifo_size        .equ 4096
-
-_mbr                    .equ 960
-_superblock             .equ 1024
-_block_group_descriptor .equ 2048
 
 text_org                .equ $400          ; code origin address for all user processes
 
@@ -822,7 +818,7 @@ syscall_io:
 syscall_io_uart_setup:
   mov al, [sys_uart0_lcr]
   or al, $80                ; set dlab access bit
-  mov [_uart0_lcr], al      ; 8 data, 2 stop, no parity by default
+  mov [_uart0_lcr], al      ; 8 data, 2 stop, even parity 
   mov al, [sys_uart0_div0]
   mov [_uart0_dlab_0], al   ; divisor latch byte 0
   mov al, [sys_uart0_div1]
@@ -834,10 +830,11 @@ syscall_io_uart_setup:
   mov [_uart0_ier], al      ; interrupts
   mov al, [sys_uart0_fifoen]
   mov [_uart0_fcr], al      ; fifo control
+
 ; uart1:
   mov al, [sys_uart1_lcr]
   or al, $80                ; set dlab access bit
-  mov [_uart1_lcr], al      ; 8 data, 2 stop, no parity by default
+  mov [_uart1_lcr], al      ; 8 data, 2 stop, even parity 
   mov al, [sys_uart1_div0]
   mov [_uart1_dlab_0], al   ; divisor latch byte 0
   mov al, [sys_uart1_div1]
@@ -855,17 +852,10 @@ syscall_io_uart_setup:
 syscall_io_putchar:
 syscall_io_putchar_l0:
   mov al, [_uart0_lsr]         ; read line status register
-  and al, $20
+  test al, $20
   jz syscall_io_putchar_l0    
   mov al, ah
   mov [_uart0_data], al        ; write char to transmitter holding register
-; write to uart1
-syscall_io_putchar_l1:
-  mov al, [_uart1_lsr]         ; read line status register
-  and al, $20
-  jz syscall_io_putchar_l1
-  mov al, ah
-  mov [_uart1_data], al        ; write char to transmitter holding register
   sysret
 
 ; char in ah
@@ -1018,17 +1008,13 @@ __load_hex_ret:
 ; kernel reset vector
 ; ---------------------------------------------------------------------
 kernel_reset_vector:  
-  mov bp, _stack_begin
-  mov sp, _stack_begin
+  mov bp, _stack_top
+  mov sp, _stack_top
   
-  mov al, %10100001             ; mask out timer interrupt for now - enable uarts and fdc irqs 
-  stomsk                        
-  sti  
-
   lodstat
   and al, %11011111             ; disable display register loading
   stostat
-  
+
 ; reset fifo pointers
   mov a, fifo
   mov d, fifo_in
@@ -1038,14 +1024,26 @@ kernel_reset_vector:
   mov al, 2
   syscall sys_io                ; enable uart in interrupt mode
 
+  mov al, %10100000             ; uart0 | timer | uart1 | 0 | 0 | 0 | 0| fdc
+  stomsk                        
+  sti  
+
   mov d, s_kernel_welcome
   call _puts
 
   mov d, s_fdc_config
   call _puts
+
   mov byte [_fdc_config], %00001101  ; %00001001 : turn led on / head load, disable double density, select side 0, select drive 0, do not select drive 1
   mov byte [_fdc_stat_cmd], %00001011     ; leave this restore command in order to clear BUSY flag
   mov byte [_fdc_track], $00 ; reset track
+
+
+  mov a, 0
+ker_loop:
+  inc a
+  mov [_til311_display], al
+  jmp ker_loop
 
   ;syscall sys_create_proc       ; launch init as a new process
 
@@ -1056,16 +1054,6 @@ kernel_reset_vector:
 .include "lib/token.asm"
 
 ; kernel parameters
-sys_uart0_lcr:
-  .db %00001111 ; 8 data bits, 2 stop bits, enable parity, odd parity
-sys_uart0_inten:
-  .db 1
-sys_uart0_fifoen:
-  .db 0
-sys_uart0_div0:
-  .db 3
-sys_uart0_div1:
-  .db 0   ; default baud = 38400
 ; baud  divisor
 ; 50    2304
 ; 110   1047
@@ -1075,8 +1063,19 @@ sys_uart0_div1:
 ; 9600    12
 ; 19200    6
 ; 38400    3
+sys_uart0_lcr:
+  .db %00001111 ; 8 data bits, 2 stop bits, enable parity, even parity
+sys_uart0_inten:
+  .db 1
+sys_uart0_fifoen:
+  .db 0
+sys_uart0_div0:
+  .db 3
+sys_uart0_div1:
+  .db 0   ; default baud = 38400
+
 sys_uart1_lcr:
-  .db %00001111 ; 8 data bits, 2 stop bits, enable parity, odd parity
+  .db %00001111 ; 8 data bits, 2 stop bits, enable parity, even parity
 sys_uart1_inten:
   .db 1
 sys_uart1_fifoen:
@@ -1122,7 +1121,7 @@ s_kernel_welcome:
   .db "************************************************\n"
   .db "*** Welcome to Solarium OS - Kernel ver. 1.0 ***\n"
   .db "*** type help for more information           ***\n"
-  .db "************************************************\n"
+  .db "************************************************\n", 0
 s_prompt_init:
   .db "starting init\n", 0
 s_priviledge:
@@ -1177,11 +1176,6 @@ s_week:
 s_fdc_irq: .db "\nIRQ0 Executed.\n", 0
 s_fdc_config:
   .db "selecting diskette drive 0, side 0, single density, head loaded\n", 0
-
-; indices used to navigate the inode table in disk
-inode_table_index_0: .dw 0
-inode_table_index_1: .dw 0
-inode_table_index_2: .dw 0
 
 fifo:
   .fill _fifo_size

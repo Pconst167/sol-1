@@ -20,7 +20,7 @@ WiFiClient serverClients[MAX_CLIENTS];
 
 void setup() {
   Serial.setRxBufferSize(1024);
-  Serial.begin(38400, SERIAL_8O2);
+  Serial.begin(38400, SERIAL_8E2);
 
   WiFi.mode(WIFI_STA);
   WiFi.begin(ssid, password);

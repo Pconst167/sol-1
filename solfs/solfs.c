@@ -817,7 +817,7 @@ uint16_t create_file(char *name, char * filename, uint16_t parent_inode){
   uint16_t num_blocks_needed;
   uint16_t parent_block_num;
   uint8_t *parent_data_block_p;
-  uint8_t file_image[BLOCK_SIZE * NUM_INODE_BLOCK_POINTERS]; // image of maximum file size
+  static uint8_t file_image[BLOCK_SIZE * NUM_INODE_BLOCK_POINTERS]; // image of maximum file size
   uint32_t file_size;
 
   file_size = loadfile(filename, file_image); // load the file from disk and write to image
@@ -846,8 +846,9 @@ uint16_t create_file(char *name, char * filename, uint16_t parent_inode){
   // now copy the file contents into the data blocks
   for(int i = 0; i < num_blocks_needed; i++){ 
     data_block_p = (uint8_t *)(data_blocks_p + new_inode.block[i]);
-    memcpy((void *)(data_block_p + i), (void *)(&file_image[i * BLOCK_SIZE]), BLOCK_SIZE);
+    memcpy(data_block_p, &file_image[i * BLOCK_SIZE], BLOCK_SIZE);
   }
+
 
   // now add an entry for this file into the parent directory
   // inode(2) | name(62) |   total size = 64

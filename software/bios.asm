@@ -63,8 +63,8 @@ _global_base     .equ $8000       		 ; base of global variable block
 
 
 boot_origin:     .equ _global_base + 2 + 2
-ide_buffer:      .equ _global_base + 2 + 2 + 1024
-inode_buffer:    .equ _global_base + 2 + 2 + 1024 + 2048
+ide_buffer:      .equ boot_origin + 1024
+inode_buffer:    .equ ide_buffer + 2048
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; global system variables
@@ -261,7 +261,7 @@ uart_services:
   jmp [uart_serv_tbl + al]
 
 uart_init:
-  mov byte[_uart0_lcr], %10001111      ; 8 data, 2 stop, odd parity, divisor latch = 1, uart address 3 = line control register
+  mov byte[_uart0_lcr], %10001111      ; 8 data, 2 stop, even parity, divisor latch = 1, uart address 3 = line control register
   mov byte[_uart0_dlab_0], 3      ; baud = 38400
   mov byte[_uart0_dlab_1], 0      ; divisor latch high byte = 0      
   mov byte[_uart0_lcr], %00001111      ; divisor latch = 0, uart address 3 = line control register

@@ -143,9 +143,8 @@ map_kernel_mem_l1:
   call __puts
 
 
-
+  ; load kernel from disk
   mov a, [boot_origin + 1022] ; get kernel inode number from bootloader chunk in ram
-  mov [kernel_inode], a       ; and save in variable
 
   call get_ino_entry_sect_ofst ; sector in a, remainder in bl
   add a, inode_table_sect_start  ; add start lba of inode table
@@ -171,12 +170,13 @@ map_kernel_mem_l1:
   call __print_u16x
   mov d, s_comma
   call __puts
-
   pop d
   mov b, [d + 28]
+  mov [kernel_blocks], b   ; save the number of blocks that make up kernel file
   push d
   call __print_u16x
-  mov d, s_nl
+
+  mov d, s_kernel_blocks
   call __puts
 
   ; now read the block numbers from the inode entry
@@ -184,46 +184,58 @@ map_kernel_mem_l1:
   add d, 34
   mov b, 0
 loop_block:
-  mov a, [d]
-  cmp a, 0       ; if a block pointer is 0, we exit.  all block pointers must be continuously non zero.
-  je loop_block_end
-  call __print_u16d
   push d
-  mov d, s_colon
+  mov d, s_hash
   call __puts
-  pop d
+  pop d      
+  mov a, [d]
+  call __print_u16d  ; print block number
+  push d
+  mov d, s_read_ok
+  call __puts
   ; now using the pointers to the kernel blocks, load the kernel file into ram
   ; Data Blocks            | 134,217,728 bytes | 65528 blocks                     | 1031       | 65528 blocks = 134,201,344 bytes
-  push d
   push b
   call load_block_and_copy  ; copy the block from disk to kernel memory
   pop b
+  call test_blk0_copy_rst_vec ; this function tests for block #0 and if so, copies kernel reset vector into kernel_reset_vector variable
   pop d
   add d, 2
   inc b
-  cmp b, 32      ; for kernel file, the maximum number of blocks possible is 32. 32*2048 = 65536 bytes. so a kernel file cannot be larger than 65536 bytes
-                 ; so we only process block numbers from 0 to 31 here.
+  mov a, [kernel_blocks]
+  cmp a, b      ; see if we reached the total number of kernel blocks that compose the file
   jne loop_block
 
-loop_block_end:
-  jmp loop_block_end
 
-; interrupt masks  
-  mov al, $ff
-  stomsk                      ; store masks
-  mov d, s_masks
-  call __puts
-  
   mov d, s_bios2
   call __puts
 
 ; now we start the kernel.
-  mov a, g                    ; retrieve kernel reset vector
+  mov a, [kernel_reset_vector] ; retrieve kernel reset vector
 
   push word $ffff             ; stack. dummy value since the real value is set in the kernel code
-  push byte %00001000         ; mode =supervisor, paging=on
+  push byte %00001000         ; mode=supervisor, paging=on
   push a                      ; pc
   sysret
+
+; this function exists solely to test if we have just read block 0 
+; and if so, then copy the kernel reset vector from location 16 in it
+test_blk0_copy_rst_vec:
+  cmp b, 0       ; if block number is 0
+  je copy_reset_vec
+  ret
+copy_reset_vec:
+  mov a, [ide_buffer + 16]   ; kernel reset vector always at location 16 = 0x10
+  mov [kernel_reset_vector], a
+  mov d, s_reset_vec
+  call __puts
+  push b
+  mov b, a
+  call __print_u16x
+  pop b
+  mov d, s_nl
+  call __puts
+  ret
 
 ; inputs:
 ;   a: block number in disk
@@ -246,17 +258,7 @@ load_block_and_copy:
   mov a, $0402                ; disk read, 4 sectors = 1 block
   syscall bios_ide            ; read sector
 
-  mov d, ide_buffer           ; we read into the bios ide buffer
-loop1:
-  mov bl, [d]
-  call __xput_u8
-  inc d
-  cmp d, ide_buffer + 2048
-  jne loop1
-  mov d, s_nl
-  call __puts
-  call __puts
-
+  ; now copy block from bios memory to kernel process memory
   mov c, 2048                 ; 4 sectors = 1 block to copy
   mov si, ide_buffer
   pop a                       ; pop 'b' that we pushed earlier into 'a'
@@ -278,39 +280,26 @@ get_ino_entry_sect_ofst:
   shr a, 2                     ; shifting right by 2, gives the multiple of 512 which represents the sector number
   ret
 
-kernel_inode: .dw 0
+kernel_blocks:       .dw 0
+kernel_reset_vector: .dw 0
 
-s_boot1:         .db "executing bootloader\n", 0
-s_kernel_setup:  .db "mapping kernel page-table to physical RAM\n", 0
-s_masks:         .db "\n\rinterrupt masks register set to 0xFF\n", 0
-s_boot:          .db "loading kernel from disk", 0
-s_bios2:         .db "entering protected-mode\n"
-                 .db "starting kernel\n", 0
+s_boot1:        .db "starting bootloader...\n", 0
+s_kernel_setup: .db "mapping kernel page-table entries to memory...\n", 0
+s_boot:         .db "loading kernel from disk...\n", 0
+s_filesize:     .db "kernel file size, number of blocks: ", 0
+s_kernel_blocks:.db "\nreading kernel blocks...\n", 0
+s_read_ok:      .db " read OK.\n", 0
+s_bios2:        .db "entering protected-mode\n"
+                .db "starting kernel...\n", 0
+s_reset_vec:    .db "kernel reset vector: ", 0
 
 s_hex_digits:   .db "0123456789ABCDEF"
 
-s_read_super:       .db "\nreading superblock\n", 0
-s_total_inodes:     .db "\ntotal inodes: ", 0
-s_total_blocks:     .db "\ntotal blocks: ", 0
-s_free_inodes:      .db "\nfree inodes: ", 0
-s_free_blocks:      .db "\nfree blocks: ", 0
-s_block_bitmap:     .db "\nblock bitmap: ", 0
-s_inode_bitmap:     .db "\ninode bitmap: ", 0
-s_inode_table:      .db "\ninode table: ", 0
-s_first_data_block: .db "\nfirst data block: ", 0
-s_used_dirs:        .db "\nnumber of used directories: ", 0
-s_uuid:             .db "\nuuid: ", 0
-s_vol_name:         .db "\nvolume name: ", 0
-
-s_colon: .db ": ", 0
-s_comma: .db ", ", 0
-s_sp: .db " ", 0
-s_nl: .db "\n", 0
-s_mode: .db "mode: ", 0
-s_filesize: .db "kernel file size, number of blocks: ", 0
-
-inode_entry_offset: .db 0
-inode_entry_sect:   .dw 0
+s_hash:         .db "#", 0
+s_colon:        .db ": ", 0
+s_comma:        .db ", ", 0
+s_sp:           .db " ", 0
+s_nl:           .db "\n", 0
 
 
 

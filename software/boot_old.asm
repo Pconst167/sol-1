@@ -89,7 +89,7 @@ map_kernel_mem_l1:
                               ; as we now need to load the kernel from disk, from that lba address
   mov c, 0
   mov d, ide_buffer           ; we read into the bios ide buffer
-  mov a, $3102                ; disk read, 31 sectors. 31 sectors because the first sector of the kernel is just a file block header
+  mov a, $1F02                ; disk read, 31 sectors. 31 sectors because the first sector of the kernel is just a file block header
                               ; used to tell whether that block is taken. so the file really has 31 sectors 
                               ; in this current file system (which is a hack and is temporary)
   syscall bios_ide            ; read sector
