@@ -1034,9 +1034,9 @@ kernel_reset_vector:
   mov d, s_fdc_config
   call _puts
 
-  mov byte [_fdc_config], %00001101  ; %00001001 : turn led on / head load, disable double density, select side 0, select drive 0, do not select drive 1
-  mov byte [_fdc_stat_cmd], %00001011     ; leave this restore command in order to clear BUSY flag
-  mov byte [_fdc_track], $00 ; reset track
+  mov byte [_fdc_config], %00001101   ; %00001001 : turn led on / head load, disable double density, select side 0, select drive 0, do not select drive 1
+  mov byte [_fdc_stat_cmd], %00001011 ; leave this restore command in order to clear BUSY flag
+  mov byte [_fdc_track], $00          ; reset track
 
 
   mov a, 0
@@ -1045,7 +1045,6 @@ ker_loop:
   mov [_til311_display], al
   jmp ker_loop
 
-  ;syscall sys_create_proc       ; launch init as a new process
 
 ; file includes
 .include "bios.exp"         ; to obtain the bios_reset_vector location (for reboots)
