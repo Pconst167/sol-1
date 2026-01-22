@@ -1038,6 +1038,13 @@ syscall_io_putchar_l0:
   jz syscall_io_putchar_l0    
   mov al, ah
   mov [_uart0_data], al        ; write char to transmitter holding register
+; uart1
+syscall_io_putchar_l1:
+  mov al, [_uart1_lsr]         ; read line status register
+  test al, $20
+  jz syscall_io_putchar_l1    
+  mov al, ah
+  mov [_uart1_data], al        ; write char to transmitter holding register
   sysret
 
 ; char in ah
