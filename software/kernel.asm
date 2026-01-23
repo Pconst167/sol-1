@@ -77,6 +77,7 @@ _timer_ctrl       .equ $ffe3         ; timer control register
 
 _stack_top        .equ $f7ff         ; beginning of stack
 _fifo_size        .equ 4096
+_scrap_size       .equ 512
 
 text_org                .equ $400          ; code origin address for all user processes
 
@@ -1052,10 +1053,11 @@ ker_loop:
 
 
 ; file includes
-.include "bios.exp"         ; to obtain the bios_reset_vector location (for reboots)
+.include "lib/bios.exp"         ; to obtain the bios_reset_vector location (for reboots)
 .include "lib/stdio.asm"
 .include "lib/ctype.asm"
 .include "lib/token.asm"
+
 
 ; kernel parameters
 ; baud  divisor
@@ -1181,12 +1183,13 @@ s_fdc_irq: .db "\nIRQ0 Executed.\n", 0
 s_fdc_config:
   .db "selecting diskette drive 0, side 0, single density, head loaded\n", 0
 
-fifo:
-  .fill _fifo_size
+; here we define areas that keep transient data
+; we use '$' which is the assembler's current address pointer so that these areas are defined to be exactly
+; after all the static data has been declared
+fifo:           .equ $   
+scrap_sector:   .equ $ + _fifo_size
+transient_area: .equ $ + _fifo_size + _scrap_size
 
-scrap_sector:
-  .fill 512         ; scrap sector
-transient_area:
-  .db 0             ; beginning of the transient memory area. used for disk reads and other purposes    
+
 
 .end
