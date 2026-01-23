@@ -23,10 +23,16 @@
      struct process *owner;
      char inbuf[128];
  };
- struct process {
-     struct file *fd[MAX_FD];
-     struct tty *tty;
- };
+
+struct process {
+    pid_t pid;                 // process ID
+    enum proc_state state;     // RUNNING, READY, BLOCKED, ZOMBIE
+
+    struct file *fd[MAX_FD];
+    struct tty *tty;
+
+    struct cpu_context ctx;    // saved registers
+};
 
  // this is for the device level. 
  struct chardev {

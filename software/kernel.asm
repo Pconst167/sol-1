@@ -30,54 +30,65 @@
 ; ------------------------------------------------------------------------------------------------------------------;
 ; system constants
 ; ------------------------------------------------------------------------------------------------------------------;
-_uart0_data       .equ $ff80         ; data
-_uart0_dlab_0     .equ $ff80         ; divisor latch low byte
-_uart0_dlab_1     .equ $ff81         ; divisor latch high byte
-_uart0_ier        .equ $ff81         ; interrupt enable register
-_uart0_fcr        .equ $ff82         ; fifo control register
-_uart0_lcr        .equ $ff83         ; line control register
-_uart0_lsr        .equ $ff85         ; line status register
+_uart0_data             .equ $ff80         ; data
+_uart0_dlab_0           .equ $ff80         ; divisor latch low byte
+_uart0_dlab_1           .equ $ff81         ; divisor latch high byte
+_uart0_ier              .equ $ff81         ; interrupt enable register
+_uart0_fcr              .equ $ff82         ; fifo control register
+_uart0_lcr              .equ $ff83         ; line control register
+_uart0_lsr              .equ $ff85         ; line status register
+                      
+_uart1_data             .equ $ff88         ; data
+_uart1_dlab_0           .equ $ff88         ; divisor latch low byte
+_uart1_dlab_1           .equ $ff89         ; divisor latch high byte
+_uart1_ier              .equ $ff89         ; interrupt enable register
+_uart1_fcr              .equ $ff8A         ; fifo control register
+_uart1_lcr              .equ $ff8B         ; line control register
+_uart1_lsr              .equ $ff8D         ; line status register
+                      
+_ide_base               .equ $ffd0         ; ide base
+_ide_r0                 .equ _ide_base + 0 ; data port
+_ide_r1                 .equ _ide_base + 1 ; read: error code, write: feature
+_ide_r2                 .equ _ide_base + 2 ; number of sectors to transfer
+_ide_r3                 .equ _ide_base + 3 ; sector address lba 0 [0:7]
+_ide_r4                 .equ _ide_base + 4 ; sector address lba 1 [8:15]
+_ide_r5                 .equ _ide_base + 5 ; sector address lba 2 [16:23]
+_ide_r6                 .equ _ide_base + 6 ; sector address lba 3 [24:27 (lsb)]
+_ide_r7                 .equ _ide_base + 7 ; read: status, write: command       
+                      
+_til311_display         .equ $ffb0         ; bios post code hex display (2 digits) (connected to pio a)
+_bios_post_ctrl         .equ $ffb3         ; bios post display control register, 80h = as output
+_pio_a                  .equ $ffb0    
+_pio_b                  .equ $ffb1
+_pio_c                  .equ $ffb2
+_pio_control            .equ $ffb3         ; pio control port
+                      
+_fdc_config             .equ $ffc0         ; 0 = select_0, 1 = select_1, 2 = side_select, 3 = dden, 4 = in_use_or_head_load, 5 = wd1770_rst
+_fdc_status_0           .equ $ffc1         ; 0 = drq, 1 = ready
+_fdc_stat_cmd           .equ $ffc8         ; status / command register
+_fdc_track              .equ $ffc9         ; track register
+_fdc_sector             .equ $ffca         ; sector register
+_fdc_data               .equ $ffcb         ; data register
+                      
+_timer_c_0              .equ $ffe0         ; timer counter 0
+_timer_c_1              .equ $ffe1         ; timer counter 1
+_timer_c_2              .equ $ffe2         ; timer counter 2
+_timer_ctrl             .equ $ffe3         ; timer control register
+                      
+_stack_top              .equ $f7ff         ; beginning of stack
+_fifo_size              .equ 4096
+_scrap_size             .equ 512
 
-_uart1_data       .equ $ff88         ; data
-_uart1_dlab_0     .equ $ff88         ; divisor latch low byte
-_uart1_dlab_1     .equ $ff89         ; divisor latch high byte
-_uart1_ier        .equ $ff89         ; interrupt enable register
-_uart1_fcr        .equ $ff8A         ; fifo control register
-_uart1_lcr        .equ $ff8B         ; line control register
-_uart1_lsr        .equ $ff8D         ; line status register
+_num_cpu_regs           .equ 10                                     ; A, B, C, D, G, PC, BP, SP, SI, DI
+_num_user_proc          .equ 128                                    ; max number of concurrent user processes
+_fd_per_proc            .equ 32                                     ; for kernel's file descriptor table per process
+_num_file_objs          .equ 128                                    ; for the kernel's file object table
+_size_file_obj_entry    .equ 1 + 2 + 1 + 2 + 2 + (4 * 2)            ; refcount, flags, type, target, offset, ops
+_size_file_obj_table    .equ _num_file_objs * _size_file_obj_entry  ; kernel's file object table
 
-_ide_base         .equ $ffd0         ; ide base
-_ide_r0           .equ _ide_base + 0 ; data port
-_ide_r1           .equ _ide_base + 1 ; read: error code, write: feature
-_ide_r2           .equ _ide_base + 2 ; number of sectors to transfer
-_ide_r3           .equ _ide_base + 3 ; sector address lba 0 [0:7]
-_ide_r4           .equ _ide_base + 4 ; sector address lba 1 [8:15]
-_ide_r5           .equ _ide_base + 5 ; sector address lba 2 [16:23]
-_ide_r6           .equ _ide_base + 6 ; sector address lba 3 [24:27 (lsb)]
-_ide_r7           .equ _ide_base + 7 ; read: status, write: command       
+_size_proc_entry        .equ 1 + 1 + _fd_per_proc * 2 + 2 + _num_cpu_regs * 2 + 1 + 39 ; pid, state, fd_table, tty pointer, context (general regs + flags), 39 bytes padding to reach 128
+_size_proc_table        .equ _size_proc_entry * _num_user_proc  ; 16k total
 
-_til311_display   .equ $ffb0         ; bios post code hex display (2 digits) (connected to pio a)
-_bios_post_ctrl   .equ $ffb3         ; bios post display control register, 80h = as output
-_pio_a            .equ $ffb0    
-_pio_b            .equ $ffb1
-_pio_c            .equ $ffb2
-_pio_control      .equ $ffb3         ; pio control port
-
-_fdc_config       .equ $ffc0         ; 0 = select_0, 1 = select_1, 2 = side_select, 3 = dden, 4 = in_use_or_head_load, 5 = wd1770_rst
-_fdc_status_0     .equ $ffc1         ; 0 = drq, 1 = ready
-_fdc_stat_cmd     .equ $ffc8         ; status / command register
-_fdc_track        .equ $ffc9         ; track register
-_fdc_sector       .equ $ffca         ; sector register
-_fdc_data         .equ $ffcb         ; data register
-
-_timer_c_0        .equ $ffe0         ; timer counter 0
-_timer_c_1        .equ $ffe1         ; timer counter 1
-_timer_c_2        .equ $ffe2         ; timer counter 2
-_timer_ctrl       .equ $ffe3         ; timer control register
-
-_stack_top        .equ $f7ff         ; beginning of stack
-_fifo_size        .equ 4096
-_scrap_size       .equ 512
 
 text_org                .equ $400          ; code origin address for all user processes
 
@@ -1181,14 +1192,22 @@ s_week:
 
 s_fdc_irq: .db "\nIRQ0 Executed.\n", 0
 s_fdc_config:
-  .db "selecting diskette drive 0, side 0, single density, head loaded\n", 0
+  .db "floppy drive configuration:\n" 
+  .db "  drive:     0\n"
+  .db "  side:      0\n"
+  .db "  density:   single density\n"
+  .db "  head load: loaded\n", 0
+
+
+file_obj_table: .equ $
+proc_table:     .equ $ + _size_file_obj_table
 
 ; here we define areas that keep transient data
 ; we use '$' which is the assembler's current address pointer so that these areas are defined to be exactly
 ; after all the static data has been declared
-fifo:           .equ $   
-scrap_sector:   .equ $ + _fifo_size
-transient_area: .equ $ + _fifo_size + _scrap_size
+fifo:           .equ $ + _size_file_obj_table + _size_proc_table
+scrap_sector:   .equ $ + _size_file_obj_table + _size_proc_table + _fifo_size
+transient_area: .equ $ + _size_file_obj_table + _size_proc_table + _fifo_size + _scrap_size
 
 
 
