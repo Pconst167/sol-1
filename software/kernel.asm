@@ -79,6 +79,11 @@ _stack_top              .equ $f7ff         ; beginning of stack
 _fifo_size              .equ 4096
 _scrap_size             .equ 512
 
+_file_type_null         .equ 0
+_file_type_reg          .equ 1
+_file_type_chardev      .equ 2
+_file_type_blockdev     .equ 3
+
 _num_cpu_regs           .equ 10                                     ; A, B, C, D, G, PC, BP, SP, SI, DI
 _num_user_proc          .equ 128                                    ; max number of concurrent user processes
 _fd_per_proc            .equ 32                                     ; for kernel's file descriptor table per process
@@ -222,10 +227,11 @@ data_blocks_sect_start  .equ 4124
 .dw syscall_rtc
 .dw syscall_ide
 .dw syscall_io
-.dw syscall_file_system
+.dw syscall_file
 .dw syscall_datetime
 .dw syscall_reboot
 .dw syscall_system
+.dw syscall_proc
 
 ; ------------------------------------------------------------------------------------------------------------------;
 ; system call aliases
@@ -234,11 +240,11 @@ sys_break            .equ 0
 sys_rtc              .equ 1
 sys_ide              .equ 2
 sys_io               .equ 3
-sys_filesystem       .equ 4
+sys_file             .equ 4
 sys_datetime         .equ 5
 sys_reboot           .equ 6
 sys_system           .equ 7
-sys_fdc              .equ 8
+sys_proc             .equ 8
 
 ; ------------------------------------------------------------------------------------------------------------------;
 ; alias exports
@@ -248,11 +254,10 @@ sys_fdc              .equ 8
 .export sys_rtc
 .export sys_ide
 .export sys_io
-.export sys_filesystem
+.export sys_file
 .export sys_datetime
 .export sys_reboot
 .export sys_system
-.export sys_fdc
 
 .export _til311_display
 
@@ -339,6 +344,17 @@ sys_mkfs:
   sysret
 
 ; ------------------------------------------------------------------------------------------------------------------;
+; process syscalls
+; ------------------------------------------------------------------------------------------------------------------;
+proc_jmptbl:
+  .dw proc_creat
+syscall_proc:
+  jmp [proc_jmptbl + al]
+
+proc_creat:
+  sysret
+
+; ------------------------------------------------------------------------------------------------------------------;
 ; system syscalls
 ; ------------------------------------------------------------------------------------------------------------------;
 system_jmptbl:
@@ -401,12 +417,11 @@ syscall_reboot:
 ; privilege exception
 ; ------------------------------------------------------------------------------------------------------------------;
 trap_privilege:
-  jmp syscall_reboot
   push d
   mov d, s_priviledge
   call _puts
   pop d
-  sysret
+  jmp syscall_reboot
 
 ; ------------------------------------------------------------------------------------------------------------------;
 ; breakpoint
@@ -936,7 +951,7 @@ file_system_jmptbl:
   .dw fs_rm                     
   .dw fs_mv                     
 
-syscall_file_system:
+syscall_file:
   jmp [file_system_jmptbl + al]
 
 ;------------------------------------------------------------------------------------------------------;
