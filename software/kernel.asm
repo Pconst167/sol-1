@@ -98,7 +98,7 @@ _num_file_objs          .equ 128                                    ; for the ke
 _size_file_obj_entry    .equ 1 + 2 + 1 + 2 + 2 + (4 * 2)            ; refcount, flags, type, target, offset, ops
 _size_file_obj_table    .equ _num_file_objs * _size_file_obj_entry  ; kernel's file object table
 
-_size_proc_entry        .equ 1 + 1 + 1 + _fd_per_proc * 2 + 2 + _num_cpu_regs + 39 ; pid, parent_pid, state, fd_table, tty pointer, context (general regs + flags), 38 bytes padding to reach 128
+_size_proc_entry        .equ 1 + 1 + 1 + _fd_per_proc * 2 + 2 + _num_cpu_regs + 38 ; pid, parent_pid, state, fd_table, tty pointer, context (general regs + flags), 38 bytes padding to reach 128
 _size_proc_table        .equ _size_proc_entry * _max_user_proc  ; 16k total
 
 
@@ -356,11 +356,12 @@ syscall_fork:
   jmp [fork_jmptbl + al]
 
 fork:
-  mov a, curr_pid
+  mov al, curr_pid
+  mov ah, 0
   shl a, 7          ; mul by 128
   add a, proc_table
   mov si, a
-  call find_empty_proc_slot  ; result proc address in a
+  call find_empty_proc_slot  ; result proc entry address in a
   mov di, a
   mov c, 128
   rep movsb  ; copy proc structure from old to new
@@ -368,6 +369,7 @@ fork:
   mov d, a  ; new process entry base
   mov al, [pid_counter]
   mov [d], al   ; set new PID
+  push al  ; save new process PID for using below
   inc al
   mov [pid_counter], al ; update global pid counter
 
@@ -376,10 +378,27 @@ fork:
   mov al, proc_runnable
   mov [d + 2], al ; set process as runnable
 
+  ; the offset of the register context is 69
+  ; for parent the return value in A is the child's PID
+  ; and for the child the return value in A is 0
+  ; so we need to place 0 in the A register in the new process' context block
+  mov al, 0
+  mov [d + 69], al  ; child PID return value = 0
+
+  ; obtain parent(current) process' entry offset again
+  mov al, curr_pid
+  mov ah, 0
+  shl a, 7  ; mul by 128
+  add a, proc_table
+  mov d, a
+  pop al   ; retrieve new child process PID that we obained before
+  mov [d + 69], al  ; and now copy that child PID into the parent's context's return value in A register
+
+
   ; now copy entire memory of old process into new process' memory
   sysret
 
-; pid, parent_pid, state, fd_table, tty pointer, context (general regs + flags), 39 bytes padding to reach 128
+; pid, parent_pid, state, fd_table, tty pointer, context (general regs + flags), 38 bytes padding to reach 128
 ; return index in b
 ; address in a
 find_empty_proc_slot:
@@ -1266,7 +1285,7 @@ s_fdc_config:
 s_reset_proc_tbl: .db "resetting process table...\n", 0
 
 pid_counter:      .dw 1
-curr_pid:         .dw 0  ; current process pid
+curr_pid:         .db 0  ; current process pid
 
 file_obj_table:   .equ $
 proc_table:       .equ $ + _size_file_obj_table
