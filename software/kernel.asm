@@ -84,26 +84,25 @@ _file_type_reg          .equ 1
 _file_type_chardev      .equ 2
 _file_type_blockdev     .equ 3
 
-_num_cpu_regs           .equ 10                                     ; A, B, C, D, G, PC, BP, SP, SI, DI
-_num_user_proc          .equ 128                                    ; max number of concurrent user processes
+proc_unused             .equ 0  ; slot free
+proc_runnable           .equ 1  ; ready to run
+proc_running            .equ 2  ; currently on cpu
+proc_sleeping           .equ 3  ; waiting for event
+proc_zombie             .equ 4  ; exited, not reaped
+
+
+_num_cpu_regs           .equ 21                                     ; A, B, C, D, G, PC, BP, SP, SI, DI, FLAGS
+_max_user_proc          .equ 128                                    ; max number of concurrent user processes
 _fd_per_proc            .equ 32                                     ; for kernel's file descriptor table per process
 _num_file_objs          .equ 128                                    ; for the kernel's file object table
 _size_file_obj_entry    .equ 1 + 2 + 1 + 2 + 2 + (4 * 2)            ; refcount, flags, type, target, offset, ops
 _size_file_obj_table    .equ _num_file_objs * _size_file_obj_entry  ; kernel's file object table
 
-_size_proc_entry        .equ 1 + 1 + _fd_per_proc * 2 + 2 + _num_cpu_regs * 2 + 1 + 39 ; pid, state, fd_table, tty pointer, context (general regs + flags), 39 bytes padding to reach 128
-_size_proc_table        .equ _size_proc_entry * _num_user_proc  ; 16k total
+_size_proc_entry        .equ 1 + 1 + 1 + _fd_per_proc * 2 + 2 + _num_cpu_regs + 39 ; pid, parent_pid, state, fd_table, tty pointer, context (general regs + flags), 38 bytes padding to reach 128
+_size_proc_table        .equ _size_proc_entry * _max_user_proc  ; 16k total
 
 
 text_org                .equ $400          ; code origin address for all user processes
-
-block_bitmap_start      .equ 2048 * 2
-block_bitmap_sec_start  .equ 8
-inode_bitmap_start      .equ 2048 * 6
-inode_bitmap_sect_start .equ 24
-inode_table_start       .equ 2048 * 7
-inode_table_sect_start  .equ 28 ; inode table starts at sector 28
-data_blocks_start       .equ 2111488
 data_blocks_sect_start  .equ 4124
 
 ;  ------------------------------------------------------------------------------------------------------------------;
@@ -231,7 +230,7 @@ data_blocks_sect_start  .equ 4124
 .dw syscall_datetime
 .dw syscall_reboot
 .dw syscall_system
-.dw syscall_proc
+.dw syscall_fork
 
 ; ------------------------------------------------------------------------------------------------------------------;
 ; system call aliases
@@ -244,7 +243,7 @@ sys_file             .equ 4
 sys_datetime         .equ 5
 sys_reboot           .equ 6
 sys_system           .equ 7
-sys_proc             .equ 8
+sys_fork             .equ 8
 
 ; ------------------------------------------------------------------------------------------------------------------;
 ; alias exports
@@ -258,6 +257,7 @@ sys_proc             .equ 8
 .export sys_datetime
 .export sys_reboot
 .export sys_system
+.export sys_fork
 
 .export _til311_display
 
@@ -346,13 +346,56 @@ sys_mkfs:
 ; ------------------------------------------------------------------------------------------------------------------;
 ; process syscalls
 ; ------------------------------------------------------------------------------------------------------------------;
-proc_jmptbl:
-  .dw proc_creat
-syscall_proc:
-  jmp [proc_jmptbl + al]
+; look for empty process slot
+; initialize new process
+; copy old process kernel table entries
+; copy old process image into new one
+fork_jmptbl:
+  .dw fork
+syscall_fork:
+  jmp [fork_jmptbl + al]
 
-proc_creat:
+fork:
+  mov a, curr_pid
+  shl a, 7          ; mul by 128
+  add a, proc_table
+  mov si, a
+  call find_empty_proc_slot  ; result proc address in a
+  mov di, a
+  mov c, 128
+  rep movsb  ; copy proc structure from old to new
+
+  mov d, a  ; new process entry base
+  mov al, [pid_counter]
+  mov [d], al   ; set new PID
+  inc al
+  mov [pid_counter], al ; update global pid counter
+
+  mov al, curr_pid
+  mov [d + 1], al ; set parent pid
+  mov al, proc_runnable
+  mov [d + 2], al ; set process as runnable
+
+  ; now copy entire memory of old process into new process' memory
   sysret
+
+; pid, parent_pid, state, fd_table, tty pointer, context (general regs + flags), 39 bytes padding to reach 128
+; return index in b
+; address in a
+find_empty_proc_slot:
+  mov d, proc_table
+  mov b, 0
+find_empty_proc_slot_l0:
+  mov al, [d]
+  cmp al, 0
+  je find_empty_proc_slot_ret
+  add d, 128
+  inc b
+  cmp b, _max_user_proc  ; if we go past _max_user_proc (128) that is considered an error
+  jne find_empty_proc_slot_l0
+find_empty_proc_slot_ret:
+  mov a, d
+  ret  ; return in 'bl'
 
 ; ------------------------------------------------------------------------------------------------------------------;
 ; system syscalls
@@ -972,7 +1015,6 @@ fs_cd:
 ;------------------------------------------------------------------------------------------------------;
 ; inode in a
 fs_ls:
-  mov d, inode_table_sect_start
 
   sysret
 
@@ -1071,6 +1113,17 @@ kernel_reset_vector:
   mov byte [_fdc_track], $00          ; reset track
 
 
+  mov d, s_reset_proc_tbl 
+  call _puts
+  mov d, proc_table
+  mov al, 0
+reset_proc_table_l0:
+  mov [d], al
+  add d, 128
+  cmp d, proc_table + 16384
+  jne reset_proc_table_l0
+
+
   mov a, 0
 ker_loop:
   inc a
@@ -1122,12 +1175,9 @@ fifo_in:
 fifo_out:
   .dw fifo
 
-; file system variables
-current_dir_id:
-  .dw 0     ; keep dirid of current directory
+
 s_init_path:
   .db "/sbin/init", 0
-
 s_uname:
   .db "solarium v.1.0", 0
 s_dataentry:
@@ -1213,9 +1263,14 @@ s_fdc_config:
   .db "  density:   single density\n"
   .db "  head load: loaded\n", 0
 
+s_reset_proc_tbl: .db "resetting process table...\n", 0
 
-file_obj_table: .equ $
-proc_table:     .equ $ + _size_file_obj_table
+pid_counter:      .dw 1
+curr_pid:         .dw 0  ; current process pid
+
+file_obj_table:   .equ $
+proc_table:       .equ $ + _size_file_obj_table
+
 
 ; here we define areas that keep transient data
 ; we use '$' which is the assembler's current address pointer so that these areas are defined to be exactly
