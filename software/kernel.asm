@@ -367,11 +367,12 @@ fork:
   rep movsb  ; copy proc structure from old to new
 
   ; TODO: need to write better function to allocate new PIDs and check that they are not already used etc
-  ; TODO: need to allocate memory in page table for new child process!!!
   mov d, a  ; new process entry base
   mov al, [pid_counter]
   mov [d], al   ; set new PID
   push al  ; save new process PID for using below
+  call proc_memory_map  ; allocate ram for new process in page table
+  mov al, [pid_counter] ; proc_memory_map overwrites al, so get it again
   inc al
   mov [pid_counter], al ; update global pid counter
 
@@ -441,6 +442,30 @@ fork_image_copy_l0:
 
   ret
 
+;----------------------------------------------------------------------------------------------------;
+; process index in al
+;----------------------------------------------------------------------------------------------------;
+; 32 pages of 2kb = 64kb
+; bl = ptb
+; bh = page number (5bits)
+; a = physical address
+; for kernel, a goes from 0 to 31, but for the last page, bit '11' must be 1 for device space
+; bl = 0
+; bh(ms 5 bits) = 0 to 31
+; a = 0000_1000_000_00000
+proc_memory_map:
+  mov ah, 0
+  mov b, a                      ; page in bl, 0 in bh
+  shl a, 5                      ; multiply by 32
+  mov c, a                      ; save in c
+  add c, 32
+proc_memory_map_l0:
+  pagemap
+  add b, $0800                  ; increase page number (msb 5 bits of bh only)
+  inc a                         ; increase both 
+  cmp a, c                      ; check to see if we reached the end of memory
+  jne proc_memory_map_l0
+  ret
 
 ; pid, parent_pid, state, fd_table, tty pointer, context (general regs + flags), 38 bytes padding to reach 128
 ; return index in b
