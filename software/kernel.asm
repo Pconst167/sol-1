@@ -409,7 +409,6 @@ fork:
 fork_image_copy:
   mov word[tmp_si], 0
   mov word[tmp_di], 0
-
   mov c, 0
 fork_image_copy_l0:
   push c
@@ -449,8 +448,7 @@ fork_image_copy_l0:
 ; bl = ptb
 ; bh = page number (5bits)
 ; a = physical address
-; for kernel, a goes from 0 to 31, but for the last page, bit '11' must be 1 for device space
-; bl = 0
+; bl = proc pid
 ; bh(ms 5 bits) = 0 to 31
 ; a = 0000_1000_000_00000
 proc_memory_map:
