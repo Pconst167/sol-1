@@ -366,6 +366,7 @@ fork:
   mov c, 128
   rep movsb  ; copy proc structure from old to new
 
+  ; TODO: need to write better function to allocate new PIDs and check that they are not already used etc
   mov d, a  ; new process entry base
   mov al, [pid_counter]
   mov [d], al   ; set new PID
@@ -394,9 +395,49 @@ fork:
   pop al   ; retrieve new child process PID that we obained before
   mov [d + 69], al  ; and now copy that child PID into the parent's context's return value in A register
 
+  ; now copy the entire parent's code image into the child's
+  call fork_image_copy
 
   ; now copy entire memory of old process into new process' memory
   sysret
+
+; copy entire image from one process to another
+; al: new proc PID
+; curr_pid: origin process
+fork_image_copy:
+  mov word[tmp_si], 0
+  mov word[tmp_di], 0
+
+  push al
+
+  mov al, curr_pid
+  setptb ; set page table base to curr_proc PID
+  mov b, [tmp_si]
+  mov si, b
+  mov di, transient_area
+  mov c, 2048
+  load    ; copy one page
+  add si, 2048
+  mov b, si
+  mov [tmp_si], b
+
+  pop al
+  setptb ; set page table base to new proc PID
+  mov b, [tmp_si]
+  mov si, b
+  mov si, transient_area
+  mov b, [tmp_di]
+  mov di, b
+  mov c, 2048
+  store
+  add di, 2048
+  mov b, si
+  mov [tmp_di], b
+
+  ret
+
+tmp_di: .dw 0
+tmp_si: .dw 0
 
 ; pid, parent_pid, state, fd_table, tty pointer, context (general regs + flags), 38 bytes padding to reach 128
 ; return index in b
