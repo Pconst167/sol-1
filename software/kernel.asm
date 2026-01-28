@@ -356,7 +356,7 @@ syscall_fork:
   jmp [fork_jmptbl + al]
 
 fork:
-  mov al, curr_pid
+  mov al, [curr_pid]
   mov ah, 0
   shl a, 7          ; mul by 128
   add a, proc_table
@@ -374,7 +374,7 @@ fork:
   inc al
   mov [pid_counter], al ; update global pid counter
 
-  mov al, curr_pid
+  mov al, [curr_pid]
   mov [d + 1], al ; set parent pid
   mov al, proc_runnable
   mov [d + 2], al ; set process as runnable
@@ -387,7 +387,7 @@ fork:
   mov [d + 69], al  ; child PID return value = 0
 
   ; obtain parent(current) process' entry offset again
-  mov al, curr_pid
+  mov al, [curr_pid]
   mov ah, 0
   shl a, 7  ; mul by 128
   add a, proc_table
@@ -396,48 +396,50 @@ fork:
   mov [d + 69], al  ; and now copy that child PID into the parent's context's return value in A register
 
   ; now copy the entire parent's code image into the child's
+  mov bl, al
   call fork_image_copy
 
-  ; now copy entire memory of old process into new process' memory
   sysret
 
 ; copy entire image from one process to another
-; al: new proc PID
+; bl: new proc PID
 ; curr_pid: origin process
 fork_image_copy:
   mov word[tmp_si], 0
   mov word[tmp_di], 0
 
-  push al
-
-  mov al, curr_pid
+  mov c, 0
+fork_image_copy_l0:
+  push c
+  mov al, [curr_pid]
   setptb ; set page table base to curr_proc PID
-  mov b, [tmp_si]
-  mov si, b
+  mov a, [tmp_si]
+  mov si, a
   mov di, transient_area
   mov c, 2048
   load    ; copy one page
   add si, 2048
-  mov b, si
-  mov [tmp_si], b
+  mov a, si
+  mov [tmp_si], a
 
-  pop al
+  mov al, bl
   setptb ; set page table base to new proc PID
-  mov b, [tmp_si]
-  mov si, b
   mov si, transient_area
-  mov b, [tmp_di]
-  mov di, b
+  mov a, [tmp_di]
+  mov di, a
   mov c, 2048
   store
   add di, 2048
-  mov b, si
-  mov [tmp_di], b
+  mov a, di
+  mov [tmp_di], a
+
+  pop c
+  inc c
+  cmp c, 32
+  jne fork_image_copy_l0
 
   ret
 
-tmp_di: .dw 0
-tmp_si: .dw 0
 
 ; pid, parent_pid, state, fd_table, tty pointer, context (general regs + flags), 38 bytes padding to reach 128
 ; return index in b
@@ -1327,6 +1329,8 @@ s_reset_proc_tbl: .db "resetting process table...\n", 0
 
 pid_counter:      .dw 1
 curr_pid:         .db 0  ; current process pid
+tmp_di:           .dw 0
+tmp_si:           .dw 0
 
 file_obj_table:   .equ $
 proc_table:       .equ $ + _size_file_obj_table
