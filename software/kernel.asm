@@ -367,6 +367,7 @@ fork:
   rep movsb  ; copy proc structure from old to new
 
   ; TODO: need to write better function to allocate new PIDs and check that they are not already used etc
+  ; TODO: need to allocate memory in page table for new child process!!!
   mov d, a  ; new process entry base
   mov al, [pid_counter]
   mov [d], al   ; set new PID
@@ -380,9 +381,9 @@ fork:
   mov [d + 2], al ; set process as runnable
 
   ; the offset of the register context is 69
-  ; for parent the return value in A is the child's PID
-  ; and for the child the return value in A is 0
-  ; so we need to place 0 in the A register in the new process' context block
+  ; for parent the return value in AL is the child's PID
+  ; and for the child the return value in AL is 0
+  ; so we need to place 0 in the AL register in the new process' context block
   mov al, 0
   mov [d + 69], al  ; child PID return value = 0
 
