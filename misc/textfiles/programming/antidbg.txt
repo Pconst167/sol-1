@@ -1,0 +1,424 @@
+                            Anti Debugging Tricks
+
+                                     By:
+
+                                  Inbar Raz
+
+                 Assistance by Eden Shochat and Yossi Gottlieb
+
+                               Release number 5
+
+  Today's anti debugging tricks devide into two categories:
+
+  1. Preventive actions;
+  2. Self-modifying code.
+
+  Most debugging tricks, as for today, are used within viruses, in order to
+avoid dis-assembly of the virus, as it will be exampled later in this file.
+Another large portion of anti debugging tricks is found with software
+protection programs, that use them in order to make the cracking of the
+protection harder.
+
+1. Preventive actions:
+----------------------
+
+  Preventive actions are, basically, actions that the program takes in order
+to make the user unable to dis-assemble the code or trace it while running.
+
+1.1. Interrupt disable:
+
+       Interrupt disable is probably the most common form of anti-debugging
+     tricks. It can be done in several ways:
+
+   1.1.1. Hardware masking of interrupt:
+
+            In order to avoid tracing of a code, one usually disables the
+          interrupt via the 8259 Interrupt Controller, addressed by read/write
+          actions to port 21h. The 8259 Interrupt Controller controls the IRQ
+          lines. This means that any IRQ between 0 and 7 may be disabled by
+          this action. Bit 0 is IRQ0, bit 1 is IRQ1 etc. Since IRQ1 is the
+          keyboard interrupt, you may disable the keyboard without the
+          debugger being able to bypass it.
+
+          Example:
+
+          CS:0100 E421           IN     AL,21
+          CS:0102 0C02           OR     AL,02
+          CS:0104 E621           OUT    21,AL
+
+            Just as a side notice, the keyboard may be also disabled by
+          commanding the Programmable Peripheral Interface (PPI), port 61h.
+
+          Example:
+
+          CS:0100 E461           IN     AL,61
+          CS:0102 0C80           OR     AL,80
+          CS:0104 E661           OUT    61,AL
+
+   1.1.2. Software masking of interrupt:
+
+            This is quite an easy form of an anti-debugging trick. All you
+          have to do is simply replace the vectors of interrupts debuggers
+          use, or any other interrupt you will not be using or expecting to
+          occur. Do not forget to restore the original vectors when you are
+          finished. It is adviseable to use manual change of vector, as shown
+          below, rather than to change it using interrupt 21h service 25h,
+          because any debugger that has gained control of interrupt 21h may
+          replace your vector with the debugger's. The example shows an
+          interception of interrupt 03h - the breakpoint interrupt.
+
+          Example:
+
+          CS:0100 EB04           JMP    0106
+          CS:0102 0000           ADD    [BX+SI],AL
+          CS:0104 0000           ADD    [BX+SI],AL
+          CS:0106 31C0           XOR    AX,AX
+          CS:0108 8EC0           MOV    ES,AX
+          CS:010A 268B1E0C00     MOV    BX,ES:[000C]
+          CS:010F 891E0201       MOV    [0102],BX
+          CS:0113 268B1E0E00     MOV    BX,ES:[000E]
+          CS:0118 891E0401       MOV    [0104],BX
+          CS:011C 26C7064C000000 MOV    Word Ptr ES:[000C],0000
+          CS:0123 26C7064E000000 MOV    Word Ptr ES:[000E],0000
+
+   1.1.3. Vector manipulation
+
+             This method involves manipulations of the interrupt vectors,
+          mainly for proper activation of the algorithm. Such action, as
+          exampled, may be used to decrypt a code (see also 2.1), using data
+          stored ON the vectors. Ofcourse, during normal operation of the
+          program, vectors 01h and 03h are not used, so unless you are trying
+          to debug such a program, it works fine.
+
+          Example:
+
+          CS:0100 31C0           XOR    AX,AX
+          CS:0102 8ED0           MOV    SS,AX
+          CS:0104 BC0E00         MOV    SP,000E
+          CS:0107 2E8B0E3412     MOV    CX,CS:[1234]
+          CS:010C 50             PUSH   AX
+          CS:010D 31C8           XOR    AX,CX
+          CS:010F 21C5           AND    BP,AX
+          CS:0111 58             POP    AX
+          CS:0112 E2F8           LOOP   010C
+
+   1.1.4. Interrupt replacement
+
+            This is a really nasty trick, and it should be used ONLY if you
+          are ABSOLUTELY sure that your programs needs no more debugging. What
+          you should do is copy the vectors of some interrupts you will be
+          using, say 16h and 21h, onto the vectors of interrupt 01h and 03h,
+          that do not occur during normal operation of the program. If the
+          user wants to debug the program, he would have to search for every
+          occurance of INT 01, and replace it with the appropriate INT
+          instruction. This trick is very effective if used together with the
+          fact that the INT 3 intruction has a ONE BYTE opcode - 0CCh, which
+          can not be changed to any other interrupt.
+
+          Example:
+
+          CS:0100 FA             CLI
+          CS:0101 31C0           XOR    AX,AX
+          CS:0103 8EC0           MOV    ES,AX
+          CS:0105 26A18400       MOV    AX,ES:[0084]
+          CS:0109 26A30400       MOV    ES:[0004],AX
+          CS:010D 26A18600       MOV    AX,ES:[0086]
+          CS:0111 26A30600       MOV    ES:[0006],AX
+          CS:0115 B44C           MOV    AH,4C
+          CS:0117 CD01           INT    01                
+
+1.2. Time watch:
+
+       This may be a less common method, but it is usefull against debuggers
+     that disable all interrupts except for the time that the program is
+     executed, such as Borland's Turbo Debugger. This method simply retains
+     the value of the clock counter, updated by interrupt 08h, and waits in an
+     infinite loop until the value changes. Another example is when you mask
+     the timer interrupt by ORing the value INed from port 21h with 01h and
+     then OUTing it back, thus disabling the IRQ0 - Timer interrupt. Note that
+     this method is usefull only against RUN actions, not TRACE/PROCEED ones.
+
+     Example:
+
+     CS:0100 2BC0           SUB    AX,AX
+     CS:0102 FB             STI
+     CS:0103 8ED8           MOV    DS,AX
+     CS:0105 8A266C04       MOV    AH,[046C]
+     CS:0109 A06C04         MOV    AL,[046C]
+     CS:010C 3AC4           CMP    AL,AH
+     CS:010E 74F9           JZ     0109
+
+1.3. Fool the debugger:
+
+       This is a very nice technique, that works especially and only on those
+     who use Turbo Debugger or its kind. What you should do is init a jump to
+     a middle of an instruction, whereas the real address actually contains
+     another opcode. If you work with a normal step debugger such as Debug or
+     SymDeb, it won't work since the debugger jumps to the exact address of
+     the jump, and not to the beginning of an instruction at the closest
+     address, like Turbo Debugger.
+
+     Example:
+
+     CS:0100 E421           IN     AL,21
+     CS:0102 B0FF           MOV    AL,FF
+     CS:0104 EB02           JMP    0108
+     CS:0106 C606E62100     MOV    Byte Ptr [21E6],00
+     CS:010B CD20           INT    20
+
+     Watch this:
+
+     CS:0108 E621           OUT    21,AL
+
+     Notice:
+
+       This trick does NOT effect the run of the program in ANY debugger. Its
+     only use is to try to deceive the user into thinking another opcode is
+     used, while another is actually run.
+
+1.4. Check CPU Flags:
+
+       This is a nice trick, effective against almost any real mode debugger.
+     What you should do is simply set the trace flag off somewhere in your
+     program, and check for it later. If it was turned on, a debugger runs in
+     the background...
+
+     Example:
+
+     CS:0100 9C             PUSHF
+     CS:0101 58             POP    AX
+     CS:0102 25FFFE         AND    AX,FEFF
+     CS:0105 50             PUSH   AX
+     CS:0106 9D             POPF
+
+     In the middle of the program:
+
+     CS:1523 9C             PUSHF
+     CS:1524 58             POP    AX
+     CS:1525 250001         AND    AX,0100
+     CS:1528 7402           JZ     152C
+     CS:152A CD20           INT    20
+
+1.5. Cause debugger to stop execution:
+
+       This is a technique that causes a debugger to stop the execution of a
+     certain program. What you need to do is to put some INT 3 instructions
+     over the code, at random places, and any debugger trying to run will stop
+     there. It is best if used within a loop, as it is run several times.
+
+     Example:
+
+     CS:0100 B96402         MOV    CX,0264
+     CS:0103 BE1001         MOV    SI,0110
+     CS:0106 AC             LODSB
+     CS:0107 CC             INT    3
+     CS:0108 98             CBW
+     CS:0109 01C3           ADD    BX,AX
+     CS:010B E2F9           LOOP   0106
+
+1.6. Halt computer using stack:
+
+       This trick is based on the fact that debuggers don't usually use a
+     stack space of their own, but rather the user program's stack space. By
+     setting the stack to a location in the middle of a code that does NOT use
+     the stack itself, any debugger that will try to trace the code will
+     overwrite some of the code by its own stack (mainly interrupt return
+     addresses). Again, CLI and STI are in order, and are not shown for the
+     purpose of the example only. They must be included, or you risk hanging
+     your computer wether a debugger is installed or not.
+
+     Example:
+
+     CS:0100 8CD0           MOV    AX,SS
+     CS:0102 89E3           MOV    BX,SP
+     CS:0104 0E             PUSH   CS
+     CS:0105 17             POP    SS
+     CS:0106 BC0B01         MOV    SP,010B
+     CS:0109 90             NOP
+     CS:010A 90             NOP
+     CS:010B EB02           JMP    010F
+     CS:010D 90             NOP
+     CS:010E 90             NOP
+     CS:010F 89DC           MOV    SP,BX
+     CS:0111 8ED0           MOV    SS,AX
+
+1.7. Halt TD386 V8086 mode:
+
+       This is a nice way to fool Turbo Debugger's V8086 module (TD386). It is
+     based on the fact that TD386 does not use INT 00h to detect division by
+     zero (or register overrun after division, which is treated by the
+     processor in the same way as in the case of division by zero). When TD386
+     detects a division fault, it aborts, reporting about the faulty division.
+     In real mode (even under a regular debugger), a faulty DIV instruction
+     will cause INT 00h to be called. Therefore, pointing INT 00h to the next
+     instruction, will recover from the faulty DIV.
+
+     Note: It is very important to restore INT 00h's vector. Otherwise, the
+     next call to INT 00h will cause the machine to hang.
+
+     Example:
+
+     CS:0100 31C0          XOR     AX,AX
+     CS:0102 8ED8          MOV     DS,AX
+     CS:0104 C70600001201  MOV     WORD PTR [0000],0112
+     CS:010A 8C0E0200      MOV     [0002],CS
+     CS:010E B400          MOV     AH,00
+     CS:0110 F6F4          DIV     AH
+     CS:0112 B8004C        MOV     AX,4C00
+     CS:0115 CD21          INT     21
+
+1.8. Halt any V8086 process:
+
+       Another way of messing TD386 is fooling it into an exception.
+     Unfortunately, this exception will also be generated under any other
+     program, running at V8086 mode. The exception is exception #13, and its
+     issued interrupt is INT 0Dh - 13d. The idea is very similar to the
+     divide by zero trick: Causing an exception, when the exception interrupt
+     points to somewhere in the program's code. It will always work when the
+     machine is running in real mode, but never under the V8086 mode.
+
+     Note: It is very important to restore the original interrupt vectors.
+     Otherwise, the next exception will hang the machine.
+
+     Example:
+
+     CS:0100 31C0          XOR     AX,AX
+     CS:0102 8ED8          MOV     DS,AX
+     CS:0104 C70634001301  MOV     WORD PTR [0034],0113
+     CS:010A 8C0E3600      MOV     [0036],CS
+     CS:010E 833EFFFF00    CMP     WORD PTR [FFFF],+00
+     CS:0113 B8004C        MOV     AX,4C00
+     CS:0116 CD21          INT     21
+
+2. Self-modifying code:
+-----------------------
+
+2.1. Encryptive/decryptive algorithm:
+
+       The first category is simply a code, that has been encrypted, and has
+     been added a decryption routine. The trick here is that when a debugger
+     sets up a breakpoint, it simply places the opcode CCh (INT 03h) in the
+     desired address, and once that interrupt is executed, the debugger
+     regains control of things. If you try to set a breakpoint AFTER the
+     decryption algorithm, what is usually needed, you will end up putting an
+     opcode CCh in a place where decryptive actions are taken, therefore losing
+     your original CCh in favour of whatever the decryption algorithm produces.
+     The following example was extracted from the Haifa virus. If you try to
+     set a breakpoint at address CS:0110, you will never reach that address,
+     since there is no way to know what will result from the change. Note that
+     if you want to make the tracing even harder, you should start the
+     decryption of the code from its END, so it takes the whole operation
+     until the opcode following the decryption routine is decrypted.
+
+     Example:
+
+     CS:0100 BB7109         MOV    BX,0971
+     CS:0103 BE1001         MOV    DI,0110
+     CS:0106 91             XCHG   AX,CX
+     CS:0107 91             XCHG   AX,CX
+     CS:0108 2E803597       XOR    Byte Ptr CS:[DI],97
+     CS:010C 47             INC    DI
+     CS:010D 4B             DEC    BX
+     CS:010E 75F6           JNZ    0106
+     CS:0110 07             POP    ES
+     CS:0111 07             POP    ES
+
+2.2. Self-modifying code:
+
+   2.2.1. Simple self-modification:
+
+            This method implements the same principle as the encryption
+          method: Change the opcode before using it. In the following example,
+          we change the insruction following the call, and therefore, if you
+          try to trace the entire call ('P'/Debug or F8/Turbo Debugger), you
+          will not succeed, since the debugger will put its CCh on offset 103h,
+          but when the routine runs, it overwrites location 103h.
+
+          Example:
+
+          CS:0100 E80400         CALL   0107
+          CS:0103 CD20           INT    20
+          CS:0105 CD21           INT    21
+          CS:0107 C7060301B44C   MOV    Word Ptr [0103],4CB4
+          CS:010D C3             RET
+
+          Watch this:
+
+          CS:0103 B44C           MOV    AH,4C
+
+   2.2.2. The Running Line (self-decrypting):
+
+            This is an example of a self-tracing self-modifying code,
+          sometimes called 'The running line'. It was presented by Serge
+          Pachkovsky. It is a bit tricky in implementation, but, unlike
+          all other techiniques mentioned in this document, it is relatively
+          resistive to various protections of the vector table. In short, it
+          results in instructions being decoded one at time, thus never
+          exposing long code fragments to analisys. I will illustrate it
+          with the following (over-simplified) code example:
+
+          XOR     AX, AX
+          MOV     ES, AX
+          MOV     WORD PTR ES:[4*1+0],OFFSET TRACER
+          MOV     WORD PTR ES:[4*1+2],CS
+          MOV     BP, SP
+          PUSHF
+          XOR     BYTE PTR [BP-1], 1
+          POPF
+          MOV     AX, 4C00H               ; This will not be traced!
+          DB      3 DUP ( 98H )
+          DB      C5H, 21H
+
+   TRACER:
+
+          PUSH    BP
+          MOV     BP, SP
+          MOV     BP, WORD PTR [BP+2]
+          XOR     BYTE PTR CS:[BP-1], 8
+          XOR     BYTE PTR CS:[BP+0], 8
+          POP     BP
+          IRET
+
+===============================================================================
+
+Comments:
+
+In order to save lines of code, I did not insert the CLI/STI pair before any
+vector change. However, it is adviseable to do this pair before ANY manual
+vector change, because if any interrupt occurs in the middle of your
+operations, the machine could hang.
+
+An apology:
+
+In previous releases of this article, a false example, as noted by Serge
+Pachkovksy, was posted. That was 2.2.2 - Manipulating the PIQ. Apperantly
+the posted source would not work under any circumstances. In return, Serge has
+presented the 'Running Line' technique.
+
+Thanks to:
+
+Eden Shochat, 2:401/100
+  and
+Yossi Gottlieb, 2:401/100.3
+
+for helping me assembling this list.
+
+Other acknowledgements:
+
+Matt Pritchard, 80XXX echo
+
+Serge Pachkovsky, Distributed Node (2:5000/19.19)
+
+================================================================================
+
+Any comments, suggestions, ideas and corrections will be gladly accepted.
+
+Author can be reached in one of the following ways:
+
+Inbar Raz, 2:401/100.1                          {fidonet}
+Inbar Raz, 2:403/100.42                         {fidonet}
+nyvirus@weizmann.weizmann.ac.il                 {internet}
+uunet!m2xenix!puddle!2!403!100.42!Inbar.Raz     {UUCP}
+Inbar.Raz@p1.f100.n401.z2.fidonet.org           {internet<>FIDO gate}
+Inbar.Raz@p42.f100.n403.z2.fidonet.org          {internet<>FIDO gate}
+

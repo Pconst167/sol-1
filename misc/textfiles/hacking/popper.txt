@@ -1,0 +1,64 @@
+**************************************************************************
+   HACK: Shell access users can use "popper" to create root owned files 
+ System: Unix
+ Source: Mark Fullmer (maf@cob.ohio-state.edu) from Bugtraq
+   Date: Fri, 6 May 1994
+**************************************************************************
+
+On systems that have /var/spool/mail mode 'drwsrwxrwt' and use the Berkeley
+popper daemon, users that have access to /var/spool/mail (ie. a user with a
+shell login) can create arbitrary root owned files on the host that popper
+is executed on.Depending on the umask that popper was run with, this file may also be world
+writeable.
+
+Details: version UCB Pop server (version 1.831beta)
+
+#line 59 of pop_dropcopy.c:
+# currently running as root: (POP_TMPDROP is /usr/spool/mail/tmpXXXXXX)
+
+>    strcpy(template,POP_TMPDROP);
+>    (void) mktemp(template);
+
+# The race starts.
+# if a user guesses the pathname in "template", they could of previously
+# made a link to say /etc/nologin.
+
+# instead of script to exploit this bug, you can verify it exists by adding
+# sleep(30) here -- after the mktemp(), before the fopen(), which will make the
+# race condition easy to win.  Ofcourse, you allready need to be root to be
+# able to do this...
+
+>    if ( (tf=fopen(template,"w+")) == NULL ) {  /* failure, bail out    */
+>        pop_log(p,POP_PRIORITY,
+>            "Unable to create temporary temporary maildrop '%s': %s",template,
+>                (errno < sys_nerr) ? sys_errlist[errno] : "") ;
+>        return pop_msg(p,POP_FAILURE,
+>        "System error, can't create temporary file.");
+>    }
+
+# at this point, the file is created.  Depending on the umask that popper was
+# run with, this file may have world write permission.
+
+# chown/chmod won't follow your link.
+>    /* Now give this file to the user   */
+>    (void) chown(template,pwp->pw_uid, pwp->pw_gid);]
+>    (void) chmod(template,0600);
+>       /* Now link this file to the temporary maildrop.  If this fails it
+>     * is probably because the temporary maildrop already exists.  If so,
+>     * this is ok.  We can just go on our way, because by the time we try
+>     * to write into the file we will be running as the user.
+>     */
+>    (void) link(template,p->temp_drop);
+>    (void) fclose(tf);
+>    (void) unlink(template);
+
+>    /* Now we run as the user. */
+>    (void) setuid(pwp->pw_uid);
+>    (void) setgid(pwp->pw_gid);
+
+Solution.  If your /var/spool/mail is mode 'drwsrwxrwt' this code isn't
+necessary.  Remove lines 59-82 of pop_dropcopy.c.  This doesn't entirely
+solve the problem, especially if root reads their mail via popper.  The
+best solution is to not have /var/spool/mail with world write permissions,
+as this same type of problem exists in atleast one delivery agent (/bin/mail),
+and probably in user agents.

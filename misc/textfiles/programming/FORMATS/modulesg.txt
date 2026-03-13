@@ -1,0 +1,190 @@
+  Sound Tracker Module File Format 
+  -------------------------------- 
+ 
+This document (C) Copyright 1990, Steven W Green.  This document may 
+be freely distibuted, providing that any corrections are sent to me, 
+this copyright notice remains intact and that it does not breach any 
+law. 
+ 
+Deduced by reverse engineering a soundtracker player and looking at 
+the files.  The author of this document can not be held responsible 
+for any damage caused by inacuracies in this document.  The author has 
+absolutely no relationship with anybody concerned with the creation of 
+SoundTracker or related utilities. 
+ 
+ 
+Overall Structure: 
+  Module name   char[20]; 
+  Instruments   INSTRUMENT[15 or 31]   30 bytes per instrument 
+  Header        UBYTE[2]; 
+  Sequences     UBYTE[80]; 
+  [ID]          LONG                   'M.K.' 
+  Patterns      PATTERN[]; 
+  Samples       WORD[][] 
+ 
+There appear to be 2 different flavours of Soundtracker modules. 
+Earlier ones, which allow 15 instruments and later ones allow 31.  A 
+way to find out the version is to look at the LongWord at offset $438 
+from the start of the file and compare it with the packed string 
+'M.K.' (presumably the initials of  someone?). 
+ 
+ Version1  Version2 
+offset length | offset length | section 
+--------------+---------------+----------------- 
+     0     20 |     0      20 | Module Name 
+   $14  30X15 |   $14   30X31 | Instruments 
+  $1d6      2 |  $3b6       2 | Header 
+  $1d8     80 |  $3b8      80 | Sequences 
+              |  $438       4 | Version ID 'M.K.' 
+  $258 1024X? |  $43c  1024X? | Patterns 
+   ?     ?    |    ?      ?   | Samples 
+--------------+---------------+----------------- 
+ 
+ 
+Instrument structure 
+-------------------- 
+ 
+Each instrument occupies 30 bytes. There are either 15 or 31 
+instruments in a module. 
+  char name[20];   A null terminated filename 
+  WORD unknown; 
+  WORD length;     Length of sample in words 
+  WORD volume;     Default volume (0..64) 
+  WORD unknown 
+  WORD repeat;     1=No repeat, otherwise position in sample for 
+                     repeat play of continuous sample. 
+ 
+To find the sample, you must find the end of the track data by finding 
+the maximum track number from the seqence section and then multiplying 
+by 1024 and adding to the start of the pattern data.  Then each 
+instrument sample is simply stored one after the other. 
+ 
+Note that the 1st instrument is instrument 1.  Thus the instruments 
+are numbered 1..15 or 1..31. 
+ 
+The instruments should be sampled as an A (110/220/440Hz) at 14KHz. 
+This is a calculated guess. 
+ 
+The filename is an Amiga name, often beginning with a volume name such 
+as ST-01:filename 
+ 
+Header 
+------ 
+ 
+  UBYTE n_tracks;   Number of tracks to play 
+  UBYTE unknown;    Maybe highest note (78) 
+ 
+Sequences 
+--------- 
+ 
+This is an array of 80 bytes.  It is a list of patterns to play and 
+they are read in order for n_tracks tracks, unless a jump instruction 
+is encountered in the pattern data. 
+ 
+Pattern Data 
+------------ 
+ 
+Each Pattern is 1024 bytes long.  A pattern consists of 64 events. 
+there is one Longword for each of the 4 tracks.  An event is executed 
+each 'tempo' vertical-blanks.  I don't know whether this should be 50Hz 
+or 60Hz.  I shall be assuming 50Hz.  The default tempo is 6.  A 
+typical song may have 4 events per crotchet => 16 per bar of 4/4 => 4 
+bars per pattern.  Then on 60Hz systems you could skip one in 6 VBL's 
+to keep the same tempo. 
+ 
+The format of a track event is: 
+ 
+         7   6   5   4   3   2   1   0 
+       +---+---+---+---+---+---+---+---+ 
+Byte 0 |  Unknown  | I | Frequency hi  | 
+       +---+---+---+---+---+---+---+---+ 
+ 
+       +---+---+---+---+---+---+---+---+ 
+Byte 1 | Frequency mid | Frequency lo  | 
+       +---+---+---+---+---+---+---+---+ 
+     
+       +---+---+---+---+---+---+---+---+ 
+Byte 2 |   Instrument  |    Command    | 
+       +---+---+---+---+---+---+---+---+ 
+ 
+       +---+---+---+---+---+---+---+---+ 
+Byte 3 |            Value              | 
+       +---+---+---+---+---+---+---+---+ 
+ 
+ 
+Frequency is a 12 bit value ranging from $71 to $358.  It is the value 
+put directly into the Amiga sound chip.  The actual frequency can be 
+calculated as: 
+                6 
+        3.5 X 10     [3.579545 (PAL), 3.546895 (NTSC)] 
+   f = ----------- 
+          value 
+ 
+This is an aproximate value.  The actual value depends on the video 
+display and varies for PAL and NTSC.  The exact values can be found in 
+the Amiga hardware reference manual.  It is the horizontal scan line 
+frequency multiplied by 124 X 2, or something similar.  A value of 0 
+means use the same as before. 
+ 
+Instrument is either a 4 or 5 bit value.  If the extended instrument 
+is allowed thn the I bit becomes bit 4 of the instrument.  A value of 
+0 means use the same instrument as before. 
+ 
+Command is one of: 
+    0 : Arpeggio 
+    1 : Portamento Up 
+    2 : Portamento Down 
+ 3..9 : Reserved for future use 
+   10 : Volume slide 
+   11 : Position Jump 
+   12 : Set Volume 
+   13 : Pattern break 
+   14 : Set filter 
+   15 : Set speed 
+ 
+Value is used differently depending on the command: 
+  Arpeggio: 
+    A value of 0 means NO arpeggio.  This also doubles as a NO COMMAND 
+    instruction. 
+ 
+    If the value is non-zero then it is split into 2 nybbles.  The 
+    note will warble between different frequencies of: 
+      Base note 
+      Base note + 1st nybble (semitones) 
+      Base note + 2nd nybble (semitone) 
+      Base note 
+      Base note + 1st nybble (semitones) 
+      Base note + 2nd nybble (semitone) 
+    The note changes each VBL (20ms). 
+ 
+ 
+  Portamento: 
+    The value is either added or subtracted to the base note each VBL 
+    depending on the direction.  The value refers to the amiga 
+    frequency as referred to above.  The note is always forced into 
+    the range $71..$358. 
+ 
+  Volume slide: 
+    The volume is changed by VALUE each VBL.  Presumably it is in 2's 
+    complement so that -ve and +ve values can be used.  Presumably 
+    values are clipped to the range 0..64? 
+  
+  Position Jump: 
+    Value is the position within the Sequence list to jump to 
+ 
+  Set Volume: 
+    Set the current volume to value.  This is a value between 0..64 
+    and is the value used by the Amiga hardware! 
+ 
+  Pattern Break: 
+    Ends the current pattern. 
+ 
+  Set Filter: 
+    A value of 1 turns the Amiga's filter ON, value 0 turns it off. 
+    Other values are undefined. 
+ 
+  Set speed: 
+    Value is the number of VBL's between events.  The default is 6. 
+    It should be a value between 1..15. 
+ 
+

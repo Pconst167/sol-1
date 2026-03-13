@@ -1,0 +1,251 @@
+		      WGT Graphics Tutorial #1
+		       Topic: Filled Polygons
+			 By Chris Egerter
+			 October 7, 1994
+
+Introduction
+------------
+   This series of tutorials describes a method of drawing filled polygons
+using 3 rendering techniques: Solid, Gouraud shading, and texture mapping.
+
+The code in this tutorial was written in Turbo C++ but can be ported to
+other graphics libraries and operating systems.  I did not use the
+WGT functions in this one, so the wgtgfx.c file contains a few routines
+which are needed for the demo.  I have decided to explain the method
+used for these routines since I had to discover them on my own, and
+think you can learn from the code.
+
+1.0 - What is a Polygon?
+------------------------
+	To start things off, we should first define what a polygon is.  A
+polygon is a any figure that is composed of straight lines. It can have any
+number of sides, and may or may not be closed.  We will be discussing closed
+polygons in this article mainly because they allow you to fill the interior
+with a colour. An open polygon can only have its edges drawn because there
+is no difference between the inside and outside.  Furthermore, we will
+only discuss convex polygons.  If you draw a horizontal line across the
+polygon, it must cross exactly two edges at any given vertical position.
+If the polygon passes this test, it is convex.
+
+
+2.0 - Drawing Polygons with Horizontal Lines
+--------------------------------------------
+	In computer graphics, the screen is comprised of an x and a y axis,
+with the coordinate (0,0) being the top left corner.  Each polygon consists
+of a number of vertices, each of which contain an (x,y) coordinate on the
+screen.  Our first task is to draw a filled polygon given a set of vertices.
+A simple way to fill the polygon would be to draw lines between the vertices
+(making sure to connect the first to the last) and using a region fill
+routine to fill in the interior.  This works in most cases however it is
+slow, and not very useful in a program that requires animation.  The other
+method, is to draw a series of horizontal lines that make up the polygon.
+
+3.0 - The algorithm
+-------------------
+	The reason for dealing with only convex polygons is simple.  Knowing
+that we can draw the polygon using horizontal lines, we can simply store
+the starting and ending x coordinate of the horizontal line on each y
+coordinate of the polygon.  Non-convex polygons would require several
+horizontal lines per y coordinate, and things get a bit more complicated.
+
+	Our basic algorithm for drawing polygons is this:
+1. Calculate the starting and ending x coordinate of the horizontal line
+   on each y coordinate.  We can do this by using a standard line algorithm
+   but instead of plotting pixels, store the x coordinates into an array.
+   Simply calculate the lines between all vertices and connect the first
+   and last vertex with a line to close the figure.
+2. Draw each horizontal line given the row, and two columns.
+
+	As you can see here, a polygon may be drawn using two simple, well
+known routines: The line (with any slope), and the horizontal line.
+
+
+4.0 - Keeping Track of the Left and Right Edges
+-----------------------------------------------
+	Let's define two arrays which will contain our horizontal line
+coordinates. These routines assume you are using 320x200x256 graphics mode,
+however they can be easily ported to another mode by changing the 200 to the
+number of rows the mode has.
+
+int startx[200];
+int endx[200];
+
+	Before the polygon is drawn, each value in these arrays will be set
+to an impossible number to indicate that no point has been found on that y
+coordinate.  For the following examples, I will use -16000 as the impossible
+number that would never be used.
+
+
+5.0 - Scan Converting the Edges of the Polygon
+----------------------------------------------
+	Our next step is to create a routine that will calculate a line and
+store the x coordinates for every y coordinate.  When we store the x
+coordinate, first check the startx array.  If it is -16000, this is the
+first point found on this row.  We will then store the x coordinate into
+the startx array and continue with the line.  If startx is not -16000, this
+means a point has already been found, and we can store the coordinate in the
+endx array (since we already know each row has exactly two intersections with
+the polygon).
+
+Below is the code for this routine:
+
+void polyline (int x1, int y1, int x2, int y2)
+/* Calculates the coordinates of a line given two
+   vertices (x1,y1) an (x2,y2).
+
+   We will use fixed point math to speed things up.
+   The x coordinate is multiplied by 256 and for each row,
+   a constant m is added to x.  This is a simplified version
+   of a line algorithm because we only have to store 1 x coordinate
+   for every y coordinate.
+
+*/
+{
+ int tmp,y;
+ long x,m;
+
+ if (y2 != y1)     /* This isn't a horizontal line */
+ {
+   if (y2 < y1)    /* Make sure y2 is greater than y1 */
+   {
+    tmp = y1;      /* Swap the y coordinate */
+    y1 = y2;
+    y2 = tmp;
+
+    tmp = x1;      /* Swap the corresponding x coordinates */
+    x1 = x2;
+    x2 = tmp;
+   }
+
+ x = (long)x1<<8;  /* Multiply be 256 */
+
+ m = ((long)(x2 - x1)<<8) / ((long)(y2 - y1));
+ /* m is the fractional amount to add to the x coordinate every row.
+    m is equal to (delta x) / (delta y).  In other words, the x coordinate
+    has to change by (x2 - x1) columns in (y2 - y1) rows. */
+
+ x += m; /* We ALWAYS skip the first point in every line. This is done */
+ y1++; /* because we do not want to store the point where two lines
+	  meet, twice.  This would result in a single point being drawn. */
+
+ for (y = y1; y <= y2; y++) /* Go through each row */
+  {
+   if ((y >= 0) & (y < 200)) /* If the coordinate is on the screen */
+    if (startx[y] == -16000) /* Store the first coordinate */
+      startx[y] = x>>8;
+    else
+      endx[y] = x>>8;        /* Store the last coordinate */
+   x += m;                   /* Add our constant to x */
+   }
+ }
+}
+
+
+6.0 - Calling the Polyline Routine
+----------------------------------
+	Next we need to write a routine that will go through our vertex list
+and call this routine.  Once that is complete, we can draw all of our
+horizontal lines.
+
+	First of all, let's make a structure for our vertices.
+This segment should appear at the top of your program with the startx and
+endx arrays.
+
+typedef struct
+    {
+     int x,y;
+    } point;
+
+	Our main polygon routine will take an array of points, call the
+polyline routine between each of the points, and finally draw each
+horizontal line in the array.
+
+Below is the filled polygon main routine:
+
+void fillpoly (point *vertexlist, int numvertex)
+/* Draws a filled polygon given an array of vertices. */
+{
+int i;
+point *curpt,*nextpt;
+  /* Two pointers to a vertex. These are used to connect to vertices
+     together in when calling the polyline routine. */
+
+ curpt = vertexlist;      /* Set to the first vertex in the array */
+ nextpt = vertexlist + 1; /* and to the second vertex */
+
+ for (i = 0; i < 200; i++)
+  {
+   startx[i] = -16000;     /* Set up our impossible values */
+   endx[i] = -16000;
+  }
+
+ for (i = 1; i < numvertex; i++)
+  {
+   polyline (curpt->x, curpt->y, nextpt->x, nextpt->y);
+   /* Calculate the edge of this line. */
+
+   curpt += 1;  /* Go to the next line */
+   nextpt += 1;
+  }
+
+  nextpt = vertexlist;  /* Now close the polygon by doing a line between
+			   the first and last vertex. */
+  polyline (curpt->x, curpt->y, nextpt->x, nextpt->y);
+
+  for (i = 0; i < 200; i++)   /* Now draw the horizontal line list */
+    if (startx[i] != -16000)  /* Indicates there is a line on this row */
+    {
+     if (endx[i] == -16000)
+	 endx[i] = startx[i]; /* In case there was only one
+				 point found on this row */
+       line (startx[i], i, endx[i], i);
+       /* Draw a line between the two x coordinates, on the row i. */
+    }
+}
+
+
+Now we should make a small test program to use these functions:
+
+point mypoints[10];
+
+void main (void)
+{
+ initialize_graphics ();
+
+ mypoints[0].x = 160;
+ mypoints[0].y = 30;
+ mypoints[1].x = 50;
+ mypoints[1].y = 150;
+ mypoints[2].x = 270;
+ mypoints[2].y = 180;
+
+ fillpoly (&mypoints, 3);
+ getch ();
+ close_graphics ();
+}
+
+	This will draw a triangle in the middle of the screen.
+You can use these routines with any graphics library.  The only routines
+you will need to rename are the graphics initialization and closing routines,
+and the line routine.
+
+	That's are there is to it.  This is a simple case however. There are
+other methods to fill a polygon with something other than solid colours. The
+two techniques I will discuss in the next issues are Gouraud shading and
+texture mapping.
+
+The code and test program contained in this text file has been put into
+two files:
+
+fillpoly.c  - contains the original (portable) code
+poly256.c   - contains a demonstration in the 320x200x256 graphics mode
+
+wgtgfx.c    - Various graphics support routines 
+wgtgfx.h    - Header file for support routines
+
+poly256 has been compiled into poly256.exe so you can view what these
+routines do instantly.  To compile poly256, make a project file and
+compile and link poly256.c and wgtgfx.c together.
+
+
+

@@ -1,0 +1,491 @@
+          >> A Beautiful obsession with the binary world <<
+                         >> By Steven Levy <<
+
+				She can kill all your files;
+				She can freeze with a frown.
+				And a wave of her hand brings the
+				  whole system down.
+				And she works on her code until ten
+				  after three.
+				She lives like a bat but she's always a
+				  hacker to me.
+
+				               - from the LOTS
+						 Hacker songbook
+
+
+
+THE LOW OVERHEAD Time-Sharing (LOTS) facility at Stanford University
+is blanketed with an eerie calm. There are more than a hundred
+students here, but they speak in whispers, as though they were in the
+presence of something godlike. The cavernous main lobby, which reaches
+up to a fourth-floor skylight (the building is the architectural soul
+mate of the recently collapsed Kansas City Hyatt), holds a lounge in
+which a dozen or so students are scattered, some pacing impatiently,
+others snoozing, their heads resting on textbooks.  The names of these
+students are on a computer queue; they are waiting for a free computer
+terminal at the north end of the lobby, where each of perhaps fifty
+cubicles is equipped with a keyboard and display screen.  Staring at
+each of these terminals is a Stanford student, or someone posing as a
+Stanford student in order to use the computer. In an adjoing room,
+there are approximately sixty more terminals, also in use.  The hushed
+voices give the occasional beeps of the computer an odd prominence,
+and you can often hear the methodical, somewhat screechy churn of the
+computer's printer in the other room.  But most of the noise is lost
+because of the enormity of the lobby.  To the ear, this is an
+electronic cathedral.
+	It's well past midnight.
+	Most of the students are under the whip of academic
+discipline.  Siting in a rather formal posture, they tentatively key
+in data and watch for the results on the display screen with skeptical
+frowns.  They often consult their books before making another move.
+These are the users.  For them, computers are functional, if over
+complex, tools:  necessary evils.
+	But to a small society that convenes here at LOTS, computers
+are much more.  The big, orange-topped, million-dollar DECSYSTEM-20
+(DEC-20) computer, visible behind a glass partition, looks no more
+spectacular than a line of file cabinets, but it is the dominant icon
+of these devotees' existence, the secret sharer of their dreams, their
+instrument of power and creativity, their medium of communication,
+their companion in merrymaking.  This is the society of hackers.
+	Hackers are the mutant offspring of the eggheads who once
+prowled throught engineering buildings with slide rules attached to
+their belts.  The computer's power has made the hackers a subculture
+to be reckoned with.  Their fellow students may consider them creepy,
+but among themselves they are risk takers, exploreres, artists.  They
+communicate with one another by intricate computer networks, speak in
+their own jargon and qualify for lucrative jobs in which they will
+create the complex programs essential for the everyday functioning of
+our nation, our world.  They have the potential to be supercriminals,
+to use digital skeleton keys to electronic vaults holding money,
+confidential personal data and national security secrets.  But the
+power is not without a price:  an addiction to computing, a conpulsion
+to program.  And they think it's fun.
+	I leave Newell to his PCL. There are about forty people still
+using the computer. Each seems to be a self-sufficient system of man
+and machine. It is almost four a.m.--the hour of the hacker.
+
+"WITHIN THE NEXT twenty years, culture will be divided between those
+who know something about the computer and those who don't. It's like
+knowing how to read when the printing press was invented," says James
+Milojkovic, a Stanford psychologist working toward a doctorate.
+Milojkovic, a cheery Australian who studies "psychological issues in
+computer interaction," has been watching hackers closely. He thinks
+it's essential that we study them. "They are looked upon as sick and
+strange; they see themselves as doing what everyone will be doing in
+the future.  There's a real mystery to them, because they know things
+that we don't.  They believe they have total control of what's going
+on, because when you understand what the computer does, you can have
+it do almost anything. Once you learn how, you're part of the
+priesthood. It's a priesthood of the young. I've heard stories of
+elementary school kids breaking into schools at night so they can use
+the computer."
+	Ernest Adams never figured to be a hacker. True, he like
+computing, which he'd been doing since he was twelve; then he
+experienced his first epiphany: "Here I was typing things, and the
+machine was typing things back at me, and we're imagining we're
+playing a space war!" Adams had a natural talent for computers, but he
+thought he got it all out of his system in high school, when he hung
+out with a group who would stay late tapping into the computer at the
+nearby University of Kentucky. He came to Stanford to major in
+physics--until sometime in his first quarter, when he wandered into
+LOTS.
+	Low Overhead Time-Sharing began at Stanford five years ago as
+a twenty-four-hour self-service operation designed to encourage
+student computer use. It was too successful. "The first student
+coordinator dropped out of school because he got to involved with the
+computer," says LOTS programmer J.Q. Johnson, "and several more got
+pretty close."
+	The Stanford community has witnessed previous generations of
+hackers, mostly in the Artificial Intelligence Lab. But that group was
+unique and pioneering. LOTS hackers are indicative of a new wave
+haunting computing centers in colleges throughout the country. In many
+cases, these new hackers, like Adams, have been raised on computers.
+They have little experience with anything but computers. They often
+don't care to learn about anything else. They associate only with
+other hackers, speaking in the own strange jargon, always complaining
+about some "bagbiting kluge," whistling in awe over some "winner's
+cuspy, yet nontrivial" program. These words are delivered in a
+high-pitched, goofy burst of verbiage that assumes the listener is
+inputting data as quickly as a PDP-11. Uninformed non-hackers (called
+users, often modified to lusers) have a word for these creatures:
+nerd. But their attitude is also touched with a trace of envy, since
+hackers know something the users don't.
+	Five weeks away from home, Ernest Adams was unhappy. He
+disliked dorm life. He was also suffering thorugh the tortuous throes
+of unrequited love known only to seventeen-year-old males. Physics was
+not going to solve his problems, so he came to LOTS. He sat down at a
+terminal, opened an account, and for the next few hours, had a long
+talk with the computer about its operating system. He'd found a
+friend.
+	"I became involved with LOTS to the exclusion of other
+things," Ernest says. "I would come to drown my sorrows." His
+expertise grew, and his programming ideas became grandiose. You could
+do anything with a program. As Ralph Gorin, the director of LOTS, puts
+it: "Who else do you know who will do whatever you tell it to?" Adams
+has his own explanation: "It's knowing you can start from scratch,
+create an object called a program, hand it to the computer and have
+the computer start plotting beautiful graphs across the screen--and
+you are personally responsible!" He smiles demonically beneath his
+beard. "It's a little like playing God."
+	The world that Adams has entered is based entirely on the
+computer.  In this world, participants are asked to choose a new name,
+and they often identify themselves with such fantasy monikers as
+Gandalf or Bombadil.  With its multimillion-character memory, the
+DEC-20 is sort of a home, an office, a babysitter and a best friend.
+It will handle the most elaborate programs you can conceive of.  It
+will play chekcers and robot war with you, and it will remind you,
+with an accompanying bell, when it's time for dinner.  <Somewhere in
+the computer memory is a list of pizzerias that deliver.> It will tell
+you when your friends have logged into the system, and allow you to
+send messages to them without leaving your terminal.  It will
+entertain you with lewd limericks stored in its core.  It will type
+your paper for you, help you with homework and, with its electronic
+bulletin board, help you sell your roller skates.  If you get
+restless, you can go exploring in the nooks and crannies of the
+DEC-20's labyrinthine operating system, looking for stray bugs.
+	The computer generates a closely knit community of disciples.
+Hackers hang out with fellow hackers, meeting one another in
+late-night sessions where they may crowd around the terminal of
+someone who is preparing a hack that will, upon reaching "winnitude,"
+be placed in the computer's operating system.  On six a.m. excursions
+to breakfast, the talk is of the machine's new PASCAL language
+compiler, or the upcoming trade of a program written at SCORE (another
+computer facility at Stanford) for a digital electronic memory cache.
+Violent arguments erupt over the relative virtues of LISP programming
+language and PCL.  The arguments are fought in the weird, coldly
+logical syntax that comes from working in the rigid linear protocol of
+programming.
+	Though some hackers won't socialize at all, most love to talk
+computers.  On slight provocation they will overwhelm users with
+arcanely detailed explanations of computer protocol.  But inevitably,
+they return to their terminals.  Only rarely does the hacker community
+gather together for special occasions, such as the recent fifth
+anniversary of LOTS, when hackers faced the glass window of the
+computer room and sang "Happy Birthday" to the DEC-20.  Otherwise, the
+most social moments at LOTS come toward the end of each quarter, when
+the lobby is packed with students waiting their turns at the computer.
+Those waiting for terminals swill beer to the accompaniment of a
+guitar-toting crooner singing hacker lyrics to the tunes of popular
+songs.  Sing-along selections include "Fifty Ways to Write Your
+Program," "LOTS Is Painless," "I Wonder How the System Is Doing
+Tonight," "I Don't Know How to Log In" and "Fun Fun Fun Till Her Daddy
+Took the Keyboard Away."
+	To understand what hackers really >do< when they sit at
+terminals until rough stubble emerges on their chins, you must
+understand something about high-level computer programming.  You must
+also set aside suspicions that computers are vile, impersonal
+manipulators of numbers, and enemies of individuality.  To hackers,
+programming is the mental equivalent of supersonic test piloting, and
+the computer is a bottomless font of spirituality.
+	A program is a set of instructions to the computer.  It
+consists of lines of code usually written in a specific language that
+the computer, equipped with suitable microprocessing translators, can
+understand.  By telling the computer how to rearrange and access its
+binary contents, each program allows the computer to perform a set of
+functions, and the results might be anything from a Space Invaders
+game to a mailing list.
+	A program must be scrupulously constructed to perform its
+function.  Former IBM software manager Frederick Brooks wrote in "The
+Mythical Man-Month": "If one character, one pause of the incantation
+is not in stricly proper form, the magic doesn't work."  But even
+after it seems to work, there might be bugs in the program that will
+affect performance.  A maniacal perfectionism is called for in
+debugging.  While it may seem workaday, hackers think otherwise."
+	"Debugging is like laying a long railroad track," says John
+Levy, a software manager for Apple Computers.  "There's a little piece
+you want to test, so you back up the locomotive five miles down the
+road and at ninety miles an hour, you bring it across the track yo're
+testing.  If everyting is perfect, it flies right over, but if there's
+one flaw, the engine rools off, flying and crashing until it comes to
+rest a mile down the track.  Only at that point do you get to see the
+pieces."
+	The ones who take the greatest programming challenges, who
+fearlessly construct miles of fragile track and race the hugest
+engines acrosss them, are hackers.  Just as the early astronauts
+achieved legendary status, there is a hacker elite whose wizardry has
+set them apart as digital daredevils.
+	Don Woods is acknowledged to have the Right Stuff.  With long,
+stringy black hair and a bearish grin, he looks somewhat older than
+his twenty-nine years.  He works at Xerox and wears a dark GAMES
+T-shirt that contrasts with his almost chalk-colored skin.  Pinned
+next to the Xerox employee badge on his shirt is a button that reads
+QUESTION AUTHORITY.  Wood is known as a classic, or canonical, hacker.
+"Here's a quick hack I've been working on," he says.  He types a few
+characters on his keyboard, and from the computer come the
+calliopelike sounds of a rousing, Sousa-style marching song.  "I put
+it together in a couple of days," he says.
+	One of the results of Woods' epic hacks is Adventure, a
+collaboration with Will Crowther.  Ostensibly a game, Adventure is a
+metaphor for hacking.  When you begin Adventure, the computer tells
+you your location: at a stream, near a forest, within sight of a small
+brick building.  From there you embark on a Tolkeinesque journey
+through the caverns and glens of a medieval land, encountering
+murderous midgets, poisonous snakes, treacherous rapids, thieving
+pirates and magazines written in dwarf language.  By telling the
+computer the direction you wish to move (typeing N for north or U for
+up, for example), the computer calculates where, on the unseen map
+created in Woods' imaginations, you will wind up next, and displays a
+written description of your next location.  You go deeper and deeper
+into this netherworld, hoping to emerge by the same path with treasure
+in hand.  There are almost 200 rooms you pass through on your way to
+the treasure, many dotted with hazards, and the path crosses and
+intertwines in ways impossible to divine without hours of exploration.
+Adventure is the most popular game at LOTS, and indeed it is a
+national craze among those with access to computers.  "I would show it
+to people on a Fraday afternoon," Woods says, "and they wouldn't leave
+their terminals until they finished it, maybe on Monday.
+	Adventure is a kind of litmus test for hackers:  if you can
+lose yourself in the gullies and misty caverns, you might be
+susceptible to computer addiction.  Just as the plot of Adventure is a
+world unto itself, the vast memory and operating system of a mainframe
+computer is a gigantic landscape, seeming impenetrable but eventually
+accessible to the most devoted seekers.  Just as everything in the
+physical world is constructed of atoms, everything a computer
+processes or reads is ultimately reduced to bits of either one or
+zero.  Like treasure seekers in the subterranean Adventure world,
+hackers are elcetronic spelunkers who have developed the skill to
+burrow down from the more superficial programming languages to the
+bedrock machine language of digits.  Woods call this "going down and
+doing the grudgies."  To get involved this deeply, you must be able to
+think in dizzyingly abstract terms.  Your mental concentration is so
+intense that your conciousness is subsumed by the computer.
+	When a hacker programs, he creates worlds.  A well-crafted
+program - a good hack - is elegant, doing the most work in the fewest
+lines of code.  If it displays wizardry and is fairly sophisticated,
+hackers call it a nontrivial program, even though what the program
+>does< might be absurdly frivolous.  Hackers judge themselves not on
+criteria of compassion, wit, altruism or even the results of their
+programs.  If your program cures cancer, fine.  If it helps a credit
+bureau track down your uncle, tough.  What's important is the
+brilliance of the program itself.
+	"My level of judgment is technically oriented, one that would
+disqualify many who consider themselves hackers," says Mark Crispin, a
+systems programmer at SCORE.  "That is, what nontrivial program have
+you written?  As opposed to logging in and sending bug reports and
+flaming [translation:  bullshitting] on the bulletin board.  I
+consider a nontrivial program to be something above a hundred lines of
+text, and it depends on what language it is.  It requires some design,
+a user interface, a significant amount of time to develop.  It doesn't
+matter if the program itself is a great idea."
+	Crispin has been holding court for me in the living room of
+his condominium, which is decorated in middle-period graduate student
+and distinguished only by a half-dozen hand-held computer games and a
+terminal hooked up to the telephone.  Crispin is tall, pale, and
+though he looks like he's never shaved, he's twenty-five.  He shares
+the condo with his finacee, who had been a member of a hacking club at
+Columbia University when she spotted a bug in one of Crispin's
+programs she was using.  She sent him transcontinental computer mail,
+he replied, and the digital correspondence led to a meeting and
+eventually a proposal.  She listens approvingly as he speak in a nasal
+voice that grows louder when he has a particular point to make.
+	Crispin wants to show me something.  He bounds out of his
+chair, heads for his terminal and calls the LOTS computer.  He types
+in his password, ignores the computer message that tells him he has
+electronic mail and demonstrates a program that generates sexual
+quips.  Typing its name, Tingle, brings this to the screen:
+
+"I'm back in the saddle again, again!..." shrieked the quadriplegic as
+the lurid sabra savagely tossed away his well-cut pants and munched on
+his spunk-filled pepperoni.
+
+	Crispin admires the hell out of this hack.  "Tingle is
+definitely a nontrivial program," he says.  "It has its own concept of
+structured English sentences.  It is completely computer-generated.
+Everything Tingle points out makes literal sense.  Tingle builds
+scripts of what it's going to do; it remembers male and female
+characteristics.  Only then does it randomly choose from vocabulary
+columns."
+	With all this hoopla, you'd think the program was perfect.
+But no program is.  "The program can always work, but you can always
+make it better," says Crispin. "You can always have it do something
+new, make it perform faster, give it more structure, make it >do<
+more!"  Crispin's voice is a high whine, and he's almost out of his
+chair.  ">You can always think of ways to make it better!<" You're
+never at the point where you stop.  Just when you say, 'It's totally
+perfect,' you say, 'Gee, but I can make it do >this<!'"
+	Is a computer program a work of art?  Mark Crispin thinks so,
+and other hackers agree.  Hackers insist that each programmer wirtes
+code in an individual, recognizable style.  Programmers work at a
+level of creativity, they say, that is comparable to writing poetry,
+composing, painting.  "You can express yourself by writing code," says
+Marc LeBrun, a twenty-nine year-old hacker who never aytended college
+but spent his teen years at Stanford's Artificial Intelligence Lab.
+"And you begin to judge programs on high-level things like style.  You
+say, is this a flavorful way to do this?  And people will often get
+into huge arguemtnst about something that will ultimately make a
+difference of a small microsecond but will have profound stylistic
+implications."
+	Hackers as artists!  Can it happen?  Will hackers give
+dramatic renditions of their latest COBOL hacks?  Will we curl up on
+the beach with a good, long word-processing program?  It seems
+impossible, because the programmer's art is so self-contained,
+esoterically personal, agressively elitist and void of the stuff of
+human experience.  "People don't read programs like novels, that's
+true," says Stanford computer scientis Dennis Allison. "And it's a
+shame."
+
+DON PARKER IS NO FAN of hackers.  Author of "Crime by Computer",
+resident expert of computer abuse at the Stanford Research Institute
+(SRI) and a lanky, three-piece-suited man who resembles an elongated
+Donald Pleasance, Parker thinks that hackers promote an attitude that
+could lead to disastrous results.
+	Computers are highly prone to being tampered with by knowl-
+edgeable intruders.  When a large computer is used in a time-sharing
+system, safeguards are installed to prevent users from getting access
+to the digital files of other users.  If a troublemaker succeeds in
+getting these files, he not only can read the private notes but can
+change and even erase them.  Parker fears hackers because they not
+only have the know-how to crack security, but they regard these
+safeguards as mountaineers regard Mount McKinley.  "The more barriers
+you put up, the more compelling the incentive is to break them down,"
+Parker says.  Marc LeBrun agrees:  "I think the hacker viewpoint is
+that the world exists to hack," he says, "and there aren't any angels
+with flaming swords standing over the world saying, 'Thou shalt not
+push these buttons.'"
+	If those angels existed, hackers would finds programs to dull
+their swords.  Despite the best efforts of the business and military
+establishment, the hacker-proof security system has yet to be devised.
+When SRI gathered a team of crack programmers to test the
+inviolability of military defense computers, the programmers were
+shocked to find that it took them only one telephone call and a few
+minutes to break into files containing top-secret information.
+	"What we have to do is change the cultural values in this
+[hacker] subculture," says Parker.  "there are instructors in high
+school and universities who encourage people to attack security
+systems as a means to learn more about computers.  There are people
+who think of this a a matter of fun and games, a stimulating thing to
+do."
+	One idle form of hacker amusement is causing the computer to
+crash, or temporarily break down.  I've asked at least six hackers to
+explain the thrill of this, and I've received only inarticulate
+sentence fragments to the effect of, well, it's >there<.  Maybe they
+do it to show the computer who's boss.  One hacker bragged how he set
+a few hundred programs into motion that constantly forked into other
+programs, which begat even more programs, growing at a logarithmic
+rate until the overloaded DEC-20 was brought to its knees.  "I guess
+it's a phase everyone goes through," explains another hacker.
+	Hackers everywhere delight in these tricks, the more harrowing
+the better.  Take Julius Smith's Seppuku program.  Smith is a grad
+student who hacks at Stanford's Computer Music Center; he has long
+been engaged in a search for the algorithm of the violin.  Smith knows
+the old hacker trick of giving an enticing name to a rogue program:
+when a user peruses a system's menu and sees something call Seppuku,
+he'll access it.  (All hackers have insatiable curiosity about other
+programs.)  On the screen the user sees:
+		Seppuku is not a program for honorable users.  Do not
+		run Seppuku unless you can live with your shame.  Type
+		y if you must run it.
+	As soon as the poor sucker types 'y', the screen becomes
+ablaze with six-inch letters shouting, "GOMEN NASAI!!"  This is
+approximate Japanese for "Now you've done it."  The screen immediately
+begins to list the titles of every file the user has ever stored in
+the computer memory.  These files represent years of work.  "Do you
+really want to delete all your files?"  the computer asks. DELETE?
+Before the stunned user can fully comprehend the catastropghic
+implications of this message, the computer answers with a 'Yes'.  One
+by one the files are wiped off the screen.
+	"Your every file directory has been deleted," says the
+computer.  "Goodbye - have a good life." Then the user is logged out.
+Screen blank.
+	"Seppuku doesn't REALLY delete the files," says Smith.  "It
+just looks like it does.  You see, hackers really don't hurt anyone."
+	But once a hacker has the knowledge to crack security, he
+simply has to be trusted.
+		At a terminal sits a hacker and a wheel by his prompt
+		And his screen shows the reminders
+		Of every bug that broke his code or
+		halted
+		Till he cried out, in his anger and his shame
+		I am leaving, logout, killjob, but the hacker still
+		 remains....
+	After a few quarters at Stanford, Ernest Adams began to
+reassess hacking: what had it done for him?  What had it done TO him?
+He had learned an incredible amount about computers but felt cut off
+from the mainstream.  He had top grades in this programming courses
+but had failed calculus because he spent too much time at LOTS.  He
+looked at some of his fellow hackers and decided that their devotion
+to computers was eroding their humanity.  Was he turning into a
+maching himself?
+	Stored within the LOTS computer memory is a computer bulletin
+board that is open to comment and response from any user in the
+system.  Items on B-Board range from lonely-hearts messages to offers
+to sell bicycles, to long-winded debates about issues of school
+politics, world affairs and computing ("If a computer had a voice,
+which sex would it be?").
+	One intense B-Board exchange dealt with the concerns Adams had
+about excessive hacking.  The opening salvo was launced by a
+disgruntled hacker who flamed about the narrowness, inhumanity and
+addictiveness of hacking - he called LOTS an "alien culture" whose
+inhabitans' personalities are irreversibly shaped by machine.  This
+kicked off a running debate between those like Adams who agreed with
+the gist of the attack, and hackers who defended their long hours of
+interfacing with "the infinite tool."
+	A Stanford psychology professor named Philip Zimbardo acquired
+a printout of this debate and sent it to "Psychology Today", which
+presented it as "The Hacker Papers," accompanied by Zimbardo's
+commentary.  He suggested basically, that hackers would be well
+advised to join the human race.  The article made many of the LOTS
+hackers self conscious.  "I sometimes try to hide the fact that I'm a
+hacker," says Dan Newell.  Others are now defensive at the least sign
+of disapproval, charging their critis with "computerphobia."  "Why
+single >us< out?" says one.  "Why not talk about how much time the
+Stanford marching band practices?"
+	All hackers, though, have a hedge against insecurity:  they
+are needed.  "The computer field is growing at a termendous rate,"
+says Dennis Allison, "and it's going to take a concentrated amount of
+wizardy to bring it about."  As our dependence on computers increases,
+it will be the hackers who can best create the supersoftware that will
+keep society from imploding into a mass of jumbled bits.  An industry
+study showed that one good programmer is as productive a ten merely
+competent ones; a wizard-level programmer can almost name his price.
+The viciously competitive computer firms are desparate for hackers,
+who ask only for flexible working hours, no dress or etiquette
+requirements, and, above all, nontrivial, trailblazing tasks.  Then
+the hackers proceed to work sixteen-hour days until the project is
+completed.  "There're lots of opportunities to make an obscene amount
+of money," says LOTS staffer Bob Knight.
+	Such "real world" pursuits (along with other distractions like
+marriage and family) have the potential of eventually turning a hacker
+from his computer extremism.  So, many of the LOTS hackers see
+Stanford - and possibly graduate school - as a last chance to run amok
+with the DEC-20.  As Julius Smith puts it:  "My [student] funding runs
+out in a year.  This is my last chance to do something pure in my
+life."
+	Some hackers find ways of remaining "pure": taking on
+temporary programming stints at Silicon Valley's high-tech operations,
+keeping a connection with other hackers by illegal accounts on
+university computers.
+	But Ernest Adams prefers a more conventional existence.  He
+wants to be counted among those who have hacked intensely for a year
+or two, then managed to grow out of it.  He took off a quarter of his
+sophomore year to work computers for the Viking Mars Landing Project,
+and later took off more time to do some professional programming.  He
+made a conscious effort to pay more attention to his other studies and
+get back into the mainstream of users, nonwinners, and even people who
+don't know a byte form an escape key.  He once was convince that
+hacking was transitory, that society need not worry about it
+proliferation.  Now he sees more hackers than ever, and he's not so
+sure.  Still, he believes he has freed himself from computer
+addiction.
+	But old obsessions die hard.  Recently, at six in the morning,
+Adams was at LOTS working at a terminal.  "Just editing a paper" was
+his excuse.  But he offered no apologies for speaking in rapturous
+tones about his planned thesis for a computer doctorate.
+	"I would like to write a program that reproduces, that reacts
+negatively or positively to its environment and, most important of
+all, could be mutated by its environment.  I would like to see if I
+could start several of these programs running, and start some sort of
+superior program that watches them mutating, and see if they evolve.
+That's the God program.  It invents the environment, reates the data
+that the programs read, and will mutate the programs...."
+	Adams flames on rabidly, his face lit up like a display for a
+well-hacked game.  The God program will create hot spots to control
+the motions of the one-celled programs.  A maturation factor will
+control the growth and adolescence of the one-cells.  The program
+might well duplicate the theory of natural selection, and be a kind of
+vindication of Darwinian theory ....>I am leaving, logout, killjob,
+but the hacker still remains.<
+
+[end of article from April Rolling Stone by Steven Levy]
+ 

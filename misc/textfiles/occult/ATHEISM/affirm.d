@@ -1,0 +1,521 @@
+                        9 page printout.
+
+    Reproducible Electronic Publishing can defeat censorship.
+
+                          ****     ****
+
+                         WISDOM REVEALED
+
+     The value of this 360K disk is $7.00. This disk, its printout,
+or copies of either are to be copied and given away, but NOT sold.
+
+          Bank of Wisdom, Box 926, Louisville, KY 40201
+
+                          ****     ****
+
+                             ATHEISM
+                       An Affirmative View
+
+                       by Emmett F. Fields
+
+                              1980
+
+
+     What is Atheism that it survives?
+
+     Every religion, from earliest times, has hated and condemned
+those who could not believe whatever it was that those old
+religions happened to believe. Throughout the ages there have been
+the 'intellectual outlaws' who have questioned the
+"unquestionable," and doubted even the very existence of the gods.
+And those individual thinkers have been hated, hunted, persecuted,
+and murdered by the religious believers. Yet the Atheists and
+doubters are very much with us today, but those old religions, and
+the gods they created, have long since ceased to trouble the
+thoughts of mankind.
+
+     If Atheism is considered to be a religion, then it is easily
+the oldest living religion in the world. Properly stated, Atheism
+is truly "that old time religion" that the Baptists keep singing
+about.
+
+     Atheism is a difficult subject only because of the slander and
+misrepresentations preached and published against it. Even the
+information that is available in our most trusted and respected
+reference books is the distorted and prejudiced view presented by
+religion. Just as in Communist countries, where the articles on
+Capitalism, democracy, politics, etc., are always written by
+Communists and from the Communist point of view, so in Christian
+dominated societies, such as the United States, all articles on
+Atheism, Rationalism, Freethought, etc., that are to be found in
+encyclopedias and other reference books, are written by
+theologians, and from the Christian point of view.
+
+     The article on Atheism in the current edition of the
+Encyclopedia Britannica was written by a Roman Catholic Jesuit
+Priest, Rev. Cornello Fabro, Professor of theoretical Philosophy,
+University of Perugia, Italy. In the Encyclopedia Americana the 
+article on Atheism was written by Roger L. Shinn, a professor at
+Union Theological Seminary. It seems that religion, like Communism,
+can survive only when it can control the information about
+conflicting beliefs.
+
+                         Bank of Wisdom
+                  Box 926, Louisville, KY 40201
+                                1
+
+                            ATHEISM;
+                       An Affirmative View
+
+     This system of writing the most trusted and basic reference
+and information books from the point of view of the dominant
+ideology in every society has the dangerous effect of further
+polarizing and isolating the peoples of the world within their own
+narrow beliefs, and of creating contempt and distrust for all
+others.
+
+     America was not established to have any dominant ideology, The
+United States was meant to be 'a free marketplace of ideas,' where
+every opinion could be heard and considered. Today we must consider
+the various ideas and opinions as they are presented in great
+newspapers and reference books.
+
+     And so it is of the utmost importance that these ideas and
+opinions be presented honestly, by the people who accept them,
+believe in them, and are convinced they are the best answers to the
+problems under consideration. Then, and only then, will people have
+any real opportunity to make an intelligent decision about the
+beliefs they are investigating. The American people have a right to
+know that in Atheism there is a moral, sensible, and scientific
+alternative to religion.
+
+     There can be no doubt but that the people of this nation must
+be among the most deceived and brainwashed in the world, at least,
+at very least, in the area of religion. As an Atheist I have a very
+special reverence for truth, real truth, truth with fact and proof
+behind it. And it is infuriating to me when I go into a public
+library and read the lies and misrepresentations that are being fed
+to the eager, active, and searching young minds that use our
+libraries in their quest for truth and understanding.
+
+     The first step, then, in understanding Atheism is to disregard
+all the lies and propaganda that religion has spread against it.
+Atheism is more than just the knowledge that gods do not exist, and
+that religion is either a mistake or a fraud. Atheism is an
+attitude, a frame of mind that looks at the world objectively,
+fearlessly, always trying to understand all things as a part of
+nature. It could be said that Atheism has a doctrine to question
+and a dogma to doubt. It is the human mind in its natural
+environment, nothing is too holy to be investigated, nor too sacred
+to be questioned. The Atheist Bible, it could be said, has but one
+word: "THINK." Atheism is the complete emancipation of the human
+mind from the chains and fears of superstition.
+
+     There is absolutely nothing negative about Atheism; truth can
+never be negative. The Atheist demands proof, or at least
+reasonable evidence, and simply rejects whatever does not meet the
+basic requirements of common sense. Throughout history all progress
+in society has come from doubting and rejecting old ideas, old
+customs, and old beliefs. The tree of human knowledge dies as it
+grows, with new growth growing out of the dead and dying parts, and
+replacing it with better and truer beliefs. The Theologian is an
+owl, sitting on an old dead branch in the tree of human knowledge,
+and hooting the same old hoots that have been hooted for hundreds
+and thousands of years, but he has never given a hoot for progress.
+
+
+
+                         Bank of Wisdom
+                  Box 926, Louisville, KY 40201
+                                2
+
+                            ATHEISM;
+                       An Affirmative View
+
+     Morally speaking, Atheism has a great advantage over religion.
+The great failure of religious morality comes from their illusion
+of a morality above right and wrong. The religious mind has always
+known it is wrong to murder and torture, wrong to persecute and
+hate, wrong to force its beliefs upon others. Religion has always
+known these things are wrong, but the religious mind suffers from
+the illusion of a "higher morality," and because of that illusion
+all history runs deep with innocent blood. In the name of their
+"god" and a "higher morality," Christians have waged holy wars of
+extermination, have plundered, tortured and murdered those who
+could not agree with their religion, or who had never even heard of
+it. In the name of this "higher morality" Christians have hated,
+hunted, persecuted, and burned alive the "heretic," the "infidel"
+and the "atheist."
+
+     And today, as always, when the religious person does a thing
+that even he recognizes as being wrong and immoral, his illusion of
+a "higher power" and a "greater morality" allows him to perform
+some ritual, confession, or prayer, and presto, miraculously, "all
+his sins are taken away", and he is free again from all pains of
+conscience and regret.
+
+     Such foolish illusions do not comfort the Atheist mind. The
+Atheist knows there is no morality above right and wrong, and no
+escape from the pains of conscience and remorse. Murder is murder,
+and robbery, hate and persecution are all crimes against humanity.
+Morally speaking, it is better to be murdered than to be the
+murderer; better to be robbed than to be the robber, and better to
+be hated and persecuted than to be among those who hate and
+persecute. Morally speaking, then, history tells us it is better to
+be an Atheist than to be a Christian.
+
+     Religion claims that immorality always springs from a lack of
+religion, but the facts prove just the opposite. Christianity has
+never been stronger than it is today, Christians have churches in
+every community, they monopolize radio and television time with
+religious propaganda, they have forced their religion into our
+government, our laws, and into our schools. They have done these
+things against the Constitution of the United States, and against
+the most basic and sacred rights of all other Americans. Like a
+sinking ship, with water rushing in and filling every compartment
+where it was not supposed to be, so religion has attacked our
+nation, rushed in where it was not supposed to be, where it has no
+business to be, silencing all opposition, all opposing views,
+poisoning the wells of our knowledge, and endangering the very
+roots of our nation.
+
+     Christianity is that strong today, and yet we have not
+achieved any respectable amount of morality in this country.
+Nowhere is the failure of Christian morality more evident than in
+America. During the same time that Christianity has been growing
+ever stronger and ever richer, over the past thirty years or so,
+the use of harmful drugs has became a national scandal, the crime
+rate has been climbing ever higher and ever faster, the divorce
+rate has skyrocketed, and during that time our nation has been
+embroiled in more wars and international conflicts than in any
+
+
+                         Bank of Wisdom
+                  Box 926, Louisville, KY 40201
+                                3
+
+                            ATHEISM;
+                       An Affirmative View
+
+other similar time period in its history. During that time, our
+nation was also getting its 5000 or so weird religious cults, a
+byproduct of Christian indoctrination. Right to-day we have the
+highest narcotics abuse rate, the highest crime rate, the highest
+divorce rate, and the highest 'religion rate' that we have ever had
+in the history of this nation. What does Christianity say about
+these facts and how to cure them? They tell us we need more
+religion and they are determined to force it upon us. Christianity
+feels so strong today that it is moving into politics to try to
+force its failing morality upon every American through a Christian
+Dictatorship and a new Dark Age.
+
+     Once Atheism is achieved, and the mind has escaped entirely
+from the religious fears and beliefs that are put upon us from
+earliest childhood; and once we can look at religion objectively
+and impartially, it becomes entirely obvious that religion has all
+the characteristics of a form of insanity. To one degree or another
+the religious mind must accept, and believe in, another world; a
+supernatural or unnatural world, a world filled with all sorts of
+imaginary beings called gods, devils, angels, saints, demons, etc.
+These imaginary creatures are talked to, asked for favors,
+guidance, "signs," or miracles, and then blamed or thanked for
+natural events that follow. Except for the cloak of religion, such
+beliefs and actions would otherwise cause an individual to be
+judged insane, and committed to an institution for treatment.
+
+     The study of history will further justify the theory that
+religion is a form of insanity. No sane and healthy minds could
+have waged the bloody religious wars and crusades where the
+conquered were slaughtered, men, women, and children, even infants,
+all were put to the sword simply because they were "infidels" or
+"heretics." The dungeons and torture chambers of the Holy
+Inquisition could not have been run by sane and healthy minds. And
+it had to be the insane mind, the religious mind, that would tie a
+woman to a stake, pile wood and fagots around her and burn her
+alive for the impossible crime of being a witch. No sane person
+could read of the horrors, rape and slaughter in a savage book and
+call that book "the word of God." And the Jesus myth, about a god
+who must become a man and be murdered before he can forgive
+mankind, is the most insane of all.
+
+     Today, Christianity chooses to ignore, or to hide and deny,
+its own bloody history and to claim that it is the very foundation
+of our morals, and even of our civilization. Religion also claims
+to be our only hope and guide for the future. In view of Christian
+history these claims are, in themselves, sheer insanity.
+
+     But Christianity is not the only form of organized insanity in
+the world today. The Atheist, being an individual who stands
+outside all belief systems, is well aware that there are other
+religions and beliefs that are equally insane and dangerous.
+Christianity is simply most dangerous to the United States; to our
+government, our freedom and our future, because it is here, it is
+powerful, it is wealthy, and it is entirely unscrupulous. In
+addition to its illusion of a morality above right and wrong, I
+
+
+
+                         Bank of Wisdom
+                  Box 926, Louisville, KY 40201
+                                4
+
+                            ATHEISM;
+                       An Affirmative View
+
+must add, and emphasize, that it also has an illusion of a "higher
+allegiance" to something above truth, above justice, and above
+America and national patriotism. It does not require that a person
+be an Atheist to be aware that Christian Fundamentalism is today
+the greatest threat to our nation and its freedom.
+
+     Communism is by far the worst thing that has happened to the
+world in the last two hundred years, but it is also the best thing
+that has happened to Christianity since the plagues. During the
+plagues the churches received great wealth from people who gave
+their possessions and land to the church in the hope that God would
+spare their lives, and the lives of their loved ones. And so today
+religion is again growing rich and powerful from our modern-day
+plague; Communism.
+
+     Christians are constantly using Communism as a club to beat
+down all opposition to their religion, their power and their
+schemes. Anyone who disagrees with them, Atheist or not, is
+denounced as being a "Communist." Religion implies that there is an
+inseparable connection between the political-economic dictatorship
+called Communism, and the freedom from religion called Atheism.
+Religion chooses to ignore the fact that Atheism is older than
+Communism and Christianity put together.
+
+     Even the fear and hate that religion is preaching against
+Communism is not aimed at the political-economic ideology that is
+the cause of our trouble, but at the "atheistic" aspect that is not
+the problem.
+
+     Let us consider very carefully what the connection is between
+Atheism and Communism in Russia. There can be no doubt but that
+Atheism is the reason for the success of Communism. Atheism is the
+force that brought the Russian nation up from being one of the most
+backward, primitive and religious nations in Europe in 1917, to the
+point of being one of the most advanced, scientific and
+technological, nations in the world today, Whether we like it or
+not, we must admit that Communist Russia is a powerful modern
+force, and a very dangerous potential enemy. Communism is an
+external threat to our nation, and to our very world, that is of
+great concern to all Americans, Atheists and Christians alike.
+
+     It must be admitted that Atheism is the engine and the thrust
+behind Communism that has allowed it to move forward into the
+modern world in such a short time. Atheism is the engine and the
+thrust, but it is not the steering wheel. The dominant, controlling
+ideology in Russia is the economic-political dictatorship known as
+Communism. Even the Christians, if they could be taught to hate a
+little less, and think a little more, would have to admit that.
+
+     Atheism is, has been, and will continue to be, the force for
+progress throughout the Communist world, it is the powerful engine
+that powers an evil ideology. Today we are in a desperate race for
+our very survival. America and the free world cannot win that race
+if we continue to allow a primitive, medieval superstition to
+hinder our progress. Because of that superstition we have lost our
+lead, and because of that superstition we may lose the race.
+
+
+                         Bank of Wisdom
+                  Box 926, Louisville, KY 40201
+                                5
+
+                            ATHEISM;
+                       An Affirmative View
+
+     What is the difference between our own Christian dominated
+society, and the Atheist-oriented society in Russia? What is it
+that will make such a great difference in the future progress of
+these two societies? According to a special report in 'Science 80'
+Magazine concerning the Communist threat, reads: "This challenge is
+expressed not only in growing military strength but in a bid to
+outpace the United States and other Western nations through an
+educational "mobilization" program designed to prepare all Soviet
+youth to participate fully in an advanced technological society."
+The article goes on to say "The Soviets have put massive resources
+behind their assumption that a decisive advantage is to be gained
+by raising the level of scientific literacy and numeracy of their
+population."
+
+     And what are we doing in the United States to keep up with the
+Communist efforts to advance even further their scientific and math
+education systems, systems that are so very important to any modern
+technological, military society? At present we have a great push by
+Christianity to have their primitive "creation" myth hidden under
+the guise of "Scientific-Creationism," taught in our public schools
+on an equal basis with the well established and accepted modern
+theory of organic evolution. This is the same battle that was
+fought in the courtroom during the Scopes "monkey trial" in 1925,
+a trial which made this country the laughing stock of the modern
+world. It is the same war that has been raging between Christianity
+and the modern world since 1859 when Charles Darwin's 'The Origin
+of Species' was first published. For over one hundred and twenty
+years Christianity has tried to prevent us from making any progress
+in this basic science. The truth is, of course, that Christianity
+has always fought every fact of science and modern knowledge that
+did not conform to its primitive Bible, written and copied, as it
+were, by ignorant, half-civilized nomads some four thousand years
+ago.
+
+     How can we hope to survive as a nation, keep our freedom and
+remain a force in the modern world unless we cast aside the
+superstitions of primitive times, and adopt the scientific,
+technological, "Atheistic" if you will, society that reason and
+common sense demands? It is time, and long past the time, for
+Atheists in America to come out of their libraries and defend our
+modern world and our nation against religion and Communism.
+
+     Today we live in a world divided and tuned for war; tuned for
+a war so unlike any previous war that wisdom can only shudder at
+the thought of it. This is a world always fearful that the other
+side may strike first, and thus gain some decisive advantage. It is
+fearful also to strike first itself, lest it fail to devastate the
+enemy completely, and leave him able to retaliate with devastation.
+Thoughtful people all over the world realize that the situation is
+more dangerous than the enemy. That each side has a tiger by the
+tail, and both sides are afraid to let go, or even to lessen its
+grip, lest that side be utterly destroyed. Intelligent people all
+over the world are working for an easing of tensions, a lessening
+of armaments, and are searching for a common ground upon which both
+sides might find some point from which to begin establishing a
+working relationship. A relationship that would lead to a
+progressive lessening of the threat of a nuclear holocaust, and the
+eventual establishment of a peaceful and lasting coexistence.
+                         Bank of Wisdom
+                  Box 926, Louisville, KY 40201
+                                6
+
+                            ATHEISM;
+                       An Affirmative View
+
+     Intelligent people all over the world are working for these
+things, but Christian fundamentalists are not. Christians are
+shouting "No coexistence with Godless Communism" and "Atheistic
+Communism must be destroyed." This is indeed the final proof that
+religion is a form of insanity. We must judge Christianity by what
+it has done throughout its history, and it has never been a force
+for peace. We must judge what Christianity is doing today in
+preaching hate against that part of our world that has outgrown and
+rejected Christianity. And we must judge what chance we have for
+survival if our part of the world continues to be held back by
+religion. Atheism has brought the Russian nation great progress in
+scientific and technological advances, and has made Communism a
+powerful force in the world. But Atheism could have been doing
+great things for us also, if we had allowed our society to lay
+aside, through education, the foolish old beliefs that are
+hindering our progress, our defense, and our very survival.
+
+     Where do we begin our long journey back to reality, back to
+sanity? I would start with an 'International Encyclopedia of
+Information,' written by those who believe the ideas and from their
+point of view. Imagine an American going to a library and learning
+what Atheism is, instead of what it is not. Imagine a Russian going
+to his library and learning what Capitalism is instead of what it
+is not. Imagine people all over the world going to their libraries
+and reading the same histories, truthful histories, histories that
+will not need to be changed when ever there is a political or
+religious power change. Let Communism write what it believes, let
+Capitalism write what it believes. Let both work together to write
+a universal history, and if they can't agree about the facts of
+history, let them both write their view of history and let them be
+published side by side, and let the reader be the judge. The
+purpose of a history or an encyclopedia is education, not
+propaganda.
+
+     After all, it was the Encyclopedia, the French encyclopedia of
+Diderot and others, that was so instrumental in bringing Europe out
+of the Christian Dark Ages during the Renaissance. There is every
+reason to believe that a universal source of basic information
+would be a great step toward ending much of the distrust and
+confusion that is at the very root of our trouble in the world
+today.
+
+     There is no part of the world where the people are all bad,
+and another part where the people are all good. When nations go to
+war, people go out and kill people. People who, under different
+circumstances, might well be their honored and trusted friends.
+Christianity has never prevented a war, but has been responsible
+for many wars because of its prejudice against all other religions,
+and especially against Atheism.
+
+     Some time ago I prepared "An Atheist's Message to America." I
+have read it at other talks and meetings. It reads:
+
+     "The overabundance of religious propaganda in this country
+would lead us to believe that the primary purpose of this nation is
+the preservation and expansion of the Christian religion. But that
+is not true.
+
+                         Bank of Wisdom
+                  Box 926, Louisville, KY 40201
+                                7
+
+                            ATHEISM;
+                       An Affirmative View
+
+     Our nation is not, and must not become, the battleship of the
+Christian religion. Our struggle in the world is in defense of
+LIBERTY. To preserve our own, and, if possible, to help others gain
+and keep theirs.
+
+     This nation is not fighting "Godless Atheism" nor "Atheistic
+Communism," nor any other group or nation that has had Christian
+hate terms applied to them.
+
+     We, as a nation, are opposed to Communism because Communism,
+like Christianity, is an ideological force that is destructive to
+human rights and freedom. It is, in fact, none of our business
+whether another nation, or another individual, believes in a god or
+not. Our only concern is that every individual must have the
+liberty to decide just what he, or she, can and will believe. And
+have the freedom to express, publish and pursue those beliefs in
+perfect safety.
+
+     In short, our only concern in the world is exactly those
+ideals that this great nation of ours was originally founded upon."
+
+     And so after all this, let us look again at our original
+question: "What is Atheism that it survives?"
+
+     Atheism is the world of reality, it is reason, it is freedom,
+Atheism is human concern, and intellectual honesty to a degree that
+the religious mind cannot begin to understand. And yet it is more
+than this. Atheism is not an old religion, it is not a new and
+coming religion, in fact it is not, and never has been, a religion
+at all. The definition of Atheism is magnificent in its simplicity:
+Atheism is merely the bed-rock of sanity in a world of madness.
+
+                                                            END.
+                          ****     ****
+                                                  July 20, 1990
+
+     The above talk was delivered at the Thomas Jefferson Unitarian
+Church in Louisville, Kentucky on Sunday, October 19, 1980, and was
+published in the July-August 1981 'American Rationalist' magazine
+(P.O. Box 994, St Louis, MO. 63188.) and has been sold as a
+pamphlet by them ever since.
+
+     There has been a great change in the world situation during
+the past year and a half. The dangerous situation discussed in the
+above lecture has, at last, been broken. But it was not done by
+Christian love or by any believer in a god. It was an Atheist, Mr.
+Mikhail Gorbachev, who had the intelligence, courage and leadership
+to move his country, the Soviet Union, in a direction of peace and
+understanding. By Mr. Gorbachev's wisdom and action, and his alone,
+the tensions have been greatly reduced. But already Christians are
+claiming that the achievement was the work of their god, and, I am
+sure, in future issues of our Encyclopedias the credit will,
+somehow, (as always) be given to Christianity and its god.
+
+     Nothing changes history like the Christian Historian.
+
+                                             Emmett F. Fields
+
+                         Bank of Wisdom
+                  Box 926, Louisville, KY 40201
+                                8
+

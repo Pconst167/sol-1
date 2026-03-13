@@ -1,0 +1,314 @@
+_LZW REVISITED_
+by Shawn M. Regan
+
+
+[LISTING ONE]
+
+/* Basic LZW Data Compression program published in DDJ October 1989 issue.
+ * Original Author: Mark R. Nelson
+ * Updated by: Shawn M. Regan, January 1990
+ * Added: - Method to clear table when compression ratio degrades
+ *        - Self adjusting code size capability (up to 14 bits)
+ * Updated functions are marked with "MODIFIED". main() has been updated also
+ * Compile with -ml (large model) for MAX_BITS == 14 only
+ */
+
+#include <stdio.h>
+
+#define INIT_BITS 9
+#define MAX_BITS 14           /* Do not exceed 14 with this program */
+#define HASHING_SHIFT MAX_BITS - 8
+
+#if MAX_BITS == 14            /* Set the table size. Must be a prime    */
+#define TABLE_SIZE 18041      /* number somewhat larger than 2^MAX_BITS.*/
+#elif MAX_BITS == 13
+#define TABLE_SIZE 9029
+#else
+#define TABLE_SIZE 5021
+#endif
+
+#define CLEAR_TABLE 256    /* Code to flush the string table */
+#define TERMINATOR  257    /* To mark EOF Condition, instead of MAX_VALUE */
+#define FIRST_CODE  258    /* First available code for code_value table */
+#define CHECK_TIME  100    /* Check comp ratio every CHECK_TIME chars input */
+
+#define MAXVAL(n) (( 1 <<( n )) -1)   /* max_value formula macro */
+
+unsigned input_code();
+void *malloc();
+
+int *code_value;                      /* This is the code value array */
+unsigned int *prefix_code;            /* This array holds the prefix codes */
+unsigned char *append_character;      /* This array holds the appended chars */
+unsigned char decode_stack[4000];     /* This array holds the decoded string */
+
+int num_bits=INIT_BITS;               /* Starting with 9 bit codes */
+unsigned long bytes_in=0,bytes_out=0; /* Used to monitor compression ratio */
+int max_code;                         /* old MAX_CODE */
+unsigned long checkpoint=CHECK_TIME;  /* For compression ratio monitoring */
+
+main(int argc, char *argv[])
+{
+   FILE *input_file, *output_file, *lzw_file;
+   char input_file_name[81];
+ /* The three buffers for the compression phase.  */
+   code_value=malloc(TABLE_SIZE*sizeof(unsigned int));
+   prefix_code=malloc(TABLE_SIZE*sizeof(unsigned int));
+   append_character=malloc(TABLE_SIZE*sizeof(unsigned char));
+
+   if (code_value==NULL || prefix_code==NULL || append_character==NULL) {
+      printf("Error allocating table space!\n");
+      exit(1);
+   }
+ /* Get the file name, open it, and open the LZW output file. */
+   if (argc>1)
+      strcpy(input_file_name,argv[1]);
+   else {
+      printf("Input file name: ");
+      scanf("%s",input_file_name);
+   }
+   input_file=fopen(input_file_name,"rb");
+   lzw_file=fopen("test.lzw","wb");
+   if (input_file == NULL || lzw_file == NULL) {
+      printf("Error opening files\n");
+      exit(1);
+   }
+   max_code = MAXVAL(num_bits);     /* Initialize max_value & max_code */
+   compress(input_file,lzw_file);       /* Call compression routine */
+
+   fclose(input_file);
+   fclose(lzw_file);
+   free(code_value);                    /* Needed only for compression */
+
+   lzw_file=fopen("test.lzw","rb");
+   output_file=fopen("test.out","wb");
+   if (lzw_file == NULL || output_file == NULL) {
+      printf("Error opening files\n");
+      exit(1);
+   }
+   num_bits=INIT_BITS;                  /* Re-initialize for expansion */
+   max_code = MAXVAL(num_bits);
+   expand(lzw_file,output_file);        /* Call expansion routine */
+
+   fclose(lzw_file);                    /* Clean it all up */
+   fclose(output_file);
+   free(prefix_code);
+   free(append_character);
+}
+/* MODIFIED This is the new compression routine. The first two 9-bit codes 
+ * have been reserved for communication between the compressor and expander.
+ */
+compress(FILE *input, FILE *output)
+{
+   unsigned int next_code=FIRST_CODE;
+   unsigned int character;
+   unsigned int string_code;
+   unsigned int index;
+   int i,             /* All purpose integer */
+   ratio_new,         /* New compression ratio as a percentage */
+   ratio_old=100;     /* Original ratio at 100% */
+
+   for (i=0;i<TABLE_SIZE;i++)   /* Initialize the string table first */
+      code_value[i]=-1;
+   printf("Compressing\n");
+   string_code=getc(input);     /* Get the first code */
+
+ /* This is the main compression loop. Notice when the table is full we try
+  * to increment the code size. Only when num_bits == MAX_BITS and the code
+  * value table is full do we start to monitor the compression ratio.
+  */
+   while((character=getc(input)) != (unsigned)EOF) {
+      if (!(++bytes_in % 1000)) {     /* Count input bytes and pacifier */
+         putchar('.');
+      }
+      index=find_match(string_code,character);
+      if (code_value[index] != -1)
+         string_code=code_value[index];
+      else {
+         if (next_code <= max_code ) {
+            code_value[index]=next_code++;
+            prefix_code[index]=string_code;
+            append_character[index]=character;
+         }
+         output_code(output,string_code);   /* Send out current code */
+         string_code=character;
+         if (next_code > max_code) {      /* Is table Full? */
+            if ( num_bits < MAX_BITS) {     /* Any more bits? */
+               putchar('+');
+               max_code = MAXVAL(++num_bits);  /* Increment code size then */
+            }
+            else if (bytes_in > checkpoint) {         /* At checkpoint? */
+               if (num_bits == MAX_BITS ) {
+                ratio_new = bytes_out*100/bytes_in; /* New compression ratio */
+                if (ratio_new > ratio_old) {        /* Has ratio degraded? */
+                  output_code(output,CLEAR_TABLE); /* YES,flush string table */
+                  putchar('C');
+                  num_bits=INIT_BITS;
+                  next_code=FIRST_CODE;        /* Reset to FIRST_CODE */
+                  max_code = MAXVAL(num_bits); /* Re-Initialize this stuff */
+                  bytes_in = bytes_out = 0;
+                  ratio_old=100;               /* Reset compression ratio */
+                  for (i=0;i<TABLE_SIZE;i++)   /* Reset code value array */
+                        code_value[i]=-1;
+               }
+               else                                /* NO, then save new */
+               ratio_old = ratio_new;            /* compression ratio */
+            }
+            checkpoint = bytes_in + CHECK_TIME;    /* Set new checkpoint */
+            }
+         }
+      }
+   }
+   output_code(output,string_code);   /* Output the last code */
+   if (next_code == max_code) {       /* Handles special case for bit */
+      ++num_bits;                     /* increment on EOF */
+      putchar('+');
+   }
+   output_code(output,TERMINATOR);    /* Output the end of buffer code */
+   output_code(output,0);             /* Flush the output buffer */
+   output_code(output,0);
+   output_code(output,0);
+   putchar('\n');
+}
+/* UNCHANGED from original
+ * This is the hashing routine.
+ */
+find_match(int hash_prefix, unsigned int hash_character)
+{
+   int index, offset;
+
+   index = (hash_character << HASHING_SHIFT ) ^ hash_prefix;
+   if (index == 0 )
+      offset=1;
+   else
+      offset = TABLE_SIZE - index;
+   while(1) {
+      if (code_value[index] == -1 )
+         return(index);
+      if (prefix_code[index] == hash_prefix && 
+                                     append_character[index] == hash_character)
+         return(index);
+      index -= offset;
+      if (index < 0)
+         index += TABLE_SIZE;
+   }
+}
+/* MODIFIED This is the modified expansion routine. It must now check for the
+ * CLEAR_TABLE code and know when to increment the code size.
+ */
+expand(FILE *input, FILE *output)
+{
+   unsigned int next_code=FIRST_CODE;
+   unsigned int new_code;
+   unsigned int old_code;
+   int character,
+   counter=0,
+   clear_flag=1;          /* Need to clear the code value array */
+   unsigned char *string;
+   char *decode_string(unsigned char *buffer, unsigned int code);
+
+   printf("Expanding\n");
+
+   while((new_code=input_code(input)) != TERMINATOR) {
+      if (clear_flag) {       /* Initialize or Re-Initialize */
+         clear_flag=0;
+         old_code=new_code;   /* The next three lines have been moved */
+         character=old_code;  /* from the original */
+         putc(old_code,output);
+         continue;
+      }
+      if (new_code == CLEAR_TABLE) {     /* Clear string table */
+         clear_flag=1;
+         num_bits=INIT_BITS;
+         next_code=FIRST_CODE;
+         putchar('C');
+         max_code = MAXVAL(num_bits);
+         continue;
+      }
+      if (++counter == 1000) {           /* Pacifier */
+         counter=0;
+         putchar('.');
+      }
+      if (new_code >= next_code) {       /* Check for string+char+string */
+         *decode_stack=character;
+         string=decode_string(decode_stack+1,old_code);
+      }
+      else
+         string=decode_string(decode_stack,new_code);
+
+      character = *string;              /* Output decoded string in reverse */
+      while (string >= decode_stack)
+         putc(*string--,output);
+
+      if (next_code <= max_code) {      /* Add to string table if not full */
+         prefix_code[next_code]=old_code;
+         append_character[next_code++]=character;
+         if (next_code == max_code && num_bits < MAX_BITS) {
+            putchar('+');
+            max_code = MAXVAL(++num_bits);
+         }
+      }
+      old_code=new_code;
+   }
+   putchar('\n');
+}
+/* UNCHANGED from original
+ * Decode a string from the string table, storing it in a buffer.
+ * The buffer can then be output in reverse order by the expansion
+ * program.
+ */
+char *decode_string(unsigned char *buffer, unsigned int code)
+{
+   int i=0;
+
+   while(code > 255 ) {
+      *buffer++ = append_character[code];
+      code=prefix_code[code];
+      if (i++ >= 4000 ) {
+         printf("Error during code expansion\n");
+         exit(1);
+      }
+   }
+   *buffer=code;
+   return(buffer);
+}
+
+/* UNCHANGED from original
+ * Input a variable length code.
+ */
+unsigned input_code(FILE *input)
+{
+   unsigned int return_value;
+   static int input_bit_count=0;
+   static unsigned long input_bit_buffer=0L;
+
+   while (input_bit_count <= 24 ) {
+     input_bit_buffer |= (unsigned long) getc(input) << (24 - input_bit_count);
+     input_bit_count += 8;
+   }
+   return_value=input_bit_buffer >> (32-num_bits);
+   input_bit_buffer <<= num_bits;
+   input_bit_count -= num_bits;
+   return(return_value);
+}
+/* MODIFIED Output a variable length code.
+ */
+output_code(FILE *output, unsigned int code)
+{
+   static int output_bit_count=0;
+   static unsigned long output_bit_buffer=0L;
+
+   output_bit_buffer |= (unsigned long) code << (32 - num_bits - 
+                                                             output_bit_count);
+   output_bit_count += num_bits;
+   while (output_bit_count >= 8) {
+      putc(output_bit_buffer >> 24, output);
+      output_bit_buffer <<= 8;
+      output_bit_count -= 8;
+      bytes_out++;                    /* ADDED for compression monitoring */
+   }
+}
+
+
+
+

@@ -1,0 +1,10 @@
+			    THE PILGRIM (CRL)
+			    -----------------
+(You begin in an empty room) SEARCH ROOM, GET LEG, SMASH WINDOW, E (after falling down, you break your arm), N, N, E, E, GET HEMP, MEND ARM (using hemp and leg), W, W, W, LOOK HEARTH, MOVE FLAGSTONE, GET
+PARCHMENT, READ PARCHMENT (the password for the door is 'Silicon'), DROP PARCHMENT, HIDE (from the warrior. He leaves again), E, S, S, E,
+LOOK AROUND, PRESS PANEL, GET BALM, W, S, E, GET SPADE, W, W, LOOK ALTAR, TURN STATUE, LIFT STATUE, GET LANTERN, GET LENSES, E, S, S, GET FRUIT, E, N, E, S, DROP SPADE, DROP LANTERN, DROP BALM, GET ROCK, SWIM LAKE (don't carry too much here), GET BAR, DROP ROCK, SWIM GLADE, S, S, E, E, E, U, E, S, SEARCH ROOM, LOOK PAPER, READ WORDS (a hint about the table at the end of the game), E, SEARCH HALL, LOOK TABLE, W, N, W, D (a sentry has shown up), GIVE FRUIT (he dies), GET MASK, LOOK MASK, D, GET ROD, U, W, W, W, MOVE LOG, GET FUNGUS, EAT FUNGUS, SLEEP (your disease is cured), N, N, GET BALM, USE BALM (and your feet heal!), WEAR MASK, GET LANTERN, GET SPADE, S, S, W, W, DIG STEPS, U, ON LANTERN, DIG GROUND, DIG GROUND, DIG GROUND, DROP SPADE, GET NUGGET, D, E, E, E, S, OPEN VALVE (on the mask), S, S, S, S, DROP LANTERN, DROP BAR, DROP ROD, DROP NUGGET, REMOVE MASK, DROP MASK, S, GET AXE, THROW AXE, N, GET AXE, GET ROD, SHARPEN AXE, DROP ROD, GET BAR, GET MASK, WEAR MASK, GET NUGGET, GET LANTERN, N, N, N, N, W,
+W, W, WAIT, WAIT (a cave appears), W, S, DROP AXE, REMOVE MASK, DROP MASK, WEAR LENSES (they protect you against the snow), GET AXE, E, LOOK AROUND, FELL TREE (it forms a bridge), E, GET PICK, W, W, S, S, E (you must carry the pick here), E, DROP AXE, REMOVE LENSES, DROP LENSES, SAY SILICON (the door opens), S, SLIDE DOOR, E, GET SUIT, WEAR SUIT, W, W, S, S, INSERT BAR (the door opens), S, GET PLATE, N, N, N, E, S, INSERT PLATE (the door opens), S, INSERT NUGGET (you take off, heading for Earth. The Pilgrim has been beaten!)
+
+Jacob Gunness - d.22/9-1990.
+
+

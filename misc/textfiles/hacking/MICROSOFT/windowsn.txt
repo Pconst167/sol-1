@@ -1,0 +1,457 @@
+
+**************************************************************************
+   Info: Windows NT Security Issues
+ Source: http://www.somar.com/
+**************************************************************************
+
+Lax registry permissions
+
+NT installs by default with Everyone given write access to much of the
+registry. To see just how much, use the Somar DumpAcl program. This is a
+major problem because the registry on any machine running NT, both servers
+and workstations, can be accessed remotely using Registry Editor. So a
+user running on some workstation can modify the registry on any server or
+workstation on which this user has an account (normally this means all
+servers), or on which the guest account is enabled.
+
+Since the registry is similar to a file system, the obvious solution is
+either to stop sharing the registry or else set registry permissions
+securely. Unfortunately, there is no way to stop sharing the registry
+currently. As far as setting permissions, this is possible in theory but
+impractical because of the complexity of the registry. It is doubtful that
+anyone besides Microsoft can give guidance as to exactly which registry keys
+can be made read-only for ordinary users and which must be writeable by
+ordinary users. It is not acceptable to set permissions on the
+HKEY_LOCAL_MACHINE root key and let those permissions be propagated to all
+subkeys. This will cause various problems with the functioning of NT (it
+did when I tried it at least). If it is possible, then Microsoft needs to
+explicitly say so.
+
+It is possible to enable auditing of the successful change of all registry
+keys and then write a program to scan the audit log looking for changes
+made by other than the admininstrator, but this seems a poor way to run a
+system. It is analogous to letting all users write to all files, then
+auditing the changes and punishing users who changed files they weren't
+supposed to change. It is clearly better to just deny write permission to
+begin with if you don't want the user changing the file or registry key.
+
+Consider various scenarios. A malicious user changes a few registry entries
+so that various services begin functioning strangely, but not so strangely
+that it is obvious what has happened. The problems are not reproducible at
+other sites and the sysadmin feels like a fool. If logging is enabled, the
+sysadmin might eventually track the problem to the user who made the changes,
+but in reality, most sysadmins will just reinstall NT. The user might then
+wait a few months, then make the changes again. So the sysadmin comes to
+the conclusion that NT needs reinstallation every few months to keep things
+running properly.
+
+It is also possible for a user to make the changes while logged on using
+another users account (the other user stepped out of the room without
+locking their workstation, or they wrote their password down in a notebook
+and the malicious user found it, etc, etc). In this case, even if the
+sysadmin traces the changes using the registry audit logs, they won't find
+the real culprit.
+
+I have raised this isues of lax permissions with Microsoft and they looking
+into it.
+
+Permissions set improperly
+
+If the file system has a large number of files (say 500,000), it is
+impractical to examine the permissions on each file using file manager.
+Somar DumpAcl produces a report of permissions which groups files and
+directories with the same permissions, so the report of file system
+permissions is much shorter. Permissions are only shown for the root
+directory and files and directories below the root whose permissions differ
+from those of the root. If all files and directories have the same
+permissions, a report of permissions consists of a single item.
+
+One of common ways for files to get "wrong" permissions is due to
+differences between the way permissions are treated when copying versus
+moving a file. Copying a file causes the file to inherit permissions from
+the directory into which the file is copied. Moving a file preserves
+existing permissions on the file. So, a user might create a file in a
+temporary directory whose initial permissions give Everyone full control.
+This user then decides to add some data to the file that they don't want
+other users to change. So they move the file to a directory where only they
+have write permission. However, the file will still have the original
+permissions, giving Everyone write permission. If the user had copied the
+file and then deleted the original, the file would have the same
+permissions as the directory. The Somar DumpAcl report makes it very easy
+to spot files with "wrong" permissions.
+
+Remote procedure calls
+
+NT programs use remote procedure calls (RPCs) to allow various system
+services to be performed on a remote computer (i.e. a computer other than
+the local computer where the program is executing). For example, the
+ability to modify the registry on remote computers is implemented using
+remote procedure calls.
+
+There are mechanisms in NT for the RPC server to learn the username of the
+RPC client and then to limit the functions it will perform based on that
+username. However, as shown too many times in this document, there is a big
+difference between having good security mechanisms and having good
+security. If the RPC server ignores the username or incorrectly gives too
+many capabilities to the Everyone account or whatever, then there is a
+security hole. Since this whole aspect of NT seems poorly documented,
+there is really no telling how many security holes there are in this area.
+
+Securing a shared workstation
+
+Many users have asked how to secure a shared workstation so users cannot do
+any damage to the machine. For example, a workstation in a computer lab at
+a university. As described above, there is no way to secure the registry.
+The file system can be secured by setting the entire drive to the following
+permissions:
+
+    SYSTEM                      full control
+    Administrators              full control
+    Everyone or Users           read only
+
+Permissions should then be reset on the %SYSTEMROOT%\SYSTEM32\CONFIG
+dirctory as follows:
+
+    SYSTEM                      full control
+    Administrators              full control
+    CREATOR OWNER               full control
+    Everyone or Users           add permission only
+
+These settings allow users to create a profile, but prevent them from
+reading other users profiles, to avoid the security issues described in
+the section on Profiles contain sensitive information.
+
+Permissions should also be reset on the TEMP directory
+(C:\TEMP or whatever) as follows:
+
+    SYSTEM                      full control
+    Administrators              full control
+    CREATOR OWNER               full control
+    Everyone or Users           add permission only
+
+These settings allows users to use the TEMP directory, but avoid problems
+with users being able to read temporary files containing sensitive
+information that were created (and never deleted) by other users. Even if
+user remove files with sensitive information from the temporary directory,
+there is the issue of permissions being retained when a file is moved
+instead of copied (discussed in the section on Permissions set improperly).
+So the permissions on the TEMP directory should be set so initial
+permissions on a file are restrictive. Users can later make the file
+world-readable if they want to.
+
+There are other files and directories to which users of a shared
+workstation may need write access:
+
+   * Some applications require write access to the application directory
+        to store data. cc:Mail is an example.
+   * Many older Windows applications require write access to the
+        %SYSTEMROOT% directory to store .INI files. Newer 32 bit
+        applications should use the user registry instead of .INI files.
+   * DOS graphic programs require write access to
+        %SYSTEMROOT%\SYSTEM32\CMOS.RAM.
+   * The builtin NT backup program requires write access the
+        %SYSTEMROOT%\SYSTEM32 directory to store temporary files.
+
+The above list is not all-inclusive. You can enable failure auditing on all
+files and then examine the audit logs after making the most of the file
+system read-only to determine what files users need write access to. You
+can also use the Somar DumpAcl program to dump and print file permissions
+prior to making any changes.
+
+Macro runs when document is opened
+
+A WinWord document can contain a macro which runs when the file is opened.
+These macros can perform very powerful operations, including file i/o,
+sending mail or calling Win32 services. So a malicous user might ask
+another, unsuspecting user to read a document the first user wrote. This
+document contains a WordBasic macro which runs when the document is opened.
+The macro copies all files from the unsuspecting user's personal
+directories to a directory to which both users have read and write
+permission. The macro then sends mail to the malicious user notifying them
+of what happened. The document may take a while to start up, but the
+unsuspecting user assumes this is because the document is long. The
+malicous user later deletes the WordBasic macro from the document and
+notifies the unsuspecting user to replace any copy they made, so that
+all potentially incriminating evidence is destroyed.
+
+It is also possible to write the macro so it calls a user written DLL that
+does something useful, as well as copying files and performing other
+hostile acts. This DLL might be large and complicated so that it would
+be very difficult to disassemble it and prove that it was doing something
+wrong. Even if you were able to prove that the DLL was accessing your
+files, the author could say this was due to a bug in the DLL. If you
+demanded the source from which the DLL was compiled, the auther could give
+you some modified source. When you pointed out that this source could not
+be used to build the DLL exactly, the author could reply that the source
+had been modified to fix bugs since the DLL was originally built, which is
+a perfectly reasonable explanation. By using a DLL in other words, there is
+never any incriminating evidence.
+
+There are other programs besides WinWord which can create files which
+contain embedded macros which execute automatically when the file is opened
+in the creating application. For example, Microsoft Access and Lotus Ami
+Pro (these are just the programs I am aware of, I am sure there are many
+others). Also, Postscript files, believe or not, have file i/o capability.
+So if you open a postscript file in an interpretor, it might go out and
+modify any files to which you have write access. Also, Windows Help files
+(.HLP extension) can call DLLs (typical use is to customize the Help
+program in some way).
+
+So, suppose you receive a package containing a .HLP, .EXE and a .DLL file
+all together. You want to browse the .HLP file to see what this package is
+all about and whether you trust it enough to run the .EXE file. You assume
+the .DLL is called by the .EXE only. When you open the .HLP file, the .DLL
+is executed and it's too late if you decide the package is untrustworthy.
+
+WinWord and Access both allow the user to hold down the shift key when
+opening a document to prevent any macro from running. It is difficult to
+get in the habit of doing this (I am speaking from experience), especially
+when most of the Word or Access documents you open are your own, and
+therefore known to be safe.
+
+Why authors of programs feel the need to include powerful embedded macro
+languages is something I really don't understand. It is possible to
+accomplish most of what embedded languages do using DDE or OLE automation.
+The advantage is that the end user learns one scripting language
+environment and then applies it to different applications, as opposed to
+learning a new language for each application. Microsoft has decided to
+include VBA in all of their products, which reduces the amount of learning
+to some extent. But why, I ask, not just provide good OLE Automation
+capabilities so we don't need embedded macro languages at all, but can
+instead use a separate Visual Basic program?
+
+In any case, if it is absolutely necessary (for political or marketing
+reasons) to include an embedded scripting language in an application, then
+users should be allowed to set an option in the application so that they
+are prompted before any macros are run (e.g. "this document contains an
+embedded macro. Do you want to run this macro?"). There should be no way
+for the document to override this option and the option setting should be
+persistent (saved in a .INI file or the user's registry profile). If
+absolutely necessary, the application can be designed so that if the user
+refuses to run the macro, the application will refuse to open the document.
+
+Interesting Note. I was just reading about the Good Times mail "virus".
+This is a hoax which alleged that there was a way to write a mail message
+such that if you read the mail message, all your files would be deleted.
+Users reading this hoax become frantic that they can no longer read any
+mail without endangering their system. Actually, there is an element of
+truth to this. If the mail message included an attached Word document, then
+reading that attachment might cause a macro to be run which deleted all
+your files. These attachments can be sent using SMTP MIME or Microsoft
+and other propertiary mail systems.
+
+File sharing issues
+
+The SMB file and print server protocol used by NT is much more resistant to
+impersonation and session hijacking than the NFS file sharing protocol used
+on Unix. This is significant since NFS is one of the biggest security
+weaknesses on Unix.
+
+It is remotely conceivable that a gateway machine could hijack an SMB
+session and then read/write any files to which the true user of that
+session had access. However, the likelihood of this happening is very small,
+since true gateway machines are seldom used on LANs due to performance
+reasons. If the machine attempting the impersonation or hijacking is merely
+a node on the same Ethernet or Token Ring as the client and/or server, then
+it would probably be very difficult to perform the impersonation or
+hijacking. In particular, it would be difficult to get packets routed to
+the impersonating machine instead of the true destination machine.
+
+In any case, the much more relevant security risk is that user data is
+transmitted in the clear and so can be easily read by any computer on any
+LAN over which the data passes. Remember that if you connect to a remote
+network drive over the Internet or other insecure connection, you are
+passing data back and forth whenever you read or write a file on the
+network drive. File manager gives the illusion of the data being local,
+which makes remote files easy to use, but which can also lead to security
+breaches.
+
+This risk of eavesdropping does not exist for logons passwords, since these
+are never transmitted in the clear over the network, but rather a
+challenge-response protocol is used instead.
+
+In the long run, it would be nice if Windows NT were designed so that all
+SMB protocol data passed over the network was automatically encrypted,
+using a key which was randomly chosen for each NetBios session. No directly
+competing operating systems have this feature and, until some do, it is
+unlikely NT will. If you have a need to transmit data over an insecure
+network and you want to be protected from eavesdroppers, you will need to
+use some sort of encryption. For example, there are router boxess that can
+encrypt all TCP data, but not the IP header which is used for routing. Put
+one of these routers at two sites and configure with the same key all data
+passed between those sites with be secure. You are still open to traffic
+analysis, however. Traffic analysis is a concern, for example, when an
+undercover spy wants to send reports back to the home office, or similar
+scenarios.
+
+Profiles contain sensitive information
+
+Some users put their userid and password on the command line of the program
+manager item, for example for Microsoft Mail. This way they can start mail
+by just double-clicking the mail icon, without having to type in their
+password. This password will be embedded in the user profile.
+
+The local user profile is stored in %SYSTEMROOT%\SYSTEM32\CONFIG and also
+on a file server share, if a named, domain-wide user profile has been
+assigned for the user. Permissions on these directories should
+be like:
+
+    SYSTEM                      full control
+    Administrators              full control
+    CREATOR OWNER               full control
+    Everyone or Users           add permission only
+
+This is how permissions are initially set on %SYSTEMROOT%\SYSTEM32\CONFIG.
+Since CREATOR OWNER has full control, each user will have full control of
+their own profile. Since Everyone and Users have only add permission, they
+will be able to create a profile, but won't be able to read other users
+profiles.
+
+In some cases, such as with 3270 emulator programs, passwords are included
+in keyboard macros (so the user can use F12 or whatever to initiate the
+entire logon sequence). These macros may be stored in the user profile or
+a file. If a file, users should be warned to make sure the directory where
+this file is stored is not world-readable. This is primarily a concern on
+shared workstations.
+
+Passwords in general
+
+If a password is short and obvious, then it can be guessed. If it is
+written down in a notebook, it can be discovered. So pick a long password,
+consisting of a mixture of upper and lower case letters and punctuation,
+never write it down, and change it often (but not so often you feel the
+need to write it down). This is all well-known, but so important that it is
+worth repeating nonetheless. Finding someone's password written down is
+the lowest-tech way to break into a system, but unfortunately also the
+most common.
+
+Special shares
+
+NT shares the %SYSTEMROOT%\SYSTEM32\REPL\EXPORT\SCRIPTS directory, so that
+users can read their login script during login. Normally, all of the
+scripts are readable by Everyone. So be careful what you put in these
+scripts and this directory. Other special shares are created by other
+installed services, such as SNA server or SMS. Use Somar DumpAcl to dump
+a list of shares and their permissions. And examine the permissions on the
+directories underlying the shares. Remember that the final access
+permission on a shared directory is the intersection of the share and NTFS
+permissions. So while you are setting permissions to restrict access, be
+careful you don't unintentionally completely remove access.
+
+Win32 services default to running under SYSTEM account
+
+Many of the internet Unix breakins occurred when someone discovered a bug
+in a TCP/IP service and took advantage of this bug to break into the
+system. For example, the infamous Internet worm took advantage of a bug
+which caused the stack to be overwritten if the finger daemon received bad
+input. Obviously, you should try to only run services which do not have
+bugs. However, the danger if there is a bug is greatly reduced if the
+service runs under an ordinary user account with restricted permissions,
+instead of under the SYSTEM account (which corresponds to the Unix root
+account). So, for example, run your SMTP service under an smtpuser account,
+and give this account limited privileges, instead of running it under the
+SYSTEM account.
+
+Viruses
+
+If you are not familiar with viruses, there are many good books on the
+subject. NT is better secured than DOS from viruses, provided you normally
+run under an ordinary user account (not administrator), and keep most
+system files protected against modification by user accounts. NT is also
+secure against boot sector viruses, which are the most difficult to
+eradicate, provided you never boot with a floppy in the drive, since NT
+does not allow non-privileged programs to write directly to disk.
+
+Data on disk not encrypted
+
+Anyone who has physical access to a machine can read file system data by
+either reinstalling NT (the installer can pick the initial Administrator's
+password and Administrator can read all files) or booting from a DOS floppy
+and reading raw sectors using a low level disk utility. In both cases, the
+user would need access to the floppy drive. On many machines, the floppy
+can be disabled via the BIOS. There are two ways to get around a disabled
+floppy:
+
+   * Resetting the BIOS. Typically this is done by setting a jumper which
+causes a slow discharge of the battery needed to preserve the BIOS settings
+in CMOS. Discharge might take several hours, or several minutes, depending
+on your motherboard. Don't trust manufacturer's specs, since this is not
+something anyone tests.
+   * Moving the hard drive to another machine and reading it there.
+
+These techniques require opening the computer case, so there should be no
+risk for machines stored in open areas where opening a case would be
+immediately noticed.
+
+If the case can be opened, then you will need to encrypt data on disk.
+There are various products which allow you to do this, with varying degress
+of user-friendliness and transparency. (Any manufacturers who would like me
+to list there product and add hypertext links to their Web pages, just drop
+me a note).
+
+If you need military grade security, it should be noted that fragments of
+any file that is stored unencrypted in memory can be written to the paging
+file. So software encryption products will not be sufficient in this case.
+What you need instead is a disk controller which encrypts data on the fly
+as it is transferred between memory and disk. Typically, the user would be
+prompted for a password by the disk controller BIOS during cold boot. An
+examples of where military grade security is needed is a embassy which
+contains secret data on PCs. These PCs might fall into the hands of a
+hostile intelligence agency with adequate resources to extract information
+from the fragments of data in the paging file. For most users, such
+military grade security is not really necessary.
+
+Backup/Restore user rights allow reading/writing all files
+
+It is obvious that to perform a backup, the operator needs to be able to
+read all files. What is not obvious is that tape need not be involved. It
+is trivial to write a program in C which takes advantage of the backup right
+to read any file in the system. So be careful of who you give the backup
+right to. The use of the backup right as well as accesses to files can be
+logged in the Audit log. Users who have both backup and restore rights can
+read any file, modify it and write it back. As with the Backup right, use
+of the restore right can be logged. User Manager is used to assign rights
+to users and enable auditing of the use of user rights.
+
+Data on backup tapes not encrypted
+
+The NT backup program does not encrypt data on tape. So anyone who has a
+tape can read it on another machine on which the user has restore
+privileges, such as their personal NT workstation.
+
+FTP/Telnet passwords
+
+Microsoft does a good job of warning people about the fact that FTP
+passwords are transmitted in the clear. Especially for machines connected
+to the Internet, it is probably best to allow only anonymous FTP, so that
+no one ever attempts to transmit a password to your machine over the
+internet. If you FTP or Telnet from your machine to another machine on the
+internet, the same warning applies: any password you enter or any
+data you transmit, could be intercepted by other machines on networks over
+which the data is passed.
+
+FTP service directory
+
+The home directory you specify for the FTP service is only the initial
+current directory. Ftp users can change their current directory. So if you
+specify a home directory of c:\ftp, any ftp user can change to c:\ and thence
+change to any subdirectories under c:\. Normal NTFS permissions will apply,
+of course, to whatever account the ftp user is running under. If you don't
+want ftp users to be able to see the root directory of your primary
+partition, you should create a separate partition for ftp and then
+configure ftp so that it can only read and/or write to that partition.
+
+Application software issues
+
+The really valuable data on a computer system is what is produced by
+applications and stored in file and databases. It is very important to
+write and install these applications with an eye on security. It does no
+good to follow all the guidelines above and then have SQL Server setup in
+such a way that anyone with an account can read the entire database. Or to
+have an transaction processing monitor which runs under a privileged
+account and allows unprivileged users to submit requests that give them
+access to the entire file system.
+
+Send comments and questions to info@somar.com
+All material Copyright © 1995 Somar Software. Last updated 3 June 1995.
+

@@ -1,0 +1,285 @@
+CHAPTER 12   COMPATIBILITY WITH OTHER ASSEMBLERS
+
+
+I gave heavy priority to compatibility when I designed A86; a
+priority just a shade behind the higher priorities of
+reliability, speed, convenience, and power.  For those of you who
+feel that "close, but incompatible" is like saying "a little bit
+pregnant", I'm sorry to report that A86 will not assemble all
+Intel/IBM/MASM programs, unmodified.  But I do think that a vast
+majority of programs can, with a little massaging, be made to
+assemble under A86.  Furthermore, the massaging can be done in
+such a way as to make the programs still acceptable to that old,
+behemoth assembler.
+
+Version 3.00 of A86 has many compatibility features not present
+in earlier versions.  Among the features added since A86 was
+first released are:  more general forward references, double
+quotes for strings, "=" as a synonym for EQU, the RADIX
+directive, and the COMMENT directive.  If you tried feeding an
+old source file to a previous A86 and were dismayed by the number
+of error messages you got, try again: things might be more
+manageable now.
+
+
+Conversion of MASM programs to A86
+
+Following is a list of the things you should watch out for when
+converting from MASM to A86:
+
+1. You need to determine whether the program was coded as a COM
+   program or as an EXE program.  All COM programs coded for MASM
+   will contain an ORG 100H directive somewhere before the start
+   of the code.  EXE programs will contain no such ORG, and will
+   often contain statements that load named segments into
+   registers.  If the program was coded as EXE, you must either
+   assemble it (using the +O option) to an OBJ file to be fed to
+   LINK, or you must eliminate the instructions that load segment
+   registers-- in a COM program they often aren't necessary
+   anyway, since COM programs are started with all segment
+   registers already pointing to the same value.
+
+   A good general rule is: when it doubt, try assembling to an
+   OBJ file.
+
+2. You need to determine whether the program is executing with
+   all segment registers pointing to the same value.  Simple COM
+   programs that fit into 64K will typically fall into this
+   category.  Most EXE programs, programs that use huge amounts
+   of memory, and programs (such as memory-resident programs)
+   that take over interrupts typically have different values in
+   segment registers.
+                                                             12-2
+
+   If there are different values in the segment registers, then
+   there may be instructions in the program for which the old
+   assembler generates segment override prefixes "behind your
+   back".  You will need to find such references, and generate
+   explicit overrides for them.  If there are data tables within
+   the program itself, a CS-override is needed.    If there are
+   data structures in the stack segment not accessed via a
+   BP-index, an SS-override is needed. If ES points to its own
+   segment, then an ES-override is needed for accesses (other
+   than STOS and MOVS destinations) to that segment.  In the
+   interrupt handlers to memory-resident programs, the "normal"
+   handler is often invoked via an indirect CALL or JMP
+   instruction that fetches the doubleword address of the normal
+   handler from memory, where it was stored by the initialization
+   code.  That CALL or JMP often requires a CS-override-- watch
+   out!
+
+   If you want to remain compatible with the old assembler, then
+   code the overrides by placing the segment register name, with
+   a colon, before the memory-access operand in the instruction.
+   If you do not need further compatibility, you can place the
+   segment register name before the instruction mnemonic.  For
+   example:
+
+    MOV AL,CS:TABLE[SI]   ; if you want compatibility do this
+    CS MOV AL,TABLE[SI]   ; if not you can do it this way
+
+3. You should use a couple of A86's switches to maximize
+   compatibility with MASM.  I've already mentioned the +O switch
+   to produce .OBJ files.  You should also assemble with the +D
+   switch, which disables A86's unique parsing of constants with
+   leading zeroes as hexidecimal.  The RADIX command in your
+   program will also do this. And you should use the +L15 switch,
+   that disables a few other A86 features that might have reduced
+   compatibility. See Chapter 3 for a detailed explanation of
+   these switches.
+
+4. A86 is a bit more restrictive with respect to forward
+   references than MASM, but not as much as it used to be. You'll
+   probably need to resolve just a few ambiguous references by
+   appending " B" or " W" to the forward reference name.  One
+   common reference that needs a bit more recoding is the
+   difference of two forward references, often used to refer to
+   the size of a block of allocated memory.  You handle this by
+   defining a new symbol representing the size, using an EQU
+   right after the block is declared, and then replacing the
+   forward-reference difference with the size symbol.
+
+5. A86's macro definition and conditional assembly language is
+   different than MASM's.  Most macros can be translated by
+   replacing the named parameters of the old macros with the
+   dedicated names #n of the A86 macro language; and by replacing
+   ENDM with #EM.  Other constructs have straightforward
+   translations, as illustrated by the following examples.  Note
+   that examples involving macro parameters have double pound
+   signs, since the condition will be tested when the macro is
+   expanded, not when it is defined.
+                                                             12-3
+
+   MASM construct              Equivalent A86 construct
+
+   IFE expr                     #IF ! expr
+   IFB <PARM3>                  ##IF !#S3
+   IFNB <PARM4>                 ##IF #S4
+   IFIDN <PARM1>,<CX>           ##IF "#1" EQ "CX"
+   IFDIF <PARM2>,<SI>           ##IF "#2" NE "SI"
+   .ERR                         (any undefined symbol)
+   .ERRcond                     TRUE EQU 0FFFF
+                                TRUE EQU cond
+   EXITM                        #EX
+   IRP ... ENDM                 #RX1L ... #ER
+   REPT 100 ...ENDM             #RX1(100) ... #ER
+   IRPC ... ENDM                #CX ... #EC
+
+   The last three constructs, IRP, REPT, and IRPC, usually occur
+   within macros; but in MASM they don't have to.  The A86
+   equivalents are valid only within macros-- if they occur in
+   the MASM program outside of a macro, you duplicate them by
+   defining an enclosing macro on the spot, and calling that
+   macro once, right after it is defined.
+
+   To retain compatibility, you isolate the old macro definitions
+   in an INCLUDE file (A86 will ignore the INCLUDE directive),
+   and isolate the A86 macro definitions in a separate file, not
+   used in an MASM assembly of the program.
+
+6. A86 supports the STRUC directive, with named structure
+   elements, just like MASM, with one exception: A86 does not
+   save initial values declared in the STRUC definition, and A86
+   does not allow assembly of instances of structure elements.
+
+   For example, the MASM construct
+
+   PAYREC STRUC
+      PNAME  DB 'no name given'
+      PKEY   DW ?
+   ENDS
+
+   PAYREC 3 DUP (?)
+   PAYREC <'Eric',1811>
+
+   causes A86 to accept the STRUC definition, and define the
+   structure elements PNAME and PKEY correctly; but the PAYREC
+   initializations need to be recoded.  If it isn't vital to
+   initialize the memory with the specific definition values, you
+   could recode the first PAYREC as:
+
+   DB  ((TYPE PAYREC) * 3) DUP ?
+
+   If you must initialize values, you do so line by line:
+
+   DB 'Eric         '
+   DW ?
+
+   If there are many such initializations, you could define a
+   macro INIT_PAYREC containing the DB and DW lines.
+                                                             12-4
+
+7. A86 does not support a couple of the more exotic features of
+   MASM assembly language: the RECORD directive and its
+   associated operators WIDTH and MASK; and the usage of
+   angle-brackets to initialize structure records.  These
+   features would have added much complication to the internal
+   structure of symbol tables in A86; degrading the speed and the
+   reliability of the assembler.  I felt that their use was
+   sufficiently rare that it was not worth including them for
+   compatibility.
+
+   If your old program does use these features, you will have to
+   re-work the areas that use them.  Macros can be used to
+   duplicate the record and structure initializations.  Explicit
+   symbol declarations can replace the usage of the WIDTH and
+   MASK operators.
+
+
+Compatibility symbols recognized by A86
+
+A86 has been programmed to ignore a variety of lines that have
+meaning to Intel/IBM/MASM assemblers; but which do nothing for
+A86.  These include lines beginning with a period (except .RADIX,
+which is acted upon), percent sign, or dollar sign; and lines
+beginning with ASSUME, INCLUDE, PAGE, SUBTTL, and TITLE. If you
+are porting your program to A86, and you wish to retain the
+option of returning to the other assembler, you may leave those
+lines in your program.  If you decide to stay with A86, you can
+remove those lines at your leisure.
+
+In addition, there is a class of symbols now recognized by A86 in
+its .OBJ mode, but still ignored in .COM mode.  This includes
+NAME, END, and PUBLIC.
+
+Named SEGMENT and ENDS directives written for other assemblers
+are, of course, recognized by A86's .OBJ mode.  In non-OBJ mode,
+A86 treats these as CODE SEGMENT directives.  A special exception
+to this is the directive
+
+    segname SEGMENT AT atvalue
+
+which is treated by A86 as if it were the following sequence:
+
+    segname EQU atvalue
+    STRUC
+
+This will accomplish what is usually intended when SEGMENT AT is
+used in a program intended to be a COM file.
+                                                             12-5
+
+Conversion of A86 Programs to Intel/IBM/MASM
+
+I consider this section a bit of a blasphemy, since it's a little
+silly to port programs from a superior assembler, to run on an
+inferior one.  However, I myself have been motivated to do so
+upon occasion, when programming for a client not familiar with
+A86; or whose computer doesn't run A86; who therefore wants the
+final version to assemble on Intel's assembler.  Since my
+assembler/debugger environment is so vastly superior to any other
+environment, I develop the program using my assembler, and port
+it to the client's environment at the end.
+
+The main key to success in following the above scenarios is to
+exercise supreme will power, and not use any of the wonderful
+language features that exist on A86, but not on MASM. This is
+often not easy; and I have devised some methods for porting my
+features to other assemblers:
+
+1. I hate giving long sequences of PUSHes and POPs on separate
+   lines.  If the program is to be ported to a lesser assembler,
+   then I put the following lines into a file that only A86 will
+   see:
+
+      PUSH2 EQU PUSH
+      PUSH3 EQU PUSH
+      POP2 EQU POP
+      POP3 EQU POP
+
+   I define macros PUSH2, PUSH3, POP2, POP3 for the lesser
+   assembler, that PUSH or POP the appropriate number of
+   operands.  Then, everywhere in the program where I would
+   ordinarily use A86's multiple PUSH/POP feature, I use one or
+   more of the PUSHn/POPn mnemonics instead.
+
+2. I refrain from using the feature of A86 whereby constants with
+   a leading zero are default-hexadecimal.  All my hex constants
+   end with H.
+
+3. I will usually go ahead and use my local labels L0 through L9;
+   then at the last minute convert them to a long set of labels
+   in sequence: Z100, Z101, Z102, etc.  I take care to remove all
+   the ">" forward reference specifiers when I make the
+   conversion.  The "Z" is used to isolate the local labels at
+   the end of the lesser assembler's symbol table listing. This
+   improves the quality of the final program so much that it is
+   worth the extra effort needed to convert L0--L9's to Z100--
+   Zxxx's.
+
+4. I will place declarations B EQU DS:BYTE PTR 0 and W EQU
+   DS:WORD PTR 0 at the top of the program.  Recall that A86 has
+   a "duplicate definition" feature whereby you can EQU an
+   already-existing symbol, as long as it is equated to the value
+   it already has.  This feature extends to the built in symbols
+   B and W, so A86 will look at those equates and essentially
+   ignore them.  On the old assembler, the effect of the
+   declarations is to add A86's notation to the old language.
+   Example:
+                                                             12-6
+
+     B EQU DS:BYTE PTR 0
+     W EQU DS:WORD PTR 0
+     MOV AX,W[0100]       ; replaces MOV AX, DS:WORD PTR 0100
+     MOV AL,B[BX]         ; replaces MOV AL, DS:BYTE PTR [BX]
+
+

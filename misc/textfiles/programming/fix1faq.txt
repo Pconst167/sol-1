@@ -1,0 +1,460 @@
+  ฺฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤ[ Rage Technologies, Inc. ]ฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฟ
+  ณ                                                                          ณ
+  ณ                             - Members -                                  ณ
+  ณ                       ] Myth: Ideas / Coder [                            ณ
+  ณ                      ] Night Stalker: Coder [                            ณ
+  ณ                       ] SKoRPiON: Musician [                             ณ
+  ณ                                                                          ณ
+  ณ                          - Support Board -                               ณ
+  ณ          ] Shadow Lands: (407) 851-2313, run by Night Stalker [          ณ
+  ณ                                                                          ณ
+ฤฤมฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤมฤฤ
+      How to use Fixed Point (16.16) Math (Part 1 of 2) - by Night Stalker
+ฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤ[ Revised version 1.1, dated March 12th, 1995 ]ฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤ
+
+[1] Introduction
+
+
+    Allright, a simple question: what exactly *IS* fixed point math?
+
+    Fixed point math is a very simple way to speed up any program that uses
+floating point.  The 16.16 describes how many bits are before and after the
+decimal point.  (In this case, 65535.999984741211 is the largest possible
+number.  If you want to know how to get this value, set the decimal portion
+to all 1's (in binary), and you get 65535 with 16 bits.  Take 65535 and divide
+it by 65536 -- that should answer your question.  Thanks goes to Jonathan K.
+Butler  for pointing this out.)  There are
+other variants such as 24.8, and 8.24.  It depends on what your application
+needs in regards to precision.
+
+    Even with a math coprocessor (as it is becoming a standard nowadays),
+floating point speeds are slow.  I will go into much detail about how fixed
+point can be used in your programs, as well as some trigonometric functions.
+
+    I'll also warn you ahead of time.  This document contains Intel 80386+
+assembly code for performance.  It was designed to compile with Watcom C/C++,
+and I'm sure it could be ported to other 32-bit compilers.  If you're going
+to try to port it to a 16-bit compiler, I wish you best of luck.  :)
+
+    But first, I must give credit to where credit is due.  The code I am
+referencing was created by David Boeren.  If you wish to reach him, E-mail
+me, and I will give you his address.  (I'd rather not post it publicly,
+although I don't think he'd mind...)
+
+
+[2] Fixed point basics
+ฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤ
+
+    First, we'll start out on how we actually set our program up to handle
+fixed point.  You really only need one definition to use fixed point math:
+
+ออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออ
+
+typedef long Fixed32;          // 16.16 FixedPoint
+
+ออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออ
+
+    Then whenever you want a fixed point number, just use 'Fixed32' instead
+of 'float'.
+
+    Allright, you've got fixed point now.  How do you actually get a number
+into this format?
+
+    This is a little trickier.  If you're using an integer or a char, you
+simply shift left over the decimal point.  Longs are truncated because only
+2 bytes fit in the upper portion of a Fixed32.
+
+    The following #defines will help you out from converting to and from
+any format to Fixed32 and back:
+
+ออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออ
+
+#define INT_TO_FIXED(x)         ((x) << 16)
+#define DOUBLE_TO_FIXED(x)      ((long)(x * 65536.0 + 0.5))
+#define FIXED_TO_INT(x)         ((x) >> 16)
+#define FIXED_TO_DOUBLE(x)      (((double)x) / 65536.0)
+#define ROUND_FIXED_TO_INT(x)   (((x) + 0x8000) >> 16)
+
+ออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออ
+
+    I also use the following #defines as well to access some well-known
+numbers:
+
+ออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออ
+
+#define ONE             INT_TO_FIXED(1)
+#define FIXED_PI        205887L
+#define FIXED_2PI       411775L
+#define FIXED_E         178144L
+#define FIXED_ROOT2      74804L
+#define FIXED_ROOT3     113512L
+#define FIXED_GOLDEN    106039L
+
+ออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออ
+
+    Notice that FIXED_2PI is not equal to 2 * PI.  Why?  Well, 2 * FIXED_PI
+is technically close enough, but FIXED_2PI is closer.  :)
+
+
+[3] Fixed point math
+ฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤ
+
+    Okay, you understand fixed point and now you want to do the basics of math.
+How do we accomplish adding, subtracting, multipling, and dividing?
+
+    Adding and subtracting are simple.  You simply add and subtract like you
+would normal floats.  (ie: c = a + b;  d -= c;  etc, etc.)  Multiplication and
+division require a little more.  Here is the code to multiply and divide fixed
+point numbers:
+
+ออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออ
+
+Fixed32 FixedMul(Fixed32 num1, Fixed32 num2);
+Fixed32 FixedDiv(Fixed32 numer, Fixed32 denom);
+
+#pragma aux FixedMul =      \
+    "imul edx"              \
+    "add eax, 8000h"        \
+    "adc edx, 0"            \
+    "shrd eax, edx, 16"     \
+    parm caller [eax] [edx] \
+    value [eax]             \
+    modify [eax edx];
+
+#pragma aux FixedDiv =      \
+    "xor eax, eax"          \
+    "shrd eax, edx, 16"     \
+    "sar edx, 16"           \
+    "idiv ebx"              \
+    parm caller [edx] [ebx] \
+    value [eax]             \
+    modify [eax ebx edx];
+
+ออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออ
+
+    If you're up on your assembly code, you'll notice that FixedDiv() doesn't
+do any rounding.  Just take that into note.
+
+    If some of you have never done assembly in Watcom, I'll try to help.
+Watcom's way of adding assembly into your programs starts with a #pragma.
+The standard format is:
+
+ออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออ
+
+#pragma aux  =       \
+    ""                    \
+    ""               \
+    "<...>"                         \
+    parm caller [] ...    \
+    value []              \
+    modify [ ...];
+
+ออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออ
+
+    Watcom uses 'parm caller' to know where to put the variables that are
+passed to an inline assembly function.  For example in FixedDiv(), the
+numerator is passed into the EDX register, and the denominator is passed
+into the EBX register.  The 'value' command is used to determine what
+register contains the value to return to the program when the inline code
+has completed.  The 'modify' command tells Watcom what registers to push
+onto the stack (since you will be modifying them).  Watcom allows omitting
+of 'parm caller' and 'value' if there is no need for them.  If you have
+a function which doesn't return a value, then omit 'value'.  The same goes
+for 'parm caller'.
+
+    Unfortunately, I've only had success at putting inline code into my .H
+(or .HPP) files.  If anyone knows the answer to this mystery, *PLEASE* tell
+me.  Thanks.  :)
+
+
+[4] More fixed point math
+ฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤ
+
+    Moving right along... now that you know the basic math, we can start on
+how to do some of the harder math functions:  squaring, one over (1/x), and
+square root.
+
+ออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออ
+
+Fixed32 FixedSquare(Fixed32 n);
+Fixed32 OneOver(Fixed32 n);
+Fixed32 FixedSqrtLP(Fixed32 n);  // Low  Precision (8.8)
+Fixed32 FixedSqrtHP(Fixed32 n);  // High Precision (8.16)
+
+// This is faster than using FixedMul for squares.
+#pragma aux FixedSquare =   \
+    "imul eax"              \
+    "add eax, 8000h"        \
+    "adc edx, 0"            \
+    "shrd eax, edx, 16"     \
+    parm caller [eax]       \
+    value [eax]             \
+    modify [eax edx];
+
+// This is faster than using FixedDiv.
+#pragma aux OneOver =       \
+    "xor eax, eax"          \
+    "mov edx, 1"            \
+    "idiv ebx"              \
+    parm caller [ebx]       \
+    value [eax]             \
+    modify [eax ebx edx];
+
+#pragma aux FixedSqrtLP =            \
+    "         xor eax, eax"          \
+    "         mov ebx, 40000000h"    \
+    "sqrtLP1: mov edx, ecx"          \
+    "         sub edx, ebx"          \
+    "         jl  sqrtLP2"           \
+    "         sub edx, eax"          \
+    "         jl  sqrtLP2"           \
+    "         mov ecx,edx"           \
+    "         shr eax, 1"            \
+    "         or  eax, ebx"          \
+    "         shr ebx, 2"            \
+    "         jnz sqrtLP1"           \
+    "         shl eax, 8"            \
+    "         jmp sqrtLP3"           \
+    "sqrtLP2: shr eax, 1"            \
+    "         shr ebx, 2"            \
+    "         jnz sqrtLP1"           \
+    "         shl eax, 8"            \
+    "sqrtLP3: nop"                   \
+    parm caller [ecx]                \
+    value [eax]                      \
+    modify [eax ebx ecx edx];
+
+#pragma aux FixedSqrtHP =            \
+    "         xor eax, eax"          \
+    "         mov ebx, 40000000h"    \
+    "sqrtHP1: mov edx, ecx"          \
+    "         sub edx, ebx"          \
+    "         jb  sqrtHP2"           \
+    "         sub edx, eax"          \
+    "         jb  sqrtHP2"           \
+    "         mov ecx,edx"           \
+    "         shr eax, 1"            \
+    "         or  eax, ebx"          \
+    "         shr ebx, 2"            \
+    "         jnz sqrtHP1"           \
+    "         jz  sqrtHP5"           \
+    "sqrtHP2: shr eax, 1"            \
+    "         shr ebx, 2"            \
+    "         jnz sqrtHP1"           \
+    "sqrtHP5: mov ebx, 00004000h"    \
+    "         shl eax, 16"           \
+    "         shl ecx, 16"           \
+    "sqrtHP3: mov edx, ecx"          \
+    "         sub edx, ebx"          \
+    "         jb  sqrtHP4"           \
+    "         sub edx, eax"          \
+    "         jb  sqrtHP4"           \
+    "         mov ecx, edx"          \
+    "         shr eax, 1"            \
+    "         or  eax, ebx"          \
+    "         shr ebx, 2"            \
+    "         jnz sqrtHP3"           \
+    "         jmp sqrtHP6"           \
+    "sqrtHP4: shr eax, 1"            \
+    "         shr ebx, 2"            \
+    "         jnz sqrtHP3"           \
+    "sqrtHP6: nop"                   \
+    parm caller [ecx]                \
+    value [eax]                      \
+    modify [eax ebx ecx edx];
+
+ออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออ
+
+    I hope you don't gawk at all that assembly code.  Not to worry, there isn't
+any more.  :)  Note that the high precision square root takes more time to
+perform than it does for the lower precision.
+
+    One note here regarding the inline assembly.  As you can see, jumps are
+possible in the code.  However, when you have a jump to the last command
+(see 'sqrtHP6:' above..), you need an instruction or Watcom will yell at you.
+NOP was the only logical choice I found, since it does just what it says, "No
+Operation".
+
+    I also have a formula to do logarithm (log), but you need to be able to
+calculate a natural logarithm (ln) before you can do it.  The basic formula
+is:
+                                      ln(n)
+                            log  n  = -----
+                               x      ln(x)
+
+    However, I have no clue on how to calculate a natural logarithm.  If anyone
+can offer any ideas, I'll be glad to write one.
+
+
+[5] Fixed point trigonometric functions
+ฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤ
+
+    Allright, this is the last section:  How to do trigonometric functions
+in fixed point.
+
+    Well, I found it easier to use lookup tables since the need for fixed
+point in the first place was for speed.  Why bother bogging down the processor
+with floating point cosines and sines and converting them to fixed point?
+
+    First off, let's define what an 'Iangle' is.  It technically stands for
+'Integer angle'.  Since it's faster to reference an integer than it is to
+reference a floating point, we'll use 'Iangles'.
+
+ออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออ
+
+typedef unsigned short Iangle; // Integer angle (0..1023)
+
+ออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออ
+
+    This means if you want to travel through a complete sine (or cosine) loop,
+you must pass through 1024 'Iangles'.  Don't get this confused with degrees or
+radians.  Neither one of them comes close to this definition.  If you're still
+a little confused, you might want to look at the table generation code below
+to see what an 'Iangle' actually is.
+
+    Below is the code to do sine, cosine, and tangent formulas:
+
+ออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออ
+
+#define MAX_TRIG 1024
+
+void CosSin(Iangle theta, Fixed32 *Cos, Fixed32 *Sin)
+{
+    theta &= (MAX_TRIG - 1);
+
+    *Sin = SinTab[theta];
+    *Cos = CosTab[theta];
+}
+
+Fixed32 Tan(Iangle theta)
+{
+    // This shifting stuff is for better accuracy.
+    theta &= (MAX_TRIG - 1);
+    return (FixedDiv(SinTab[theta] << 16, CosTab[theta]) >> 16);
+}
+
+ออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออ
+
+    The code to generate the lookup tables is below.  It creates two .HPP
+files, COSTAB.HPP and SINTAB.HPP which can simply be #included into your
+source code.
+
+    The 'MAGIC' value I used was derived from being able to fit an entire
+360๘ sine and cosine inside an array of 1024 fixed point numbers.  These
+tables eat up 8K of RAM, so I figured 1024 was plenty.  Remember, fixed
+point numbers are 4 bytes a piece:
+
+   (1024 entries * 4 bytes per entry) = 4096 bytes * 2 tables = 8192 bytes.
+
+ออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออ
+
+#include 
+#include 
+
+#define MAGIC       162.974
+
+#define MAX_TRIG    1024
+#define DOUBLE_TO_FIXED(x)      ((long)(x * 65536.0 + 0.5))
+
+typedef long Fixed32;
+
+void main()
+{
+    FILE *f;
+    int i, pos = 0;
+    Fixed32 z;
+
+    f = fopen("sintab.hpp", "wt");
+    fputs("Fixed32 SinTab[MAX_TRIG] = {\n", f);
+    for (i = 0; i < 1023; i++)
+    {
+        if (pos == 0)
+            fputs("    ", f);
+
+        z = DOUBLE_TO_FIXED(sin((double)i / MAGIC));
+
+        fprintf(f, "%10lu, ", z);
+        pos += 12;
+        if (pos > 70)
+        {
+            fputs("\n", f);
+            pos = 0;
+        }
+    }
+
+    z = DOUBLE_TO_FIXED(sin(1023.0 / MAGIC));
+    fprintf(f, "%10lu };\n ", z);
+    fclose(f);
+
+    pos = 0;
+    f = fopen("costab.hpp", "wt");
+    fputs("Fixed32 CosTab[MAX_TRIG] = {\n", f);
+    for (i = 0; i < 1023; i++)
+    {
+        if (pos == 0)
+            fputs("    ", f);
+
+        z = DOUBLE_TO_FIXED(cos((double)i / MAGIC));
+
+        fprintf(f, "%10lu, ", z);
+        pos += 12;
+        if (pos > 70)
+        {
+            fputs("\n", f);
+            pos = 0;
+        }
+    }
+
+    z = DOUBLE_TO_FIXED(cos(1023.0 / MAGIC));
+
+    fprintf(f, "%10lu };\n ", z);
+    fclose(f);
+}
+
+ออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออ
+
+[6] Conclusion
+ฤฤฤฤฤฤฤฤฤฤฤฤฤฤ
+
+    This is the first part of two files on fixed point math.  The next file
+covers doing Vector and Matrix calculations.
+
+    Enjoy the speed improvements in your program, and as always, if you ever
+need any help, feel free to ask us.  We may be working on a kick-butt demo,
+but we can always spare a couple of minutes to help someone out.  :)
+
+                                                - Night Stalker
+
+-------------------------------------------------------------------------------
+
+Look for other Rage Technologies, Inc. stuff coming soon:
+
+        - Our first major demo, "Transvectoring".  The theme is to
+          show off our new 3-D engine with lightsourcing and texture
+          mapping... REALLY fast.  Also to show what objects beyond
+          3D really look like.  For example, a 4D or a 5D cube.  Maybe
+          more.  Expected release date:  Mid '95 (?)
+
+        - Night Hawk 0.2เ BBS.  The first BBS software to show that
+          ANSI is dead, and RIP is a thing of the past.  Features
+          include: True multitasking, full video and audio routines,
+          and more.  Expected release date:  Early/Mid '96.
+
+-------------------------------------------------------------------------------
+
+Other news:
+
+        - Shadow Lands is still not up.  Blame Night Stalker.  He's too
+          lazy to sell his old 486/33 to run the board on a DX4-100.
+          We'll let you know when he gets off his duff and has Shadow
+          Lands online.
+
+        - Rage Technologies, Inc. has a mailing list.  If you'd like to
+          get ahold of any one of us, send E-mail to:
+
+                                      ragetech@trappen.vsl.ist.ucf.edu
+
+        - Rage Technologies, Inc. also has an experimental FTP server
+          running.  If you would like to get any Rage products, simply
+          anonymous FTP to:  trappen.vsl.ist.ucf.edu.  All Rage files
+          are located in /pub/ragetech.

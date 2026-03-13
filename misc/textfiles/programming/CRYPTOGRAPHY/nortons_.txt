@@ -1,0 +1,164 @@
+From: pgut1@cs.aukuni.ac.nz (Peter Gutmann)
+Subject: Norton's InDiskreet
+Date: Thu, 11 Nov 1993 12:37:43 GMT
+
+People have mentioned Norton's [In]Diskreet here recently and I thought I'd
+have a look at it to see how good (or bad) its DES implementation really is (I
+didn't bother with the "fast, proprietary method", by all indications it's
+worthless).  As the summary line in the header says, don't throw away your copy
+of PGP yet.  For those of you who have a copy and would like a quick look at
+the sort of security you're buying, try the following:
+ 
+   - Create a test file, I used 128 zeroes.
+   - Encrypt it with the password 'xxxxxx'
+   - Decrypt it with the password 'xxxxxx'
+   - Decrypt it with the password 'xxxxyy'
+   - Decrypt it with the password 'yyyyxx'
+ 
+The DES routines themselves seem to be taken from a DES library rather than
+being written by Symantec/Norton.  Symantec provide the front-end, and Peter
+Norton provides the picture of himself wearing a pastel shirt and silly smirk
+for the cover of the box.  This seemed to be a good indication - perhaps the
+DES implementation was by someone vaguely competent, which meant Symantec would
+have little chance of screwing it up.
+ 
+Unfortunately, as the above test shows, it isn't.  The front-end gets a
+password in the range of 6..40 characters, and converts it to all-uppercase
+(red neon sign lights up and flashes "MISTAKE.  MISTAKE.  MISTAKE").  Then it
+packs it into a struct along with a collection of other information and passes
+it to the DES library.  The DES library then takes the password and reduces it
+to 64 bits by cyclically xor-ing in the full-length password into an 8-byte
+buffer initially set to all zeroes, ie:
+ 
+    for( index = 0; *password; index++ )
+        buffer[ index % 8 ] = *password++;
+ 
+Finally, the top 32 bits of this buffer is passed to the key schedule routines
+and some of it used for the key schedule (this is what the sample en/decryption
+shows up).  They seemed to be doing a DES key schedule, but I didn't bother
+verifying its correctness - there didn't seem much point really.  Note that the
+first mistake was made by the front-end, but the second two were made in the
+DES library itself, meaning that both parts are incompetently implemented.  Oh
+well, at least Peter Norton's contribution to the whole affair doesn't weaken
+it's security.  Usually I check DES implementations against the NBS test data,
+but I couldn't be bothered ripping out the code, and the key handling provides
+holes big enough to drive a bus through anyway.  Note that it doesn't even use
+a proper 56-bit key as per the FIPS docs (although, admittedly, it's in good
+company there), or check for the weak keys which are possible with the key
+setup they're using.
+ 
+The encryption itself uses DES in CBC mode with a fixed IV.  This means that,
+in combination with the tiny key space, it's possible to create a precomputed
+collection of plaintext/ciphertext pairs and "break" most encrypted files by
+reading the results out of a table.  Since the whole-disk encryption always
+begins with a fixed DOS FAT (file allocation table), this instant decryption is
+entirely feasible.  When encrypting files, [In]Diskreet stores the file name,
+date, and various other pieces of information at the start of the data and a
+key check sequence at the end, allowing a quick and easy check for correct
+passwords.
+ 
+In summary, there may be a possibly-correct DES implementation in there
+somewhere, but it doesn't help much.  [In]Diskreet will stop a casual browser,
+but won't give you any protection at all against any serious attack.
+ 
+ObPropaganda: There should be an encrypting filesystem offering *real* security
+              available within a few weeks.  The initial version will be for
+DOS only, and will provide sector-level encryption for entire disks. I just
+need to test it a bit more, I'll call for beta-testers here once it's ready.
+ 
+Peter.
+--
+ pgut1@cs.aukuni.ac.nz||p_gutmann@cs.aukuni.ac.nz||gutmann_p@kosmos.wcc.govt.nz
+peterg@kcbbs.gen.nz||peter@nacjack.gen.nz||peter@phlarnschlorpht.nacjack.gen.nz
+             (In order of preference - one of 'em's bound to work)
+             -- DOS 6 - Double your disk space: delete Windoze --
+
+
+From: kocherp@leland.Stanford.EDU (Paul Carl Kocher)
+Subject: Norton Diskreet (Security overview)
+Date: Thu, 18 Nov 93 23:43:32 GMT
+
+
+The signal-to-noise ratio here has made me mostly stop reading
+sci.crypt, but I saw this and thought I'd contribute the results of
+some work I did with the program a year or so ago.  Hopefully there'll
+be a moderated group soon so I can come back (hint hint)...!
+
+
+First off, the "propriatary" algorithm is fairly easy to crytanalyze.  
+It uses the DES key schedule and leaks information badly.  
+Consequently it's quite easy to break.  Fine for stopping casual 
+snoopers, but definitely not something I'd use on important data.
+(I'm afraid my code is not available.  See note at the end.)
+
+The DES function orders the output bits in a nonstandard way (they do
+the permutation differently from everyone else), but otherwise the
+algorithm is correct.  CBC mode is used, with a new initialization 
+vector every so often (I forget the block length).  The IVs repeat,
+so if you encrypt a few megs of zeros, the output will repeat.
+
+The key initialization function is a very, very, very bad problem,
+though.  The function is actually worse than people have been
+suggesting, since it's case insensitive and the parity bit is
+the least significant bit.  The algorithm is:
+
+      unsigned char DESKey[8] = { 0,0,0,0,0,0,0,0 };
+      for (n = 0; n < password_length; n++)
+          DESKey[n % 8] ^= toupper(password[n]);
+                 /* toupper converts lowercase ascii to uppercase */
+                 /* (n % 8) equals (n mod 8) */
+
+To see just how bad this is, consider a password containing just
+letters that is known to be 16 bytes long.  This *should* give
+an effective keyspace significantly above that of the DES
+key (26^16 = 4.3 x 10^22, while the 56-bit DES key has 2^56 =
+7.2 x 10^16 possibilities).  However for this password, the
+keyspace is actually only 32 bits (4 billion passwords):
+
+  - The total keyspace in DESKey is 64 bits.
+  - The most significant bit (value 128) is zero in each password
+       byte, and consequently is zero in each byte the DES key,
+       reducing the keyspace to 56 bits.
+  - The bit with value 64 is set to 1 for all capital letters, lowering
+       the keyspace to 48 bits.
+  - The bit with value 32 is set to 0 in all capital letters, lowering
+       the keyspace to 40 bits.  (If the password length isn't known,
+       there are 16 different possible combinations for the bit in 
+       this position if the password only contains letters.)
+  - The lowest bit is the parity bit, and is not used, lowering the
+       total to 32 bits.
+
+A PC is more than adequate to crack such passwords.  I hacked my 32-bit 
+DES code to optimize key searches quickly, and it took about a week to
+find a password for a client.  I seem to recall that I was getting a bit
+over 15000 passwords/second on a '386-33, though it might have been
+faster.  Fortunately the password was all letters, or it would 
+have taken longer...
+
+>How is the key check computed? Could you post the algorithm?
+
+It uses DES, and should be secure.  (There is quite a bit of known
+plaintext in the file header, and it checks to make sure this decrypts
+peroperly.  However, with the propriatary algorithm, this known
+plaintext is enough to crack the password.)
+
+-- Paul Kocher
+kocherp@leland.stanford.edu
+
+PLEASE READ BEFORE RESPONDING TO THIS POST:
+
+My e-mail box is already flooded with messages; it has over 900 
+in it, about 150 of which I still have to respond to.  So if you 
+write please keep understand if I don't respond immediately.  If
+you don't hear back within a couple weeks and want a reply, resend
+your message, since I could easily have missed it.  So I don't have
+to write the same thing to 50 people:  My code/executables for 
+breaking DISKREET passwords are NOT available, and I don't have
+time to find forgotten passwords for people.  Sorry to sound so 
+rude and all, but I can't afford the risk of annoying the
+government (e.g. ITAR, etc.) or companies I'm working with by 
+giving out crypto code.  Plus I haven't been to bed before 3am in
+weeks and need more sleep :-).  While I am sometimes available for 
+contract work, I don't have any time available before January.
+
+

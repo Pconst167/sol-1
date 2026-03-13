@@ -1,0 +1,128 @@
+How To Waste Time
+* Copyright 1988 Commodore-Amiga, Inc.
+*  
+* Executables based on this information may be used in software
+* for Commodore Amiga computers.  All other rights reserved.
+* This information is provided "as is"; no warranties are made.  All 
+* use is at your own risk. No liability or responsibility is assumed.
+
+
+The worst way to insert a delay in an Amiga program is this:
+
+         move.w #2000,d0
+    loop dbra   loop,d0
+
+This loop, or anything like it is *unacceptable*.
+
+If running under the multitasking operating system, the
+timer.device can provide delay that still lets other tasks run. 
+If taking over the machine, a loop like this is far better:
+
+    loop btst.b #0,$bfed01
+         beq.s  loop
+
+This uses one of the high speed timer chips.  As included example
+shows, the timers are very easy to use.  This method is superior
+for a large number of reasons:
+
+° The timer chip loop is more accurate.
+
+° The software loop method fails to produce accurate timing under
+a large number of circumstances.  The speed depends on what CPU
+is installed in the system, what video mode is selected, what
+type of memory the program is in, in what relation to vertical
+blank the code executes in, what the blitter is doing, what
+interrupts are enabled and more other factors than you want to
+think about.
+
+° The timer chip can be "set and forgotten".  The chip does the
+counting.  Your code can continue to get other things done while
+the chip is counting.
+
+° The timer can produce an interrupt when it is finished, or it
+can set a bit you can examine at any time.
+
+° The timer can be set to automatically reload the count and
+start again.  This gives even pulses, even if your software can't
+respond to them immediately.
+
+
+Calculating the time
+
+First some definitions:
+
+    1 milisecond  (ms)  = 1/1,000 second
+    1 microsecond (us)  = 1/1,000,000 second
+    1 nanosecond  (ns)  = 1/1,000,000,000 second
+
+On a stock 68000 based Amiga with no extra memory, the "DBRA"
+instruction listed above will take about 1.5 microseconds perloop.  The loop 
+above will thus waste about (2000 * 1.5 = 3000)
+microseconds (This is the same as 3 miliseconds, or .003
+seconds).
+
+Each 8520 chip has two 16 bit timers counting down at .715909
+Mhz, or 1.3968255 microseconds per tick.  To get the same 3
+milisecond delay with the 8520, we need to divide the desired
+time by the rate.  3000 / 1.3968255 = 2148.
+
+
+A Complete Example
+
+
+;
+; A complete 8520 timing example.  This blinks the power light at
+; (exactly) 3 milisecond intervals.  It takes over the machine,
+; so watch out!
+;
+;
+; The base Amiga crytal frequecies are:
+;           NTSC    28.318181 Mhz
+;           PAL     28.37516  Mhz
+;
+;
+;
+; The two 16 bit timers on the 8520 chips each count down at 1/10
+; the CPU clock, or .715909 Mhz.  That works out to 1.3968255
+; microseconds per count.  Under PAL the countdown is a hair
+; slower, .709379 Mhz.
+;
+; To wait 1/100 second would require waiting 10,000 microseconds.
+; The timer register would be set to (10,000 / 1.3968255 =
+; 7159).
+;
+; To wait 3 miliseconds would require waiting 3000 microsecsonds.
+; The register would be set to (3000 / 1.3968255 = 2148).
+;
+; See the hardware manual for more information on the 8520 chips.
+;
+ciaatalo        EQU $bfe401     ;Timer A low
+ciaatahi        EQU $bfe501     ;Timer A high
+ciaaicr         EQU $bfed01     ;Interrupt control register
+ciaacra         EQU $bfee01     ;Timer A control
+
+                move.w  #$7fff,$dff09a      ;Kill all custom chip interrupts
+
+;----Setup, only do once
+;----This sets timer A to one-shot mode.
+                move.b  ciaacra,d0          ;Set control register A on CIAA
+                and.b   #%11000000,d0       ;Don't trash the 60/50Hz flag
+                or.b    #%00001000,d0       ;or serial direction bits
+                move.b  d0,ciaacra
+                move.b  #%01111111,ciaaicr  ;Clear all 8520 interrupts
+
+;----Set time (low byte THEN high byte)
+;----And the low order with $ff
+;----Shift the high order by 8
+                move.b  #(2148&255),ciaatalo
+                move.b  #(2148>>8),ciaatahi
+
+;----Wait for the timer to count down
+busy_wait:      btst.b  #0,ciaaicr          ;Wait for timer expired flag
+                beq.s   busy_wait
+                bchg.b  #1,$bfe001          ;Blink light
+                bset.b  #0,ciaacra          ;Restart timer
+                bra.s   busy_wait
+
+         END
+

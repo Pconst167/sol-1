@@ -1,0 +1,2633 @@
+0001   0000             .include "lib/kernel.exp"
+0001+  0000             fdc_al_restore   .EQU  $0000
+0002+  0000             fdc_al_step      .EQU  $0001
+0003+  0000             fdc_al_step_in   .EQU  $0002
+0004+  0000             fdc_al_step_out  .EQU  $0003
+0005+  0000             fdc_al_seek      .EQU  $0004
+0006+  0000             fdc_al_format_128 .EQU  $0005
+0007+  0000             fdc_al_formatdisk_128 .EQU  $0006
+0008+  0000             fdc_al_format_512 .EQU  $0007
+0009+  0000             fdc_al_formatdisk_512 .EQU  $0008
+0010+  0000             fdc_al_read_addr .EQU  $0009
+0011+  0000             fdc_al_read_track .EQU  $000a
+0012+  0000             fdc_al_read_sect .EQU  $000b
+0013+  0000             fdc_al_write_sect .EQU  $000c
+0014+  0000             fdc_al_force_int .EQU  $000d
+0015+  0000             fdc_al_status0   .EQU  $000e
+0016+  0000             fdc_al_status1   .EQU  $000f
+0017+  0000             noname._til311_display .EQU  $ffb0
+0018+  0000             noname._fdc_config .EQU  $ffc0
+0019+  0000             noname._fdc_status_0 .EQU  $ffc1
+0020+  0000             noname._fdc_stat_cmd .EQU  $ffc8
+0021+  0000             sys_break        .EQU  $0000
+0022+  0000             sys_rtc          .EQU  $0001
+0023+  0000             sys_ide          .EQU  $0002
+0024+  0000             sys_io           .EQU  $0003
+0025+  0000             sys_filesystem   .EQU  $0004
+0026+  0000             sys_create_proc  .EQU  $0005
+0027+  0000             sys_list_proc    .EQU  $0006
+0028+  0000             sys_datetime     .EQU  $0007
+0029+  0000             sys_reboot       .EQU  $0008
+0030+  0000             sys_pause_proc   .EQU  $0009
+0031+  0000             sys_resume_proc  .EQU  $000a
+0032+  0000             sys_terminate_proc .EQU  $000b
+0033+  0000             sys_system       .EQU  $000c
+0034+  0000             sys_fdc          .EQU  $000d
+0035+  0000             text_org         .EQU  $0400
+0002   0000             
+0003   0400             .org text_org			; origin at 1024
+0004   0400             
+0005   0400             main:
+0006   0400 07 E6 04    	call init_board
+0007   0403 07 0F 05    	call init_board2
+0008   0406 19 00       	mov al, 0
+0009   0408 3D B7 05    	mov [parity], al
+0010   040B             main_loop:
+0011   040B             
+0012   040B 10 01 00    	mov a, 1
+0013   040E 42 B3 05    	mov [line], a
+0014   0411 42 B5 05    	mov [col], a
+0015   0414             board_lines:;{
+0016   0414 10 01 00    	mov a, 1
+0017   0417 42 B5 05    	mov [col], a
+0018   041A             board_cols:;{
+0019   041A 07 70 04    	call update_cell
+0020   041D 14 B5 05    	mov a, [col]
+0021   0420 77          	inc a
+0022   0421 42 B5 05    	mov [col], a
+0023   0424 AF 7F 00    	cmp a, width-1
+0024   0427 C7 1A 04    	jne board_cols
+0025   042A             ;}	
+0026   042A 14 B3 05    	mov a, [line]
+0027   042D 77          	inc a
+0028   042E 42 B3 05    	mov [line], a
+0029   0431 AF 2F 00    	cmp a, height-1
+0030   0434 C7 14 04    	jne board_lines
+0031   0437             ;}
+0032   0437             	
+0033   0437 3B B8 05    	mov d, s_clear
+0034   043A 07 D4 07    	call _puts
+0035   043D 07 B0 04    	call print_board
+0036   0440             	
+0037   0440 1D B7 05    	mov al, [parity]
+0038   0443 96          	not al
+0039   0444 3D B7 05    	mov [parity], al
+0040   0447             	
+0041   0447 0A 0B 04    	jmp main_loop
+0042   044A             
+0043   044A             check_parity_inv:
+0044   044A D7          	push a
+0045   044B 1D B7 05    	mov al, [parity]
+0046   044E B9 00       	cmp al, 0
+0047   0450 C6 58 04    	je parity_inv_even
+0048   0453 3B 32 09    	mov d, board
+0049   0456 E4          	pop a
+0050   0457 09          	ret
+0051   0458             parity_inv_even:
+0052   0458 3B 32 09    	mov d, board
+0053   045B E4          	pop a
+0054   045C 09          	ret
+0055   045D             
+0056   045D             check_parity:
+0057   045D D7          	push a
+0058   045E 1D B7 05    	mov al, [parity]
+0059   0461 B9 00       	cmp al, 0
+0060   0463 C6 6B 04    	je parity_even
+0061   0466 3B 32 09    	mov d, board
+0062   0469 E4          	pop a
+0063   046A 09          	ret
+0064   046B             parity_even:
+0065   046B 3B 32 09    	mov d, board
+0066   046E E4          	pop a
+0067   046F 09          	ret
+0068   0470             
+0069   0470             update_cell:
+0070   0470 29 B3 05    	mov b, [line]
+0071   0473 10 80 00    	mov a, width
+0072   0476 AC          	mul a, b
+0073   0477 14 B5 05    	mov a, [col]
+0074   047A 56          	add b, a
+0075   047B D8          	push b				; save cell number
+0076   047C 07 5D 04    	call check_parity
+0077   047F 5A          	add d, b
+0078   0480 1E          	mov al, [d]
+0079   0481 B9 2A       	cmp al, '*'
+0080   0483 C6 98 04    	je live_cell
+0081   0486 E4          	pop a
+0082   0487 07 38 05    	call get_live_neighbours
+0083   048A C0 03 00    	cmp b, 3
+0084   048D C7 97 04    	jne update_cell_end
+0085   0490 07 4A 04    	call check_parity_inv
+0086   0493 59          	add d, a
+0087   0494 19 2A       	mov al, '*'
+0088   0496 3E          	mov [d], al
+0089   0497             update_cell_end:
+0090   0497 09          	ret
+0091   0498             live_cell:
+0092   0498 E4          	pop a
+0093   0499 07 38 05    	call get_live_neighbours
+0094   049C C0 02 00    	cmp b, 2
+0095   049F C6 97 04    	je update_cell_end	; continue alive
+0096   04A2 C0 03 00    	cmp b, 3
+0097   04A5 C6 97 04    	je update_cell_end	; continue alive
+0098   04A8 07 4A 04    	call check_parity_inv
+0099   04AB 59          	add d, a
+0100   04AC 19 20       	mov al, ' '
+0101   04AE 3E          	mov [d], al
+0102   04AF 09          	ret
+0103   04B0             
+0104   04B0             print_board:
+0105   04B0 10 00 00    	mov a, 0
+0106   04B3 42 B1 05    	mov [c], a
+0107   04B6 42 AF 05    	mov [l], a
+0108   04B9 07 4A 04    	call check_parity_inv
+0109   04BC             print_L0:
+0110   04BC 1E          	mov al, [d]
+0111   04BD 23          	mov ah, al
+0112   04BE 07 A8 06    	call _putchar
+0113   04C1 79          	inc d
+0114   04C2 14 B1 05    	mov a, [c]
+0115   04C5 77          	inc a
+0116   04C6 42 B1 05    	mov [c], a
+0117   04C9 AF 80 00    	cmp a, width
+0118   04CC C7 BC 04    	jne print_L0
+0119   04CF 07 81 07    	call printnl
+0120   04D2 10 00 00    	mov a, 0
+0121   04D5 42 B1 05    	mov [c], a
+0122   04D8 14 AF 05    	mov a, [l]
+0123   04DB 77          	inc a
+0124   04DC 42 AF 05    	mov [l], a
+0125   04DF AF 30 00    	cmp a, height
+0126   04E2 C7 BC 04    	jne print_L0
+0127   04E5 09          	ret
+0128   04E6             
+0129   04E6             init_board:
+0130   04E6 3B 32 09    	mov d, board
+0131   04E9 26 00 00    	mov b, 0
+0132   04EC             init_L0:
+0133   04EC 1B          	mov al, bl
+0134   04ED 87 05       	and al, 5
+0135   04EF B9 05       	cmp al, 5
+0136   04F1 C6 02 05    	je init_odd
+0137   04F4 19 2A       	mov al, '*'
+0138   04F6 3E          	mov [d], al
+0139   04F7 79          	inc d
+0140   04F8 FD 77       	inc b
+0141   04FA 78          	inc c
+0142   04FB C0 00 18    	cmp b, width*height
+0143   04FE C7 EC 04    	jne init_L0
+0144   0501 09          	ret
+0145   0502             init_odd:
+0146   0502 19 20       	mov al, ' '
+0147   0504 3E          	mov [d], al
+0148   0505 79          	inc d
+0149   0506 FD 77       	inc b
+0150   0508 C0 00 18    	cmp b, width*height
+0151   050B C7 EC 04    	jne init_L0
+0152   050E 09          	ret
+0153   050F             
+0154   050F             init_board2:
+0155   050F 3B 32 21    	mov d, board2
+0156   0512 26 00 00    	mov b, 0
+0157   0515             init_L02:
+0158   0515 1B          	mov al, bl
+0159   0516 87 05       	and al, 5
+0160   0518 B9 05       	cmp al, 5
+0161   051A C6 2B 05    	je init_odd2
+0162   051D 19 2A       	mov al, '*'
+0163   051F 3E          	mov [d], al
+0164   0520 79          	inc d
+0165   0521 FD 77       	inc b
+0166   0523 78          	inc c
+0167   0524 C0 00 18    	cmp b, width*height
+0168   0527 C7 15 05    	jne init_L02
+0169   052A 09          	ret
+0170   052B             init_odd2:
+0171   052B 19 20       	mov al, ' '
+0172   052D 3E          	mov [d], al
+0173   052E 79          	inc d
+0174   052F FD 77       	inc b
+0175   0531 C0 00 18    	cmp b, width*height
+0176   0534 C7 15 05    	jne init_L02
+0177   0537 09          	ret
+0178   0538             ; find total neighbours at a point
+0179   0538             ; A = position
+0180   0538             ; B = result
+0181   0538             get_live_neighbours:
+0182   0538 D7          	push a
+0183   0539 DA          	push d
+0184   053A D9          	push c
+0185   053B 38 00 00    	mov c, 0	; reset number
+0186   053E             
+0187   053E 07 5D 04    	call check_parity
+0188   0541 59          	add d, a
+0189   0542 63 81 00    	sub d, width+1
+0190   0545 32          	mov bl, [d]
+0191   0546 C1 2A       	cmp bl, '*'
+0192   0548 C7 4C 05    	jne jmp1
+0193   054B 78          	inc c
+0194   054C             jmp1:
+0195   054C 07 5D 04    	call check_parity
+0196   054F 59          	add d, a
+0197   0550 63 80 00    	sub d, width
+0198   0553 32          	mov bl, [d]
+0199   0554 C1 2A       	cmp bl, '*'
+0200   0556 C7 5A 05    	jne jmp2
+0201   0559 78          	inc c
+0202   055A             jmp2:
+0203   055A 07 5D 04    	call check_parity
+0204   055D 59          	add d, a
+0205   055E 63 7F 00    	sub d, width-1
+0206   0561 32          	mov bl, [d]
+0207   0562 C1 2A       	cmp bl, '*'
+0208   0564 C7 68 05    	jne jmp3
+0209   0567 78          	inc c
+0210   0568             jmp3:
+0211   0568 07 5D 04    	call check_parity
+0212   056B 59          	add d, a
+0213   056C 79          	inc d 
+0214   056D 32          	mov bl, [d]
+0215   056E C1 2A       	cmp bl, '*'
+0216   0570 C7 74 05    	jne jmp4
+0217   0573 78          	inc c
+0218   0574             jmp4:
+0219   0574 07 5D 04    	call check_parity
+0220   0577 59          	add d, a
+0221   0578 58 81 00    	add d, width+1
+0222   057B 32          	mov bl, [d]
+0223   057C C1 2A       	cmp bl, '*'
+0224   057E C7 82 05    	jne jmp5
+0225   0581 78          	inc c
+0226   0582             jmp5:
+0227   0582 07 5D 04    	call check_parity
+0228   0585 59          	add d, a
+0229   0586 58 80 00    	add d, width
+0230   0589 32          	mov bl, [d]
+0231   058A C1 2A       	cmp bl, '*'
+0232   058C C7 90 05    	jne jmp6
+0233   058F 78          	inc c
+0234   0590             jmp6:
+0235   0590 07 5D 04    	call check_parity
+0236   0593 59          	add d, a
+0237   0594 58 7F 00    	add d, width-1
+0238   0597 32          	mov bl, [d]
+0239   0598 C1 2A       	cmp bl, '*'
+0240   059A C7 9E 05    	jne jmp7
+0241   059D 78          	inc c
+0242   059E             jmp7:
+0243   059E 07 5D 04    	call check_parity
+0244   05A1 59          	add d, a
+0245   05A2 7F          	dec d
+0246   05A3 32          	mov bl, [d]
+0247   05A4 C1 2A       	cmp bl, '*'
+0248   05A6 C7 AA 05    	jne jmp8
+0249   05A9 78          	inc c
+0250   05AA             jmp8:
+0251   05AA 28          	mov b, c
+0252   05AB E6          	pop c
+0253   05AC E7          	pop d
+0254   05AD E4          	pop a
+0255   05AE 09          	ret
+0256   05AF             
+0257   05AF             width: 			.equ 128
+0258   05AF             height:			.equ 48
+0259   05AF             
+0260   05AF 00 00       l: .dw 0
+0261   05B1 00 00       c: .dw 0
+0262   05B3             
+0263   05B3 01 00       line:	.dw 1
+0264   05B5 01 00       col:	.dw 1
+0265   05B7             
+0266   05B7 00          parity: .db 0
+0267   05B8             
+0268   05B8 1B 5B 32 4A s_clear:		.db 27, "[2J", 27, "[H", 0
+0268   05BC 1B 5B 48 00 
+0269   05C0             
+0270   05C0             .include "lib/stdio.asm"
+0001+  05C0             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0002+  05C0             ; stdio.s
+0003+  05C0             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0004+  05C0             .include "lib/string.asm"
+0001++ 05C0             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0002++ 05C0             ; string.s
+0003++ 05C0             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0004++ 05C0             
+0005++ 05C0             
+0006++ 05C0             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0007++ 05C0             ; _strrev
+0008++ 05C0             ; reverse a string
+0009++ 05C0             ; d = string address
+0010++ 05C0             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0011++ 05C0             ; 01234
+0012++ 05C0             _strrev:
+0013++ 05C0 4B          	pusha
+0014++ 05C1 07 07 06    	call _strlen	; length in c
+0015++ 05C4 12          	mov a, c
+0016++ 05C5 AF 01 00    	cmp a, 1
+0017++ 05C8 D0 E2 05    	jleu _strrev_end	; check string length. string len must be > 1
+0018++ 05CB 7D          	dec a
+0019++ 05CC FD 4E       	mov si, d	; beginning of string
+0020++ 05CE FD 50       	mov di, d	; beginning of string (for destinations)
+0021++ 05D0 59          	add d, a	; end of string
+0022++ 05D1 12          	mov a, c
+0023++ 05D2 FD 9B       	shr a		; divide by 2
+0024++ 05D4 39          	mov c, a	; c now counts the steps
+0025++ 05D5             _strrev_l0:
+0026++ 05D5 32          	mov bl, [d]	; save load right-side char into bl
+0027++ 05D6 F6          	lodsb		; load left-side char into al; increase si
+0028++ 05D7 3E          	mov [d], al	; store left char into right side
+0029++ 05D8 1B          	mov al, bl
+0030++ 05D9 F7          	stosb		; store right-side char into left-side; increase di
+0031++ 05DA 7E          	dec c
+0032++ 05DB 7F          	dec d
+0033++ 05DC C2 00 00    	cmp c, 0
+0034++ 05DF C7 D5 05    	jne _strrev_l0
+0035++ 05E2             _strrev_end:
+0036++ 05E2 4C          	popa
+0037++ 05E3 09          	ret
+0038++ 05E4             	
+0039++ 05E4             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0040++ 05E4             ; _strchr
+0041++ 05E4             ; search string in d for char in al
+0042++ 05E4             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0043++ 05E4             _strchr:
+0044++ 05E4             _strchr_l0:
+0045++ 05E4 32          	mov bl, [d]
+0046++ 05E5 C1 00       	cmp bl, 0
+0047++ 05E7 C6 F2 05    	je _strchr_end
+0048++ 05EA BA          	cmp al, bl
+0049++ 05EB C6 F2 05    	je _strchr_end
+0050++ 05EE 79          	inc d
+0051++ 05EF 0A E4 05    	jmp _strchr_l0
+0052++ 05F2             _strchr_end:
+0053++ 05F2 1B          	mov al, bl
+0054++ 05F3 09          	ret
+0055++ 05F4             
+0056++ 05F4             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0057++ 05F4             ; _strstr
+0058++ 05F4             ; find sub-string
+0059++ 05F4             ; str1 in si
+0060++ 05F4             ; str2 in di
+0061++ 05F4             ; si points to end of source string
+0062++ 05F4             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0063++ 05F4             _strstr:
+0064++ 05F4 DB          	push al
+0065++ 05F5 DA          	push d
+0066++ 05F6 E3          	push di
+0067++ 05F7             _strstr_loop:
+0068++ 05F7 F3          	cmpsb					; compare a byte of the strings
+0069++ 05F8 C7 03 06    	jne _strstr_ret
+0070++ 05FB FC 00 00    	lea d, [di + 0]
+0071++ 05FE BD 00       	cmp byte[d], 0				; check if at end of string (null)
+0072++ 0600 C7 F7 05    	jne _strstr_loop				; equal chars but not at end
+0073++ 0603             _strstr_ret:
+0074++ 0603 F0          	pop di
+0075++ 0604 E7          	pop d
+0076++ 0605 E8          	pop al
+0077++ 0606 09          	ret
+0078++ 0607             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0079++ 0607             ; length of null terminated string
+0080++ 0607             ; result in c
+0081++ 0607             ; pointer in d
+0082++ 0607             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0083++ 0607             _strlen:
+0084++ 0607 DA          	push d
+0085++ 0608 38 00 00    	mov c, 0
+0086++ 060B             _strlen_l1:
+0087++ 060B BD 00       	cmp byte [d], 0
+0088++ 060D C6 15 06    	je _strlen_ret
+0089++ 0610 79          	inc d
+0090++ 0611 78          	inc c
+0091++ 0612 0A 0B 06    	jmp _strlen_l1
+0092++ 0615             _strlen_ret:
+0093++ 0615 E7          	pop d
+0094++ 0616 09          	ret
+0095++ 0617             
+0096++ 0617             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0097++ 0617             ; strcmp
+0098++ 0617             ; compare two strings
+0099++ 0617             ; str1 in si
+0100++ 0617             ; str2 in di
+0101++ 0617             ; create a string compairon instrucion ?????
+0102++ 0617             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0103++ 0617             _strcmp:
+0104++ 0617 DB          	push al
+0105++ 0618 DA          	push d
+0106++ 0619 E3          	push di
+0107++ 061A E2          	push si
+0108++ 061B             _strcmp_loop:
+0109++ 061B F3          	cmpsb					; compare a byte of the strings
+0110++ 061C C7 27 06    	jne _strcmp_ret
+0111++ 061F FB FF FF    	lea d, [si +- 1]
+0112++ 0622 BD 00       	cmp byte[d], 0				; check if at end of string (null)
+0113++ 0624 C7 1B 06    	jne _strcmp_loop				; equal chars but not at end
+0114++ 0627             _strcmp_ret:
+0115++ 0627 EF          	pop si
+0116++ 0628 F0          	pop di
+0117++ 0629 E7          	pop d
+0118++ 062A E8          	pop al
+0119++ 062B 09          	ret
+0120++ 062C             
+0121++ 062C             
+0122++ 062C             ; strcpy
+0123++ 062C             ; copy null terminated string from si to di
+0124++ 062C             ; source in si
+0125++ 062C             ; destination in di
+0126++ 062C             _strcpy:
+0127++ 062C E2          	push si
+0128++ 062D E3          	push di
+0129++ 062E DB          	push al
+0130++ 062F             _strcpy_l1:
+0131++ 062F F6          	lodsb
+0132++ 0630 F7          	stosb
+0133++ 0631 B9 00       	cmp al, 0
+0134++ 0633 C7 2F 06    	jne _strcpy_l1
+0135++ 0636             _strcpy_end:
+0136++ 0636 E8          	pop al
+0137++ 0637 F0          	pop di
+0138++ 0638 EF          	pop si
+0139++ 0639 09          	ret
+0140++ 063A             
+0141++ 063A             ; strcat
+0142++ 063A             ; concatenate a null terminated string into string at di, from string at si
+0143++ 063A             ; source in si
+0144++ 063A             ; destination in di
+0145++ 063A             _strcat:
+0146++ 063A E2          	push si
+0147++ 063B E3          	push di
+0148++ 063C D7          	push a
+0149++ 063D DA          	push d
+0150++ 063E 50          	mov a, di
+0151++ 063F 3C          	mov d, a
+0152++ 0640             _strcat_goto_end_l1:
+0153++ 0640 BD 00       	cmp byte[d], 0
+0154++ 0642 C6 49 06    	je _strcat_start
+0155++ 0645 79          	inc d
+0156++ 0646 0A 40 06    	jmp _strcat_goto_end_l1
+0157++ 0649             _strcat_start:
+0158++ 0649 FD 50       	mov di, d
+0159++ 064B             _strcat_l1:
+0160++ 064B F6          	lodsb
+0161++ 064C F7          	stosb
+0162++ 064D B9 00       	cmp al, 0
+0163++ 064F C7 4B 06    	jne _strcat_l1
+0164++ 0652             _strcat_end:
+0165++ 0652 E7          	pop d
+0166++ 0653 E4          	pop a
+0167++ 0654 F0          	pop di
+0168++ 0655 EF          	pop si
+0169++ 0656 09          	ret
+0170++ 0657             
+0171++ 0657             
+0005+  0657             
+0006+  0657             
+0007+  0657             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0008+  0657             ; convert ascii 'o'..'f' to integer 0..15
+0009+  0657             ; ascii in bl
+0010+  0657             ; result in al
+0011+  0657             ; ascii for f = 0100 0110
+0012+  0657             ; ascii for 9 = 0011 1001
+0013+  0657             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0014+  0657             hex_ascii_encode:
+0015+  0657 1B            mov al, bl
+0016+  0658 93 40         test al, $40        ; test if letter or number
+0017+  065A C7 60 06      jnz hex_letter
+0018+  065D 87 0F         and al, $0f        ; get number
+0019+  065F 09            ret
+0020+  0660             hex_letter:
+0021+  0660 87 0F         and al, $0f        ; get letter
+0022+  0662 6A 09         add al, 9
+0023+  0664 09            ret
+0024+  0665             
+0025+  0665             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0026+  0665             ; atoi
+0027+  0665             ; 2 letter hex string in b
+0028+  0665             ; 8bit integer returned in al
+0029+  0665             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0030+  0665             _atoi:
+0031+  0665 D8            push b
+0032+  0666 07 57 06      call hex_ascii_encode      ; convert bl to 4bit code in al
+0033+  0669 30            mov bl, bh
+0034+  066A DB            push al          ; save a
+0035+  066B 07 57 06      call hex_ascii_encode
+0036+  066E EA            pop bl  
+0037+  066F FD 9E 04      shl al, 4
+0038+  0672 8C            or al, bl
+0039+  0673 E5            pop b
+0040+  0674 09            ret  
+0041+  0675             
+0042+  0675             
+0043+  0675             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0044+  0675             ; scanf
+0045+  0675             ; no need for explanations!
+0046+  0675             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0047+  0675             scanf:
+0048+  0675 09            ret
+0049+  0676             
+0050+  0676             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0051+  0676             ; itoa
+0052+  0676             ; 8bit value in bl
+0053+  0676             ; 2 byte ascii result in a
+0054+  0676             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0055+  0676             _itoa:
+0056+  0676 DA            push d
+0057+  0677 D8            push b
+0058+  0678 A7 00         mov bh, 0
+0059+  067A FD A4 04      shr bl, 4  
+0060+  067D 74            mov d, b
+0061+  067E 1F 10 09      mov al, [d + s_hex_digits]
+0062+  0681 23            mov ah, al
+0063+  0682               
+0064+  0682 E5            pop b
+0065+  0683 D8            push b
+0066+  0684 A7 00         mov bh, 0
+0067+  0686 FD 87 0F      and bl, $0f
+0068+  0689 74            mov d, b
+0069+  068A 1F 10 09      mov al, [d + s_hex_digits]
+0070+  068D E5            pop b
+0071+  068E E7            pop d
+0072+  068F 09            ret
+0073+  0690             
+0074+  0690             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0075+  0690             ; hex string to binary
+0076+  0690             ; di = destination address
+0077+  0690             ; si = source
+0078+  0690             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0079+  0690             _hex_to_int:
+0080+  0690             _hex_to_int_l1:
+0081+  0690 F6            lodsb          ; load from [si] to al
+0082+  0691 B9 00         cmp al, 0        ; check if ascii 0
+0083+  0693 C6 A0 06      jz _hex_to_int_ret
+0084+  0696 36            mov bh, al
+0085+  0697 F6            lodsb
+0086+  0698 2F            mov bl, al
+0087+  0699 07 65 06      call _atoi        ; convert ascii byte in b to int (to al)
+0088+  069C F7            stosb          ; store al to [di]
+0089+  069D 0A 90 06      jmp _hex_to_int_l1
+0090+  06A0             _hex_to_int_ret:
+0091+  06A0 09            ret    
+0092+  06A1             
+0093+  06A1             
+0094+  06A1             
+0095+  06A1             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0096+  06A1             ; getchar
+0097+  06A1             ; char in ah
+0098+  06A1             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0099+  06A1             getch:
+0100+  06A1 DB            push al
+0101+  06A2             getch_retry:
+0102+  06A2 19 01         mov al, 1
+0103+  06A4 05 03         syscall sys_io      ; receive in ah
+0104+  06A6 E8            pop al
+0105+  06A7 09            ret
+0106+  06A8             
+0107+  06A8             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0108+  06A8             ; putchar
+0109+  06A8             ; char in ah
+0110+  06A8             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0111+  06A8             _putchar:
+0112+  06A8 DB            push al
+0113+  06A9 19 00         mov al, 0
+0114+  06AB 05 03         syscall sys_io      ; char in ah
+0115+  06AD E8            pop al
+0116+  06AE 09            ret
+0117+  06AF             
+0118+  06AF             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0119+  06AF             ;; input a string
+0120+  06AF             ;; terminates with null
+0121+  06AF             ;; pointer in d
+0122+  06AF             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0123+  06AF             _gets:
+0124+  06AF D7            push a
+0125+  06B0 DA            push d
+0126+  06B1             _gets_loop:
+0127+  06B1 19 01         mov al, 1
+0128+  06B3 05 03         syscall sys_io      ; receive in ah
+0129+  06B5 76 1B         cmp ah, 27
+0130+  06B7 C6 D8 06      je _gets_ansi_esc
+0131+  06BA 76 0A         cmp ah, $0a        ; lf
+0132+  06BC C6 34 07      je _gets_end
+0133+  06BF 76 0D         cmp ah, $0d        ; cr
+0134+  06C1 C6 34 07      je _gets_end
+0135+  06C4 76 5C         cmp ah, $5c        ; '\\'
+0136+  06C6 C6 FA 06      je _gets_escape
+0137+  06C9 76 08         cmp ah, $08      ; check for backspace
+0138+  06CB C6 D4 06      je _gets_backspace
+0139+  06CE 1A            mov al, ah
+0140+  06CF 3E            mov [d], al
+0141+  06D0 79            inc d
+0142+  06D1 0A B1 06      jmp _gets_loop
+0143+  06D4             _gets_backspace:
+0144+  06D4 7F            dec d
+0145+  06D5 0A B1 06      jmp _gets_loop
+0146+  06D8             _gets_ansi_esc:
+0147+  06D8 19 01         mov al, 1
+0148+  06DA 05 03         syscall sys_io        ; receive in ah without echo
+0149+  06DC 76 5B         cmp ah, '['
+0150+  06DE C7 B1 06      jne _gets_loop
+0151+  06E1 19 01         mov al, 1
+0152+  06E3 05 03         syscall sys_io          ; receive in ah without echo
+0153+  06E5 76 64         cmp ah, 'd'
+0154+  06E7 C6 F2 06      je _gets_left_arrow
+0155+  06EA 76 63         cmp ah, 'c'
+0156+  06EC C6 F6 06      je _gets_right_arrow
+0157+  06EF 0A B1 06      jmp _gets_loop
+0158+  06F2             _gets_left_arrow:
+0159+  06F2 7F            dec d
+0160+  06F3 0A B1 06      jmp _gets_loop
+0161+  06F6             _gets_right_arrow:
+0162+  06F6 79            inc d
+0163+  06F7 0A B1 06      jmp _gets_loop
+0164+  06FA             _gets_escape:
+0165+  06FA 19 01         mov al, 1
+0166+  06FC 05 03         syscall sys_io      ; receive in ah
+0167+  06FE 76 6E         cmp ah, 'n'
+0168+  0700 C6 1F 07      je _gets_lf
+0169+  0703 76 72         cmp ah, 'r'
+0170+  0705 C6 26 07      je _gets_cr
+0171+  0708 76 30         cmp ah, '0'
+0172+  070A C6 2D 07      je _gets_null
+0173+  070D 76 5C         cmp ah, $5c  ; '\'
+0174+  070F C6 18 07      je _gets_slash
+0175+  0712 1A            mov al, ah        ; if not a known escape, it is just a normal letter
+0176+  0713 3E            mov [d], al
+0177+  0714 79            inc d
+0178+  0715 0A B1 06      jmp _gets_loop
+0179+  0718             _gets_slash:
+0180+  0718 19 5C         mov al, $5c
+0181+  071A 3E            mov [d], al
+0182+  071B 79            inc d
+0183+  071C 0A B1 06      jmp _gets_loop
+0184+  071F             _gets_lf:
+0185+  071F 19 0A         mov al, $0a
+0186+  0721 3E            mov [d], al
+0187+  0722 79            inc d
+0188+  0723 0A B1 06      jmp _gets_loop
+0189+  0726             _gets_cr:
+0190+  0726 19 0D         mov al, $0d
+0191+  0728 3E            mov [d], al
+0192+  0729 79            inc d
+0193+  072A 0A B1 06      jmp _gets_loop
+0194+  072D             _gets_null:
+0195+  072D 19 00         mov al, $00
+0196+  072F 3E            mov [d], al
+0197+  0730 79            inc d
+0198+  0731 0A B1 06      jmp _gets_loop
+0199+  0734             _gets_end:
+0200+  0734 19 00         mov al, 0
+0201+  0736 3E            mov [d], al        ; terminate string
+0202+  0737 E7            pop d
+0203+  0738 E4            pop a
+0204+  0739 09            ret
+0205+  073A             
+0206+  073A             
+0207+  073A             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0208+  073A             ;; input text
+0209+  073A             ;; terminated with ctrl+d
+0210+  073A             ;; pointer in d
+0211+  073A             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0212+  073A             _gettxt:
+0213+  073A D7            push a
+0214+  073B DA            push d
+0215+  073C             _gettxt_loop:
+0216+  073C 19 01         mov al, 1
+0217+  073E 05 03         syscall sys_io      ; receive in ah
+0218+  0740 76 04         cmp ah, 4      ; eot
+0219+  0742 C6 7B 07      je _gettxt_end
+0220+  0745 76 08         cmp ah, $08      ; check for backspace
+0221+  0747 C6 77 07      je _gettxt_backspace
+0222+  074A 76 5C         cmp ah, $5c        ; '\'
+0223+  074C C6 55 07      je _gettxt_escape
+0224+  074F 1A            mov al, ah
+0225+  0750 3E            mov [d], al
+0226+  0751 79            inc d
+0227+  0752 0A 3C 07      jmp _gettxt_loop
+0228+  0755             _gettxt_escape:
+0229+  0755 19 01         mov al, 1
+0230+  0757 05 03         syscall sys_io      ; receive in ah
+0231+  0759 76 6E         cmp ah, 'n'
+0232+  075B C6 69 07      je _gettxt_lf
+0233+  075E 76 72         cmp ah, 'r'
+0234+  0760 C6 70 07      je _gettxt_cr
+0235+  0763 1A            mov al, ah        ; if not a known escape, it is just a normal letter
+0236+  0764 3E            mov [d], al
+0237+  0765 79            inc d
+0238+  0766 0A 3C 07      jmp _gettxt_loop
+0239+  0769             _gettxt_lf:
+0240+  0769 19 0A         mov al, $0a
+0241+  076B 3E            mov [d], al
+0242+  076C 79            inc d
+0243+  076D 0A 3C 07      jmp _gettxt_loop
+0244+  0770             _gettxt_cr:
+0245+  0770 19 0D         mov al, $0d
+0246+  0772 3E            mov [d], al
+0247+  0773 79            inc d
+0248+  0774 0A 3C 07      jmp _gettxt_loop
+0249+  0777             _gettxt_backspace:
+0250+  0777 7F            dec d
+0251+  0778 0A 3C 07      jmp _gettxt_loop
+0252+  077B             _gettxt_end:
+0253+  077B 19 00         mov al, 0
+0254+  077D 3E            mov [d], al        ; terminate string
+0255+  077E E7            pop d
+0256+  077F E4            pop a
+0257+  0780 09            ret
+0258+  0781             
+0259+  0781             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0260+  0781             ; print new line
+0261+  0781             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0262+  0781             printnl:
+0263+  0781 D7            push a
+0264+  0782 10 00 0A      mov a, $0a00
+0265+  0785 05 03         syscall sys_io
+0266+  0787 10 00 0D      mov a, $0d00
+0267+  078A 05 03         syscall sys_io
+0268+  078C E4            pop a
+0269+  078D 09            ret
+0270+  078E             
+0271+  078E             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0272+  078E             ; _strtoint
+0273+  078E             ; 4 digit hex string number in d
+0274+  078E             ; integer returned in a
+0275+  078E             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0276+  078E             _strtointx:
+0277+  078E D8            push b
+0278+  078F 32            mov bl, [d]
+0279+  0790 37            mov bh, bl
+0280+  0791 33 01 00      mov bl, [d + 1]
+0281+  0794 07 65 06      call _atoi        ; convert to int in al
+0282+  0797 23            mov ah, al        ; move to ah
+0283+  0798 33 02 00      mov bl, [d + 2]
+0284+  079B 37            mov bh, bl
+0285+  079C 33 03 00      mov bl, [d + 3]
+0286+  079F 07 65 06      call _atoi        ; convert to int in al
+0287+  07A2 E5            pop b
+0288+  07A3 09            ret
+0289+  07A4             
+0290+  07A4             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0291+  07A4             ; _strtoint
+0292+  07A4             ; 5 digit base10 string number in d
+0293+  07A4             ; integer returned in a
+0294+  07A4             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0295+  07A4             _strtoint:
+0296+  07A4 E2            push si
+0297+  07A5 D8            push b
+0298+  07A6 D9            push c
+0299+  07A7 DA            push d
+0300+  07A8 07 07 06      call _strlen      ; get string length in c
+0301+  07AB 7E            dec c
+0302+  07AC FD 4E         mov si, d
+0303+  07AE 12            mov a, c
+0304+  07AF FD 99         shl a
+0305+  07B1 3B 28 09      mov d, table_power
+0306+  07B4 59            add d, a
+0307+  07B5 38 00 00      mov c, 0
+0308+  07B8             _strtoint_l0:
+0309+  07B8 F6            lodsb      ; load ascii to al
+0310+  07B9 B9 00         cmp al, 0
+0311+  07BB C6 CE 07      je _strtoint_end
+0312+  07BE 6F 30         sub al, $30    ; make into integer
+0313+  07C0 22 00         mov ah, 0
+0314+  07C2 2A            mov b, [d]
+0315+  07C3 AC            mul a, b      ; result in b since it fits in 16bits
+0316+  07C4 11            mov a, b
+0317+  07C5 28            mov b, c
+0318+  07C6 54            add a, b
+0319+  07C7 39            mov c, a
+0320+  07C8 63 02 00      sub d, 2
+0321+  07CB 0A B8 07      jmp _strtoint_l0
+0322+  07CE             _strtoint_end:
+0323+  07CE 12            mov a, c
+0324+  07CF E7            pop d
+0325+  07D0 E6            pop c
+0326+  07D1 E5            pop b
+0327+  07D2 EF            pop si
+0328+  07D3 09            ret
+0329+  07D4             
+0330+  07D4             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0331+  07D4             ; print null terminated string
+0332+  07D4             ; pointer in d
+0333+  07D4             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0334+  07D4             _puts:
+0335+  07D4 D7            push a
+0336+  07D5 DA            push d
+0337+  07D6             _puts_l1:
+0338+  07D6 1E            mov al, [d]
+0339+  07D7 B9 00         cmp al, 0
+0340+  07D9 C6 E5 07      jz _puts_end
+0341+  07DC 23            mov ah, al
+0342+  07DD 19 00         mov al, 0
+0343+  07DF 05 03         syscall sys_io
+0344+  07E1 79            inc d
+0345+  07E2 0A D6 07      jmp _puts_l1
+0346+  07E5             _puts_end:
+0347+  07E5 E7            pop d
+0348+  07E6 E4            pop a
+0349+  07E7 09            ret
+0350+  07E8             
+0351+  07E8             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0352+  07E8             ; print n size string
+0353+  07E8             ; pointer in d
+0354+  07E8             ; size in c
+0355+  07E8             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0356+  07E8             _putsn:
+0357+  07E8 DB            push al
+0358+  07E9 DA            push d
+0359+  07EA D9            push c
+0360+  07EB             _putsn_l0:
+0361+  07EB 1E            mov al, [d]
+0362+  07EC 23            mov ah, al
+0363+  07ED 19 00         mov al, 0
+0364+  07EF 05 03         syscall sys_io
+0365+  07F1 79            inc d
+0366+  07F2 7E            dec c  
+0367+  07F3 C2 00 00      cmp c, 0
+0368+  07F6 C7 EB 07      jne _putsn_l0
+0369+  07F9             _putsn_end:
+0370+  07F9 E6            pop c
+0371+  07FA E7            pop d
+0372+  07FB E8            pop al
+0373+  07FC 09            ret
+0374+  07FD             
+0375+  07FD             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0376+  07FD             ; print 16bit decimal number
+0377+  07FD             ; input number in a
+0378+  07FD             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0379+  07FD             print_u16d:
+0380+  07FD D7            push a
+0381+  07FE D8            push b
+0382+  07FF FD D8         push g
+0383+  0801 26 10 27      mov b, 10000
+0384+  0804 AE            div a, b      ; get 10000's coeff.
+0385+  0805 07 29 08      call print_number
+0386+  0808 11            mov a, b
+0387+  0809 26 E8 03      mov b, 1000
+0388+  080C AE            div a, b      ; get 1000's coeff.
+0389+  080D 07 29 08      call print_number
+0390+  0810 11            mov a, b
+0391+  0811 26 64 00      mov b, 100
+0392+  0814 AE            div a, b
+0393+  0815 07 29 08      call print_number
+0394+  0818 11            mov a, b
+0395+  0819 26 0A 00      mov b, 10
+0396+  081C AE            div a, b
+0397+  081D 07 29 08      call print_number
+0398+  0820 1B            mov al, bl      ; 1's coeff in bl
+0399+  0821 07 29 08      call print_number
+0400+  0824 FD F1         pop g
+0401+  0826 E5            pop b
+0402+  0827 E4            pop a
+0403+  0828 09            ret
+0404+  0829             
+0405+  0829             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0406+  0829             ; print al
+0407+  0829             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0408+  0829             print_number:
+0409+  0829 6A 30         add al, $30
+0410+  082B 23            mov ah, al
+0411+  082C 07 A8 06      call _putchar
+0412+  082F 09            ret
+0413+  0830             
+0414+  0830             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0415+  0830             ; print 16bit hex integer
+0416+  0830             ; integer value in reg b
+0417+  0830             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0418+  0830             print_u16x:
+0419+  0830 D7            push a
+0420+  0831 D8            push b
+0421+  0832 DD            push bl
+0422+  0833 30            mov bl, bh
+0423+  0834 07 76 06      call _itoa        ; convert bh to char in a
+0424+  0837 2F            mov bl, al        ; save al
+0425+  0838 19 00         mov al, 0
+0426+  083A 05 03         syscall sys_io        ; display ah
+0427+  083C 24            mov ah, bl        ; retrieve al
+0428+  083D 19 00         mov al, 0
+0429+  083F 05 03         syscall sys_io        ; display al
+0430+  0841             
+0431+  0841 EA            pop bl
+0432+  0842 07 76 06      call _itoa        ; convert bh to char in a
+0433+  0845 2F            mov bl, al        ; save al
+0434+  0846 19 00         mov al, 0
+0435+  0848 05 03         syscall sys_io        ; display ah
+0436+  084A 24            mov ah, bl        ; retrieve al
+0437+  084B 19 00         mov al, 0
+0438+  084D 05 03         syscall sys_io        ; display al
+0439+  084F             
+0440+  084F E5            pop b
+0441+  0850 E4            pop a
+0442+  0851 09            ret
+0443+  0852             
+0444+  0852             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0445+  0852             ; input 16bit hex integer
+0446+  0852             ; read 16bit integer into a
+0447+  0852             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0448+  0852             scan_u16x:
+0449+  0852 F8 10 00      enter 16
+0450+  0855 D8            push b
+0451+  0856 DA            push d
+0452+  0857             
+0453+  0857 FA F1 FF      lea d, [bp + -15]
+0454+  085A 07 AF 06      call _gets        ; get number
+0455+  085D             
+0456+  085D 32            mov bl, [d]
+0457+  085E 37            mov bh, bl
+0458+  085F 33 01 00      mov bl, [d + 1]
+0459+  0862 07 65 06      call _atoi        ; convert to int in al
+0460+  0865 23            mov ah, al        ; move to ah
+0461+  0866             
+0462+  0866 33 02 00      mov bl, [d + 2]
+0463+  0869 37            mov bh, bl
+0464+  086A 33 03 00      mov bl, [d + 3]
+0465+  086D 07 65 06      call _atoi        ; convert to int in al
+0466+  0870             
+0467+  0870 E7            pop d
+0468+  0871 E5            pop b
+0469+  0872 F9            leave
+0470+  0873 09            ret
+0471+  0874             
+0472+  0874             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0473+  0874             ; print 8bit hex integer
+0474+  0874             ; integer value in reg bl
+0475+  0874             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0476+  0874             print_u8x:
+0477+  0874 D7            push a
+0478+  0875 DD            push bl
+0479+  0876             
+0480+  0876 07 76 06      call _itoa        ; convert bl to char in a
+0481+  0879 2F            mov bl, al        ; save al
+0482+  087A 19 00         mov al, 0
+0483+  087C 05 03         syscall sys_io        ; display ah
+0484+  087E 24            mov ah, bl        ; retrieve al
+0485+  087F 19 00         mov al, 0
+0486+  0881 05 03         syscall sys_io        ; display al
+0487+  0883             
+0488+  0883 EA            pop bl
+0489+  0884 E4            pop a
+0490+  0885 09            ret
+0491+  0886             
+0492+  0886             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0493+  0886             ; print 8bit decimal unsigned number
+0494+  0886             ; input number in al
+0495+  0886             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0496+  0886             print_u8d:
+0497+  0886 D7            push a
+0498+  0887 D8            push b
+0499+  0888 FD D8         push g
+0500+  088A 22 00         mov ah, 0
+0501+  088C 26 64 00      mov b, 100
+0502+  088F AE            div a, b
+0503+  0890 D8            push b      ; save remainder
+0504+  0891 B9 00         cmp al, 0
+0505+  0893 C6 9D 08      je skip100
+0506+  0896 6A 30         add al, $30
+0507+  0898 23            mov ah, al
+0508+  0899 19 00         mov al, 0
+0509+  089B 05 03         syscall sys_io  ; print coeff
+0510+  089D             skip100:
+0511+  089D E4            pop a
+0512+  089E 22 00         mov ah, 0
+0513+  08A0 26 0A 00      mov b, 10
+0514+  08A3 AE            div a, b
+0515+  08A4 D8            push b      ; save remainder
+0516+  08A5 B9 00         cmp al, 0
+0517+  08A7 C6 B1 08      je skip10
+0518+  08AA 6A 30         add al, $30
+0519+  08AC 23            mov ah, al
+0520+  08AD 19 00         mov al, 0
+0521+  08AF 05 03         syscall sys_io  ; print coeff
+0522+  08B1             skip10:
+0523+  08B1 E4            pop a
+0524+  08B2 1B            mov al, bl
+0525+  08B3 6A 30         add al, $30
+0526+  08B5 23            mov ah, al
+0527+  08B6 19 00         mov al, 0
+0528+  08B8 05 03         syscall sys_io  ; print coeff
+0529+  08BA FD F1         pop g
+0530+  08BC E5            pop b
+0531+  08BD E4            pop a
+0532+  08BE 09            ret
+0533+  08BF             
+0534+  08BF             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0535+  08BF             ; input 8bit hex integer
+0536+  08BF             ; read 8bit integer into al
+0537+  08BF             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0538+  08BF             scan_u8x:
+0539+  08BF F8 04 00      enter 4
+0540+  08C2 D8            push b
+0541+  08C3 DA            push d
+0542+  08C4             
+0543+  08C4 FA FD FF      lea d, [bp + -3]
+0544+  08C7 07 AF 06      call _gets        ; get number
+0545+  08CA             
+0546+  08CA 32            mov bl, [d]
+0547+  08CB 37            mov bh, bl
+0548+  08CC 33 01 00      mov bl, [d + 1]
+0549+  08CF 07 65 06      call _atoi        ; convert to int in al
+0550+  08D2             
+0551+  08D2 E7            pop d
+0552+  08D3 E5            pop b
+0553+  08D4 F9            leave
+0554+  08D5 09            ret
+0555+  08D6             
+0556+  08D6             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0557+  08D6             ; input decimal number
+0558+  08D6             ; result in a
+0559+  08D6             ; 655'\0'
+0560+  08D6             ; low--------high
+0561+  08D6             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0562+  08D6             scan_u16d:
+0563+  08D6 F8 08 00      enter 8
+0564+  08D9 E2            push si
+0565+  08DA D8            push b
+0566+  08DB D9            push c
+0567+  08DC DA            push d
+0568+  08DD FA F9 FF      lea d, [bp +- 7]
+0569+  08E0 07 AF 06      call _gets
+0570+  08E3 07 07 06      call _strlen      ; get string length in c
+0571+  08E6 7E            dec c
+0572+  08E7 FD 4E         mov si, d
+0573+  08E9 12            mov a, c
+0574+  08EA FD 99         shl a
+0575+  08EC 3B 28 09      mov d, table_power
+0576+  08EF 59            add d, a
+0577+  08F0 38 00 00      mov c, 0
+0578+  08F3             mul_loop:
+0579+  08F3 F6            lodsb      ; load ascii to al
+0580+  08F4 B9 00         cmp al, 0
+0581+  08F6 C6 09 09      je mul_exit
+0582+  08F9 6F 30         sub al, $30    ; make into integer
+0583+  08FB 22 00         mov ah, 0
+0584+  08FD 2A            mov b, [d]
+0585+  08FE AC            mul a, b      ; result in b since it fits in 16bits
+0586+  08FF 11            mov a, b
+0587+  0900 28            mov b, c
+0588+  0901 54            add a, b
+0589+  0902 39            mov c, a
+0590+  0903 63 02 00      sub d, 2
+0591+  0906 0A F3 08      jmp mul_loop
+0592+  0909             mul_exit:
+0593+  0909 12            mov a, c
+0594+  090A E7            pop d
+0595+  090B E6            pop c
+0596+  090C E5            pop b
+0597+  090D EF            pop si
+0598+  090E F9            leave
+0599+  090F 09            ret
+0600+  0910             
+0601+  0910             
+0602+  0910 30 31 32 33 s_hex_digits:    .db "0123456789abcdef"  
+0602+  0914 34 35 36 37 
+0602+  0918 38 39 61 62 
+0602+  091C 63 64 65 66 
+0603+  0920 1B 5B 32 6A s_telnet_clear:  .db "\033[2j\033[h", 0
+0603+  0924 1B 5B 68 00 
+0604+  0928             
+0605+  0928             table_power:
+0606+  0928 01 00         .dw 1
+0607+  092A 0A 00         .dw 10
+0608+  092C 64 00         .dw 100
+0609+  092E E8 03         .dw 1000
+0610+  0930 10 27         .dw 100000271   0932             
+0272   0932 FF FF FF FF board:			.fill (width)*(height)
+0272   0936 FF FF FF FF 
+0272   093A FF FF FF FF 
+0272   093E FF FF FF FF 
+0272   0942 FF FF FF FF 
+0272   0946 FF FF FF FF 
+0272   094A FF FF FF FF 
+0272   094E FF FF FF FF 
+0272   0952 FF FF FF FF 
+0272   0956 FF FF FF FF 
+0272   095A FF FF FF FF 
+0272   095E FF FF FF FF 
+0272   0962 FF FF FF FF 
+0272   0966 FF FF FF FF 
+0272   096A FF FF FF FF 
+0272   096E FF FF FF FF 
+0272   0972 FF FF FF FF 
+0272   0976 FF FF FF FF 
+0272   097A FF FF FF FF 
+0272   097E FF FF FF FF 
+0272   0982 FF FF FF FF 
+0272   0986 FF FF FF FF 
+0272   098A FF FF FF FF 
+0272   098E FF FF FF FF 
+0272   0992 FF FF FF FF 
+0272   0996 FF FF FF FF 
+0272   099A FF FF FF FF 
+0272   099E FF FF FF FF 
+0272   09A2 FF FF FF FF 
+0272   09A6 FF FF FF FF 
+0272   09AA FF FF FF FF 
+0272   09AE FF FF FF FF 
+0272   09B2 FF FF FF FF 
+0272   09B6 FF FF FF FF 
+0272   09BA FF FF FF FF 
+0272   09BE FF FF FF FF 
+0272   09C2 FF FF FF FF 
+0272   09C6 FF FF FF FF 
+0272   09CA FF FF FF FF 
+0272   09CE FF FF FF FF 
+0272   09D2 FF FF FF FF 
+0272   09D6 FF FF FF FF 
+0272   09DA FF FF FF FF 
+0272   09DE FF FF FF FF 
+0272   09E2 FF FF FF FF 
+0272   09E6 FF FF FF FF 
+0272   09EA FF FF FF FF 
+0272   09EE FF FF FF FF 
+0272   09F2 FF FF FF FF 
+0272   09F6 FF FF FF FF 
+0272   09FA FF FF FF FF 
+0272   09FE FF FF FF FF 
+0272   0A02 FF FF FF FF 
+0272   0A06 FF FF FF FF 
+0272   0A0A FF FF FF FF 
+0272   0A0E FF FF FF FF 
+0272   0A12 FF FF FF FF 
+0272   0A16 FF FF FF FF 
+0272   0A1A FF FF FF FF 
+0272   0A1E FF FF FF FF 
+0272   0A22 FF FF FF FF 
+0272   0A26 FF FF FF FF 
+0272   0A2A FF FF FF FF 
+0272   0A2E FF FF FF FF 
+0272   0A32 FF FF FF FF 
+0272   0A36 FF FF FF FF 
+0272   0A3A FF FF FF FF 
+0272   0A3E FF FF FF FF 
+0272   0A42 FF FF FF FF 
+0272   0A46 FF FF FF FF 
+0272   0A4A FF FF FF FF 
+0272   0A4E FF FF FF FF 
+0272   0A52 FF FF FF FF 
+0272   0A56 FF FF FF FF 
+0272   0A5A FF FF FF FF 
+0272   0A5E FF FF FF FF 
+0272   0A62 FF FF FF FF 
+0272   0A66 FF FF FF FF 
+0272   0A6A FF FF FF FF 
+0272   0A6E FF FF FF FF 
+0272   0A72 FF FF FF FF 
+0272   0A76 FF FF FF FF 
+0272   0A7A FF FF FF FF 
+0272   0A7E FF FF FF FF 
+0272   0A82 FF FF FF FF 
+0272   0A86 FF FF FF FF 
+0272   0A8A FF FF FF FF 
+0272   0A8E FF FF FF FF 
+0272   0A92 FF FF FF FF 
+0272   0A96 FF FF FF FF 
+0272   0A9A FF FF FF FF 
+0272   0A9E FF FF FF FF 
+0272   0AA2 FF FF FF FF 
+0272   0AA6 FF FF FF FF 
+0272   0AAA FF FF FF FF 
+0272   0AAE FF FF FF FF 
+0272   0AB2 FF FF FF FF 
+0272   0AB6 FF FF FF FF 
+0272   0ABA FF FF FF FF 
+0272   0ABE FF FF FF FF 
+0272   0AC2 FF FF FF FF 
+0272   0AC6 FF FF FF FF 
+0272   0ACA FF FF FF FF 
+0272   0ACE FF FF FF FF 
+0272   0AD2 FF FF FF FF 
+0272   0AD6 FF FF FF FF 
+0272   0ADA FF FF FF FF 
+0272   0ADE FF FF FF FF 
+0272   0AE2 FF FF FF FF 
+0272   0AE6 FF FF FF FF 
+0272   0AEA FF FF FF FF 
+0272   0AEE FF FF FF FF 
+0272   0AF2 FF FF FF FF 
+0272   0AF6 FF FF FF FF 
+0272   0AFA FF FF FF FF 
+0272   0AFE FF FF FF FF 
+0272   0B02 FF FF FF FF 
+0272   0B06 FF FF FF FF 
+0272   0B0A FF FF FF FF 
+0272   0B0E FF FF FF FF 
+0272   0B12 FF FF FF FF 
+0272   0B16 FF FF FF FF 
+0272   0B1A FF FF FF FF 
+0272   0B1E FF FF FF FF 
+0272   0B22 FF FF FF FF 
+0272   0B26 FF FF FF FF 
+0272   0B2A FF FF FF FF 
+0272   0B2E FF FF FF FF 
+0272   0B32 FF FF FF FF 
+0272   0B36 FF FF FF FF 
+0272   0B3A FF FF FF FF 
+0272   0B3E FF FF FF FF 
+0272   0B42 FF FF FF FF 
+0272   0B46 FF FF FF FF 
+0272   0B4A FF FF FF FF 
+0272   0B4E FF FF FF FF 
+0272   0B52 FF FF FF FF 
+0272   0B56 FF FF FF FF 
+0272   0B5A FF FF FF FF 
+0272   0B5E FF FF FF FF 
+0272   0B62 FF FF FF FF 
+0272   0B66 FF FF FF FF 
+0272   0B6A FF FF FF FF 
+0272   0B6E FF FF FF FF 
+0272   0B72 FF FF FF FF 
+0272   0B76 FF FF FF FF 
+0272   0B7A FF FF FF FF 
+0272   0B7E FF FF FF FF 
+0272   0B82 FF FF FF FF 
+0272   0B86 FF FF FF FF 
+0272   0B8A FF FF FF FF 
+0272   0B8E FF FF FF FF 
+0272   0B92 FF FF FF FF 
+0272   0B96 FF FF FF FF 
+0272   0B9A FF FF FF FF 
+0272   0B9E FF FF FF FF 
+0272   0BA2 FF FF FF FF 
+0272   0BA6 FF FF FF FF 
+0272   0BAA FF FF FF FF 
+0272   0BAE FF FF FF FF 
+0272   0BB2 FF FF FF FF 
+0272   0BB6 FF FF FF FF 
+0272   0BBA FF FF FF FF 
+0272   0BBE FF FF FF FF 
+0272   0BC2 FF FF FF FF 
+0272   0BC6 FF FF FF FF 
+0272   0BCA FF FF FF FF 
+0272   0BCE FF FF FF FF 
+0272   0BD2 FF FF FF FF 
+0272   0BD6 FF FF FF FF 
+0272   0BDA FF FF FF FF 
+0272   0BDE FF FF FF FF 
+0272   0BE2 FF FF FF FF 
+0272   0BE6 FF FF FF FF 
+0272   0BEA FF FF FF FF 
+0272   0BEE FF FF FF FF 
+0272   0BF2 FF FF FF FF 
+0272   0BF6 FF FF FF FF 
+0272   0BFA FF FF FF FF 
+0272   0BFE FF FF FF FF 
+0272   0C02 FF FF FF FF 
+0272   0C06 FF FF FF FF 
+0272   0C0A FF FF FF FF 
+0272   0C0E FF FF FF FF 
+0272   0C12 FF FF FF FF 
+0272   0C16 FF FF FF FF 
+0272   0C1A FF FF FF FF 
+0272   0C1E FF FF FF FF 
+0272   0C22 FF FF FF FF 
+0272   0C26 FF FF FF FF 
+0272   0C2A FF FF FF FF 
+0272   0C2E FF FF FF FF 
+0272   0C32 FF FF FF FF 
+0272   0C36 FF FF FF FF 
+0272   0C3A FF FF FF FF 
+0272   0C3E FF FF FF FF 
+0272   0C42 FF FF FF FF 
+0272   0C46 FF FF FF FF 
+0272   0C4A FF FF FF FF 
+0272   0C4E FF FF FF FF 
+0272   0C52 FF FF FF FF 
+0272   0C56 FF FF FF FF 
+0272   0C5A FF FF FF FF 
+0272   0C5E FF FF FF FF 
+0272   0C62 FF FF FF FF 
+0272   0C66 FF FF FF FF 
+0272   0C6A FF FF FF FF 
+0272   0C6E FF FF FF FF 
+0272   0C72 FF FF FF FF 
+0272   0C76 FF FF FF FF 
+0272   0C7A FF FF FF FF 
+0272   0C7E FF FF FF FF 
+0272   0C82 FF FF FF FF 
+0272   0C86 FF FF FF FF 
+0272   0C8A FF FF FF FF 
+0272   0C8E FF FF FF FF 
+0272   0C92 FF FF FF FF 
+0272   0C96 FF FF FF FF 
+0272   0C9A FF FF FF FF 
+0272   0C9E FF FF FF FF 
+0272   0CA2 FF FF FF FF 
+0272   0CA6 FF FF FF FF 
+0272   0CAA FF FF FF FF 
+0272   0CAE FF FF FF FF 
+0272   0CB2 FF FF FF FF 
+0272   0CB6 FF FF FF FF 
+0272   0CBA FF FF FF FF 
+0272   0CBE FF FF FF FF 
+0272   0CC2 FF FF FF FF 
+0272   0CC6 FF FF FF FF 
+0272   0CCA FF FF FF FF 
+0272   0CCE FF FF FF FF 
+0272   0CD2 FF FF FF FF 
+0272   0CD6 FF FF FF FF 
+0272   0CDA FF FF FF FF 
+0272   0CDE FF FF FF FF 
+0272   0CE2 FF FF FF FF 
+0272   0CE6 FF FF FF FF 
+0272   0CEA FF FF FF FF 
+0272   0CEE FF FF FF FF 
+0272   0CF2 FF FF FF FF 
+0272   0CF6 FF FF FF FF 
+0272   0CFA FF FF FF FF 
+0272   0CFE FF FF FF FF 
+0272   0D02 FF FF FF FF 
+0272   0D06 FF FF FF FF 
+0272   0D0A FF FF FF FF 
+0272   0D0E FF FF FF FF 
+0272   0D12 FF FF FF FF 
+0272   0D16 FF FF FF FF 
+0272   0D1A FF FF FF FF 
+0272   0D1E FF FF FF FF 
+0272   0D22 FF FF FF FF 
+0272   0D26 FF FF FF FF 
+0272   0D2A FF FF FF FF 
+0272   0D2E FF FF FF FF 
+0272   0D32 FF FF FF FF 
+0272   0D36 FF FF FF FF 
+0272   0D3A FF FF FF FF 
+0272   0D3E FF FF FF FF 
+0272   0D42 FF FF FF FF 
+0272   0D46 FF FF FF FF 
+0272   0D4A FF FF FF FF 
+0272   0D4E FF FF FF FF 
+0272   0D52 FF FF FF FF 
+0272   0D56 FF FF FF FF 
+0272   0D5A FF FF FF FF 
+0272   0D5E FF FF FF FF 
+0272   0D62 FF FF FF FF 
+0272   0D66 FF FF FF FF 
+0272   0D6A FF FF FF FF 
+0272   0D6E FF FF FF FF 
+0272   0D72 FF FF FF FF 
+0272   0D76 FF FF FF FF 
+0272   0D7A FF FF FF FF 
+0272   0D7E FF FF FF FF 
+0272   0D82 FF FF FF FF 
+0272   0D86 FF FF FF FF 
+0272   0D8A FF FF FF FF 
+0272   0D8E FF FF FF FF 
+0272   0D92 FF FF FF FF 
+0272   0D96 FF FF FF FF 
+0272   0D9A FF FF FF FF 
+0272   0D9E FF FF FF FF 
+0272   0DA2 FF FF FF FF 
+0272   0DA6 FF FF FF FF 
+0272   0DAA FF FF FF FF 
+0272   0DAE FF FF FF FF 
+0272   0DB2 FF FF FF FF 
+0272   0DB6 FF FF FF FF 
+0272   0DBA FF FF FF FF 
+0272   0DBE FF FF FF FF 
+0272   0DC2 FF FF FF FF 
+0272   0DC6 FF FF FF FF 
+0272   0DCA FF FF FF FF 
+0272   0DCE FF FF FF FF 
+0272   0DD2 FF FF FF FF 
+0272   0DD6 FF FF FF FF 
+0272   0DDA FF FF FF FF 
+0272   0DDE FF FF FF FF 
+0272   0DE2 FF FF FF FF 
+0272   0DE6 FF FF FF FF 
+0272   0DEA FF FF FF FF 
+0272   0DEE FF FF FF FF 
+0272   0DF2 FF FF FF FF 
+0272   0DF6 FF FF FF FF 
+0272   0DFA FF FF FF FF 
+0272   0DFE FF FF FF FF 
+0272   0E02 FF FF FF FF 
+0272   0E06 FF FF FF FF 
+0272   0E0A FF FF FF FF 
+0272   0E0E FF FF FF FF 
+0272   0E12 FF FF FF FF 
+0272   0E16 FF FF FF FF 
+0272   0E1A FF FF FF FF 
+0272   0E1E FF FF FF FF 
+0272   0E22 FF FF FF FF 
+0272   0E26 FF FF FF FF 
+0272   0E2A FF FF FF FF 
+0272   0E2E FF FF FF FF 
+0272   0E32 FF FF FF FF 
+0272   0E36 FF FF FF FF 
+0272   0E3A FF FF FF FF 
+0272   0E3E FF FF FF FF 
+0272   0E42 FF FF FF FF 
+0272   0E46 FF FF FF FF 
+0272   0E4A FF FF FF FF 
+0272   0E4E FF FF FF FF 
+0272   0E52 FF FF FF FF 
+0272   0E56 FF FF FF FF 
+0272   0E5A FF FF FF FF 
+0272   0E5E FF FF FF FF 
+0272   0E62 FF FF FF FF 
+0272   0E66 FF FF FF FF 
+0272   0E6A FF FF FF FF 
+0272   0E6E FF FF FF FF 
+0272   0E72 FF FF FF FF 
+0272   0E76 FF FF FF FF 
+0272   0E7A FF FF FF FF 
+0272   0E7E FF FF FF FF 
+0272   0E82 FF FF FF FF 
+0272   0E86 FF FF FF FF 
+0272   0E8A FF FF FF FF 
+0272   0E8E FF FF FF FF 
+0272   0E92 FF FF FF FF 
+0272   0E96 FF FF FF FF 
+0272   0E9A FF FF FF FF 
+0272   0E9E FF FF FF FF 
+0272   0EA2 FF FF FF FF 
+0272   0EA6 FF FF FF FF 
+0272   0EAA FF FF FF FF 
+0272   0EAE FF FF FF FF 
+0272   0EB2 FF FF FF FF 
+0272   0EB6 FF FF FF FF 
+0272   0EBA FF FF FF FF 
+0272   0EBE FF FF FF FF 
+0272   0EC2 FF FF FF FF 
+0272   0EC6 FF FF FF FF 
+0272   0ECA FF FF FF FF 
+0272   0ECE FF FF FF FF 
+0272   0ED2 FF FF FF FF 
+0272   0ED6 FF FF FF FF 
+0272   0EDA FF FF FF FF 
+0272   0EDE FF FF FF FF 
+0272   0EE2 FF FF FF FF 
+0272   0EE6 FF FF FF FF 
+0272   0EEA FF FF FF FF 
+0272   0EEE FF FF FF FF 
+0272   0EF2 FF FF FF FF 
+0272   0EF6 FF FF FF FF 
+0272   0EFA FF FF FF FF 
+0272   0EFE FF FF FF FF 
+0272   0F02 FF FF FF FF 
+0272   0F06 FF FF FF FF 
+0272   0F0A FF FF FF FF 
+0272   0F0E FF FF FF FF 
+0272   0F12 FF FF FF FF 
+0272   0F16 FF FF FF FF 
+0272   0F1A FF FF FF FF 
+0272   0F1E FF FF FF FF 
+0272   0F22 FF FF FF FF 
+0272   0F26 FF FF FF FF 
+0272   0F2A FF FF FF FF 
+0272   0F2E FF FF FF FF 
+0272   0F32 FF FF FF FF 
+0272   0F36 FF FF FF FF 
+0272   0F3A FF FF FF FF 
+0272   0F3E FF FF FF FF 
+0272   0F42 FF FF FF FF 
+0272   0F46 FF FF FF FF 
+0272   0F4A FF FF FF FF 
+0272   0F4E FF FF FF FF 
+0272   0F52 FF FF FF FF 
+0272   0F56 FF FF FF FF 
+0272   0F5A FF FF FF FF 
+0272   0F5E FF FF FF FF 
+0272   0F62 FF FF FF FF 
+0272   0F66 FF FF FF FF 
+0272   0F6A FF FF FF FF 
+0272   0F6E FF FF FF FF 
+0272   0F72 FF FF FF FF 
+0272   0F76 FF FF FF FF 
+0272   0F7A FF FF FF FF 
+0272   0F7E FF FF FF FF 
+0272   0F82 FF FF FF FF 
+0272   0F86 FF FF FF FF 
+0272   0F8A FF FF FF FF 
+0272   0F8E FF FF FF FF 
+0272   0F92 FF FF FF FF 
+0272   0F96 FF FF FF FF 
+0272   0F9A FF FF FF FF 
+0272   0F9E FF FF FF FF 
+0272   0FA2 FF FF FF FF 
+0272   0FA6 FF FF FF FF 
+0272   0FAA FF FF FF FF 
+0272   0FAE FF FF FF FF 
+0272   0FB2 FF FF FF FF 
+0272   0FB6 FF FF FF FF 
+0272   0FBA FF FF FF FF 
+0272   0FBE FF FF FF FF 
+0272   0FC2 FF FF FF FF 
+0272   0FC6 FF FF FF FF 
+0272   0FCA FF FF FF FF 
+0272   0FCE FF FF FF FF 
+0272   0FD2 FF FF FF FF 
+0272   0FD6 FF FF FF FF 
+0272   0FDA FF FF FF FF 
+0272   0FDE FF FF FF FF 
+0272   0FE2 FF FF FF FF 
+0272   0FE6 FF FF FF FF 
+0272   0FEA FF FF FF FF 
+0272   0FEE FF FF FF FF 
+0272   0FF2 FF FF FF FF 
+0272   0FF6 FF FF FF FF 
+0272   0FFA FF FF FF FF 
+0272   0FFE FF FF FF FF 
+0272   1002 FF FF FF FF 
+0272   1006 FF FF FF FF 
+0272   100A FF FF FF FF 
+0272   100E FF FF FF FF 
+0272   1012 FF FF FF FF 
+0272   1016 FF FF FF FF 
+0272   101A FF FF FF FF 
+0272   101E FF FF FF FF 
+0272   1022 FF FF FF FF 
+0272   1026 FF FF FF FF 
+0272   102A FF FF FF FF 
+0272   102E FF FF FF FF 
+0272   1032 FF FF FF FF 
+0272   1036 FF FF FF FF 
+0272   103A FF FF FF FF 
+0272   103E FF FF FF FF 
+0272   1042 FF FF FF FF 
+0272   1046 FF FF FF FF 
+0272   104A FF FF FF FF 
+0272   104E FF FF FF FF 
+0272   1052 FF FF FF FF 
+0272   1056 FF FF FF FF 
+0272   105A FF FF FF FF 
+0272   105E FF FF FF FF 
+0272   1062 FF FF FF FF 
+0272   1066 FF FF FF FF 
+0272   106A FF FF FF FF 
+0272   106E FF FF FF FF 
+0272   1072 FF FF FF FF 
+0272   1076 FF FF FF FF 
+0272   107A FF FF FF FF 
+0272   107E FF FF FF FF 
+0272   1082 FF FF FF FF 
+0272   1086 FF FF FF FF 
+0272   108A FF FF FF FF 
+0272   108E FF FF FF FF 
+0272   1092 FF FF FF FF 
+0272   1096 FF FF FF FF 
+0272   109A FF FF FF FF 
+0272   109E FF FF FF FF 
+0272   10A2 FF FF FF FF 
+0272   10A6 FF FF FF FF 
+0272   10AA FF FF FF FF 
+0272   10AE FF FF FF FF 
+0272   10B2 FF FF FF FF 
+0272   10B6 FF FF FF FF 
+0272   10BA FF FF FF FF 
+0272   10BE FF FF FF FF 
+0272   10C2 FF FF FF FF 
+0272   10C6 FF FF FF FF 
+0272   10CA FF FF FF FF 
+0272   10CE FF FF FF FF 
+0272   10D2 FF FF FF FF 
+0272   10D6 FF FF FF FF 
+0272   10DA FF FF FF FF 
+0272   10DE FF FF FF FF 
+0272   10E2 FF FF FF FF 
+0272   10E6 FF FF FF FF 
+0272   10EA FF FF FF FF 
+0272   10EE FF FF FF FF 
+0272   10F2 FF FF FF FF 
+0272   10F6 FF FF FF FF 
+0272   10FA FF FF FF FF 
+0272   10FE FF FF FF FF 
+0272   1102 FF FF FF FF 
+0272   1106 FF FF FF FF 
+0272   110A FF FF FF FF 
+0272   110E FF FF FF FF 
+0272   1112 FF FF FF FF 
+0272   1116 FF FF FF FF 
+0272   111A FF FF FF FF 
+0272   111E FF FF FF FF 
+0272   1122 FF FF FF FF 
+0272   1126 FF FF FF FF 
+0272   112A FF FF FF FF 
+0272   112E FF FF FF FF 
+0272   1132 FF FF FF FF 
+0272   1136 FF FF FF FF 
+0272   113A FF FF FF FF 
+0272   113E FF FF FF FF 
+0272   1142 FF FF FF FF 
+0272   1146 FF FF FF FF 
+0272   114A FF FF FF FF 
+0272   114E FF FF FF FF 
+0272   1152 FF FF FF FF 
+0272   1156 FF FF FF FF 
+0272   115A FF FF FF FF 
+0272   115E FF FF FF FF 
+0272   1162 FF FF FF FF 
+0272   1166 FF FF FF FF 
+0272   116A FF FF FF FF 
+0272   116E FF FF FF FF 
+0272   1172 FF FF FF FF 
+0272   1176 FF FF FF FF 
+0272   117A FF FF FF FF 
+0272   117E FF FF FF FF 
+0272   1182 FF FF FF FF 
+0272   1186 FF FF FF FF 
+0272   118A FF FF FF FF 
+0272   118E FF FF FF FF 
+0272   1192 FF FF FF FF 
+0272   1196 FF FF FF FF 
+0272   119A FF FF FF FF 
+0272   119E FF FF FF FF 
+0272   11A2 FF FF FF FF 
+0272   11A6 FF FF FF FF 
+0272   11AA FF FF FF FF 
+0272   11AE FF FF FF FF 
+0272   11B2 FF FF FF FF 
+0272   11B6 FF FF FF FF 
+0272   11BA FF FF FF FF 
+0272   11BE FF FF FF FF 
+0272   11C2 FF FF FF FF 
+0272   11C6 FF FF FF FF 
+0272   11CA FF FF FF FF 
+0272   11CE FF FF FF FF 
+0272   11D2 FF FF FF FF 
+0272   11D6 FF FF FF FF 
+0272   11DA FF FF FF FF 
+0272   11DE FF FF FF FF 
+0272   11E2 FF FF FF FF 
+0272   11E6 FF FF FF FF 
+0272   11EA FF FF FF FF 
+0272   11EE FF FF FF FF 
+0272   11F2 FF FF FF FF 
+0272   11F6 FF FF FF FF 
+0272   11FA FF FF FF FF 
+0272   11FE FF FF FF FF 
+0272   1202 FF FF FF FF 
+0272   1206 FF FF FF FF 
+0272   120A FF FF FF FF 
+0272   120E FF FF FF FF 
+0272   1212 FF FF FF FF 
+0272   1216 FF FF FF FF 
+0272   121A FF FF FF FF 
+0272   121E FF FF FF FF 
+0272   1222 FF FF FF FF 
+0272   1226 FF FF FF FF 
+0272   122A FF FF FF FF 
+0272   122E FF FF FF FF 
+0272   1232 FF FF FF FF 
+0272   1236 FF FF FF FF 
+0272   123A FF FF FF FF 
+0272   123E FF FF FF FF 
+0272   1242 FF FF FF FF 
+0272   1246 FF FF FF FF 
+0272   124A FF FF FF FF 
+0272   124E FF FF FF FF 
+0272   1252 FF FF FF FF 
+0272   1256 FF FF FF FF 
+0272   125A FF FF FF FF 
+0272   125E FF FF FF FF 
+0272   1262 FF FF FF FF 
+0272   1266 FF FF FF FF 
+0272   126A FF FF FF FF 
+0272   126E FF FF FF FF 
+0272   1272 FF FF FF FF 
+0272   1276 FF FF FF FF 
+0272   127A FF FF FF FF 
+0272   127E FF FF FF FF 
+0272   1282 FF FF FF FF 
+0272   1286 FF FF FF FF 
+0272   128A FF FF FF FF 
+0272   128E FF FF FF FF 
+0272   1292 FF FF FF FF 
+0272   1296 FF FF FF FF 
+0272   129A FF FF FF FF 
+0272   129E FF FF FF FF 
+0272   12A2 FF FF FF FF 
+0272   12A6 FF FF FF FF 
+0272   12AA FF FF FF FF 
+0272   12AE FF FF FF FF 
+0272   12B2 FF FF FF FF 
+0272   12B6 FF FF FF FF 
+0272   12BA FF FF FF FF 
+0272   12BE FF FF FF FF 
+0272   12C2 FF FF FF FF 
+0272   12C6 FF FF FF FF 
+0272   12CA FF FF FF FF 
+0272   12CE FF FF FF FF 
+0272   12D2 FF FF FF FF 
+0272   12D6 FF FF FF FF 
+0272   12DA FF FF FF FF 
+0272   12DE FF FF FF FF 
+0272   12E2 FF FF FF FF 
+0272   12E6 FF FF FF FF 
+0272   12EA FF FF FF FF 
+0272   12EE FF FF FF FF 
+0272   12F2 FF FF FF FF 
+0272   12F6 FF FF FF FF 
+0272   12FA FF FF FF FF 
+0272   12FE FF FF FF FF 
+0272   1302 FF FF FF FF 
+0272   1306 FF FF FF FF 
+0272   130A FF FF FF FF 
+0272   130E FF FF FF FF 
+0272   1312 FF FF FF FF 
+0272   1316 FF FF FF FF 
+0272   131A FF FF FF FF 
+0272   131E FF FF FF FF 
+0272   1322 FF FF FF FF 
+0272   1326 FF FF FF FF 
+0272   132A FF FF FF FF 
+0272   132E FF FF FF FF 
+0272   1332 FF FF FF FF 
+0272   1336 FF FF FF FF 
+0272   133A FF FF FF FF 
+0272   133E FF FF FF FF 
+0272   1342 FF FF FF FF 
+0272   1346 FF FF FF FF 
+0272   134A FF FF FF FF 
+0272   134E FF FF FF FF 
+0272   1352 FF FF FF FF 
+0272   1356 FF FF FF FF 
+0272   135A FF FF FF FF 
+0272   135E FF FF FF FF 
+0272   1362 FF FF FF FF 
+0272   1366 FF FF FF FF 
+0272   136A FF FF FF FF 
+0272   136E FF FF FF FF 
+0272   1372 FF FF FF FF 
+0272   1376 FF FF FF FF 
+0272   137A FF FF FF FF 
+0272   137E FF FF FF FF 
+0272   1382 FF FF FF FF 
+0272   1386 FF FF FF FF 
+0272   138A FF FF FF FF 
+0272   138E FF FF FF FF 
+0272   1392 FF FF FF FF 
+0272   1396 FF FF FF FF 
+0272   139A FF FF FF FF 
+0272   139E FF FF FF FF 
+0272   13A2 FF FF FF FF 
+0272   13A6 FF FF FF FF 
+0272   13AA FF FF FF FF 
+0272   13AE FF FF FF FF 
+0272   13B2 FF FF FF FF 
+0272   13B6 FF FF FF FF 
+0272   13BA FF FF FF FF 
+0272   13BE FF FF FF FF 
+0272   13C2 FF FF FF FF 
+0272   13C6 FF FF FF FF 
+0272   13CA FF FF FF FF 
+0272   13CE FF FF FF FF 
+0272   13D2 FF FF FF FF 
+0272   13D6 FF FF FF FF 
+0272   13DA FF FF FF FF 
+0272   13DE FF FF FF FF 
+0272   13E2 FF FF FF FF 
+0272   13E6 FF FF FF FF 
+0272   13EA FF FF FF FF 
+0272   13EE FF FF FF FF 
+0272   13F2 FF FF FF FF 
+0272   13F6 FF FF FF FF 
+0272   13FA FF FF FF FF 
+0272   13FE FF FF FF FF 
+0272   1402 FF FF FF FF 
+0272   1406 FF FF FF FF 
+0272   140A FF FF FF FF 
+0272   140E FF FF FF FF 
+0272   1412 FF FF FF FF 
+0272   1416 FF FF FF FF 
+0272   141A FF FF FF FF 
+0272   141E FF FF FF FF 
+0272   1422 FF FF FF FF 
+0272   1426 FF FF FF FF 
+0272   142A FF FF FF FF 
+0272   142E FF FF FF FF 
+0272   1432 FF FF FF FF 
+0272   1436 FF FF FF FF 
+0272   143A FF FF FF FF 
+0272   143E FF FF FF FF 
+0272   1442 FF FF FF FF 
+0272   1446 FF FF FF FF 
+0272   144A FF FF FF FF 
+0272   144E FF FF FF FF 
+0272   1452 FF FF FF FF 
+0272   1456 FF FF FF FF 
+0272   145A FF FF FF FF 
+0272   145E FF FF FF FF 
+0272   1462 FF FF FF FF 
+0272   1466 FF FF FF FF 
+0272   146A FF FF FF FF 
+0272   146E FF FF FF FF 
+0272   1472 FF FF FF FF 
+0272   1476 FF FF FF FF 
+0272   147A FF FF FF FF 
+0272   147E FF FF FF FF 
+0272   1482 FF FF FF FF 
+0272   1486 FF FF FF FF 
+0272   148A FF FF FF FF 
+0272   148E FF FF FF FF 
+0272   1492 FF FF FF FF 
+0272   1496 FF FF FF FF 
+0272   149A FF FF FF FF 
+0272   149E FF FF FF FF 
+0272   14A2 FF FF FF FF 
+0272   14A6 FF FF FF FF 
+0272   14AA FF FF FF FF 
+0272   14AE FF FF FF FF 
+0272   14B2 FF FF FF FF 
+0272   14B6 FF FF FF FF 
+0272   14BA FF FF FF FF 
+0272   14BE FF FF FF FF 
+0272   14C2 FF FF FF FF 
+0272   14C6 FF FF FF FF 
+0272   14CA FF FF FF FF 
+0272   14CE FF FF FF FF 
+0272   14D2 FF FF FF FF 
+0272   14D6 FF FF FF FF 
+0272   14DA FF FF FF FF 
+0272   14DE FF FF FF FF 
+0272   14E2 FF FF FF FF 
+0272   14E6 FF FF FF FF 
+0272   14EA FF FF FF FF 
+0272   14EE FF FF FF FF 
+0272   14F2 FF FF FF FF 
+0272   14F6 FF FF FF FF 
+0272   14FA FF FF FF FF 
+0272   14FE FF FF FF FF 
+0272   1502 FF FF FF FF 
+0272   1506 FF FF FF FF 
+0272   150A FF FF FF FF 
+0272   150E FF FF FF FF 
+0272   1512 FF FF FF FF 
+0272   1516 FF FF FF FF 
+0272   151A FF FF FF FF 
+0272   151E FF FF FF FF 
+0272   1522 FF FF FF FF 
+0272   1526 FF FF FF FF 
+0272   152A FF FF FF FF 
+0272   152E FF FF FF FF 
+0272   1532 FF FF FF FF 
+0272   1536 FF FF FF FF 
+0272   153A FF FF FF FF 
+0272   153E FF FF FF FF 
+0272   1542 FF FF FF FF 
+0272   1546 FF FF FF FF 
+0272   154A FF FF FF FF 
+0272   154E FF FF FF FF 
+0272   1552 FF FF FF FF 
+0272   1556 FF FF FF FF 
+0272   155A FF FF FF FF 
+0272   155E FF FF FF FF 
+0272   1562 FF FF FF FF 
+0272   1566 FF FF FF FF 
+0272   156A FF FF FF FF 
+0272   156E FF FF FF FF 
+0272   1572 FF FF FF FF 
+0272   1576 FF FF FF FF 
+0272   157A FF FF FF FF 
+0272   157E FF FF FF FF 
+0272   1582 FF FF FF FF 
+0272   1586 FF FF FF FF 
+0272   158A FF FF FF FF 
+0272   158E FF FF FF FF 
+0272   1592 FF FF FF FF 
+0272   1596 FF FF FF FF 
+0272   159A FF FF FF FF 
+0272   159E FF FF FF FF 
+0272   15A2 FF FF FF FF 
+0272   15A6 FF FF FF FF 
+0272   15AA FF FF FF FF 
+0272   15AE FF FF FF FF 
+0272   15B2 FF FF FF FF 
+0272   15B6 FF FF FF FF 
+0272   15BA FF FF FF FF 
+0272   15BE FF FF FF FF 
+0272   15C2 FF FF FF FF 
+0272   15C6 FF FF FF FF 
+0272   15CA FF FF FF FF 
+0272   15CE FF FF FF FF 
+0272   15D2 FF FF FF FF 
+0272   15D6 FF FF FF FF 
+0272   15DA FF FF FF FF 
+0272   15DE FF FF FF FF 
+0272   15E2 FF FF FF FF 
+0272   15E6 FF FF FF FF 
+0272   15EA FF FF FF FF 
+0272   15EE FF FF FF FF 
+0272   15F2 FF FF FF FF 
+0272   15F6 FF FF FF FF 
+0272   15FA FF FF FF FF 
+0272   15FE FF FF FF FF 
+0272   1602 FF FF FF FF 
+0272   1606 FF FF FF FF 
+0272   160A FF FF FF FF 
+0272   160E FF FF FF FF 
+0272   1612 FF FF FF FF 
+0272   1616 FF FF FF FF 
+0272   161A FF FF FF FF 
+0272   161E FF FF FF FF 
+0272   1622 FF FF FF FF 
+0272   1626 FF FF FF FF 
+0272   162A FF FF FF FF 
+0272   162E FF FF FF FF 
+0272   1632 FF FF FF FF 
+0272   1636 FF FF FF FF 
+0272   163A FF FF FF FF 
+0272   163E FF FF FF FF 
+0272   1642 FF FF FF FF 
+0272   1646 FF FF FF FF 
+0272   164A FF FF FF FF 
+0272   164E FF FF FF FF 
+0272   1652 FF FF FF FF 
+0272   1656 FF FF FF FF 
+0272   165A FF FF FF FF 
+0272   165E FF FF FF FF 
+0272   1662 FF FF FF FF 
+0272   1666 FF FF FF FF 
+0272   166A FF FF FF FF 
+0272   166E FF FF FF FF 
+0272   1672 FF FF FF FF 
+0272   1676 FF FF FF FF 
+0272   167A FF FF FF FF 
+0272   167E FF FF FF FF 
+0272   1682 FF FF FF FF 
+0272   1686 FF FF FF FF 
+0272   168A FF FF FF FF 
+0272   168E FF FF FF FF 
+0272   1692 FF FF FF FF 
+0272   1696 FF FF FF FF 
+0272   169A FF FF FF FF 
+0272   169E FF FF FF FF 
+0272   16A2 FF FF FF FF 
+0272   16A6 FF FF FF FF 
+0272   16AA FF FF FF FF 
+0272   16AE FF FF FF FF 
+0272   16B2 FF FF FF FF 
+0272   16B6 FF FF FF FF 
+0272   16BA FF FF FF FF 
+0272   16BE FF FF FF FF 
+0272   16C2 FF FF FF FF 
+0272   16C6 FF FF FF FF 
+0272   16CA FF FF FF FF 
+0272   16CE FF FF FF FF 
+0272   16D2 FF FF FF FF 
+0272   16D6 FF FF FF FF 
+0272   16DA FF FF FF FF 
+0272   16DE FF FF FF FF 
+0272   16E2 FF FF FF FF 
+0272   16E6 FF FF FF FF 
+0272   16EA FF FF FF FF 
+0272   16EE FF FF FF FF 
+0272   16F2 FF FF FF FF 
+0272   16F6 FF FF FF FF 
+0272   16FA FF FF FF FF 
+0272   16FE FF FF FF FF 
+0272   1702 FF FF FF FF 
+0272   1706 FF FF FF FF 
+0272   170A FF FF FF FF 
+0272   170E FF FF FF FF 
+0272   1712 FF FF FF FF 
+0272   1716 FF FF FF FF 
+0272   171A FF FF FF FF 
+0272   171E FF FF FF FF 
+0272   1722 FF FF FF FF 
+0272   1726 FF FF FF FF 
+0272   172A FF FF FF FF 
+0272   172E FF FF FF FF 
+0272   1732 FF FF FF FF 
+0272   1736 FF FF FF FF 
+0272   173A FF FF FF FF 
+0272   173E FF FF FF FF 
+0272   1742 FF FF FF FF 
+0272   1746 FF FF FF FF 
+0272   174A FF FF FF FF 
+0272   174E FF FF FF FF 
+0272   1752 FF FF FF FF 
+0272   1756 FF FF FF FF 
+0272   175A FF FF FF FF 
+0272   175E FF FF FF FF 
+0272   1762 FF FF FF FF 
+0272   1766 FF FF FF FF 
+0272   176A FF FF FF FF 
+0272   176E FF FF FF FF 
+0272   1772 FF FF FF FF 
+0272   1776 FF FF FF FF 
+0272   177A FF FF FF FF 
+0272   177E FF FF FF FF 
+0272   1782 FF FF FF FF 
+0272   1786 FF FF FF FF 
+0272   178A FF FF FF FF 
+0272   178E FF FF FF FF 
+0272   1792 FF FF FF FF 
+0272   1796 FF FF FF FF 
+0272   179A FF FF FF FF 
+0272   179E FF FF FF FF 
+0272   17A2 FF FF FF FF 
+0272   17A6 FF FF FF FF 
+0272   17AA FF FF FF FF 
+0272   17AE FF FF FF FF 
+0272   17B2 FF FF FF FF 
+0272   17B6 FF FF FF FF 
+0272   17BA FF FF FF FF 
+0272   17BE FF FF FF FF 
+0272   17C2 FF FF FF FF 
+0272   17C6 FF FF FF FF 
+0272   17CA FF FF FF FF 
+0272   17CE FF FF FF FF 
+0272   17D2 FF FF FF FF 
+0272   17D6 FF FF FF FF 
+0272   17DA FF FF FF FF 
+0272   17DE FF FF FF FF 
+0272   17E2 FF FF FF FF 
+0272   17E6 FF FF FF FF 
+0272   17EA FF FF FF FF 
+0272   17EE FF FF FF FF 
+0272   17F2 FF FF FF FF 
+0272   17F6 FF FF FF FF 
+0272   17FA FF FF FF FF 
+0272   17FE FF FF FF FF 
+0272   1802 FF FF FF FF 
+0272   1806 FF FF FF FF 
+0272   180A FF FF FF FF 
+0272   180E FF FF FF FF 
+0272   1812 FF FF FF FF 
+0272   1816 FF FF FF FF 
+0272   181A FF FF FF FF 
+0272   181E FF FF FF FF 
+0272   1822 FF FF FF FF 
+0272   1826 FF FF FF FF 
+0272   182A FF FF FF FF 
+0272   182E FF FF FF FF 
+0272   1832 FF FF FF FF 
+0272   1836 FF FF FF FF 
+0272   183A FF FF FF FF 
+0272   183E FF FF FF FF 
+0272   1842 FF FF FF FF 
+0272   1846 FF FF FF FF 
+0272   184A FF FF FF FF 
+0272   184E FF FF FF FF 
+0272   1852 FF FF FF FF 
+0272   1856 FF FF FF FF 
+0272   185A FF FF FF FF 
+0272   185E FF FF FF FF 
+0272   1862 FF FF FF FF 
+0272   1866 FF FF FF FF 
+0272   186A FF FF FF FF 
+0272   186E FF FF FF FF 
+0272   1872 FF FF FF FF 
+0272   1876 FF FF FF FF 
+0272   187A FF FF FF FF 
+0272   187E FF FF FF FF 
+0272   1882 FF FF FF FF 
+0272   1886 FF FF FF FF 
+0272   188A FF FF FF FF 
+0272   188E FF FF FF FF 
+0272   1892 FF FF FF FF 
+0272   1896 FF FF FF FF 
+0272   189A FF FF FF FF 
+0272   189E FF FF FF FF 
+0272   18A2 FF FF FF FF 
+0272   18A6 FF FF FF FF 
+0272   18AA FF FF FF FF 
+0272   18AE FF FF FF FF 
+0272   18B2 FF FF FF FF 
+0272   18B6 FF FF FF FF 
+0272   18BA FF FF FF FF 
+0272   18BE FF FF FF FF 
+0272   18C2 FF FF FF FF 
+0272   18C6 FF FF FF FF 
+0272   18CA FF FF FF FF 
+0272   18CE FF FF FF FF 
+0272   18D2 FF FF FF FF 
+0272   18D6 FF FF FF FF 
+0272   18DA FF FF FF FF 
+0272   18DE FF FF FF FF 
+0272   18E2 FF FF FF FF 
+0272   18E6 FF FF FF FF 
+0272   18EA FF FF FF FF 
+0272   18EE FF FF FF FF 
+0272   18F2 FF FF FF FF 
+0272   18F6 FF FF FF FF 
+0272   18FA FF FF FF FF 
+0272   18FE FF FF FF FF 
+0272   1902 FF FF FF FF 
+0272   1906 FF FF FF FF 
+0272   190A FF FF FF FF 
+0272   190E FF FF FF FF 
+0272   1912 FF FF FF FF 
+0272   1916 FF FF FF FF 
+0272   191A FF FF FF FF 
+0272   191E FF FF FF FF 
+0272   1922 FF FF FF FF 
+0272   1926 FF FF FF FF 
+0272   192A FF FF FF FF 
+0272   192E FF FF FF FF 
+0272   1932 FF FF FF FF 
+0272   1936 FF FF FF FF 
+0272   193A FF FF FF FF 
+0272   193E FF FF FF FF 
+0272   1942 FF FF FF FF 
+0272   1946 FF FF FF FF 
+0272   194A FF FF FF FF 
+0272   194E FF FF FF FF 
+0272   1952 FF FF FF FF 
+0272   1956 FF FF FF FF 
+0272   195A FF FF FF FF 
+0272   195E FF FF FF FF 
+0272   1962 FF FF FF FF 
+0272   1966 FF FF FF FF 
+0272   196A FF FF FF FF 
+0272   196E FF FF FF FF 
+0272   1972 FF FF FF FF 
+0272   1976 FF FF FF FF 
+0272   197A FF FF FF FF 
+0272   197E FF FF FF FF 
+0272   1982 FF FF FF FF 
+0272   1986 FF FF FF FF 
+0272   198A FF FF FF FF 
+0272   198E FF FF FF FF 
+0272   1992 FF FF FF FF 
+0272   1996 FF FF FF FF 
+0272   199A FF FF FF FF 
+0272   199E FF FF FF FF 
+0272   19A2 FF FF FF FF 
+0272   19A6 FF FF FF FF 
+0272   19AA FF FF FF FF 
+0272   19AE FF FF FF FF 
+0272   19B2 FF FF FF FF 
+0272   19B6 FF FF FF FF 
+0272   19BA FF FF FF FF 
+0272   19BE FF FF FF FF 
+0272   19C2 FF FF FF FF 
+0272   19C6 FF FF FF FF 
+0272   19CA FF FF FF FF 
+0272   19CE FF FF FF FF 
+0272   19D2 FF FF FF FF 
+0272   19D6 FF FF FF FF 
+0272   19DA FF FF FF FF 
+0272   19DE FF FF FF FF 
+0272   19E2 FF FF FF FF 
+0272   19E6 FF FF FF FF 
+0272   19EA FF FF FF FF 
+0272   19EE FF FF FF FF 
+0272   19F2 FF FF FF FF 
+0272   19F6 FF FF FF FF 
+0272   19FA FF FF FF FF 
+0272   19FE FF FF FF FF 
+0272   1A02 FF FF FF FF 
+0272   1A06 FF FF FF FF 
+0272   1A0A FF FF FF FF 
+0272   1A0E FF FF FF FF 
+0272   1A12 FF FF FF FF 
+0272   1A16 FF FF FF FF 
+0272   1A1A FF FF FF FF 
+0272   1A1E FF FF FF FF 
+0272   1A22 FF FF FF FF 
+0272   1A26 FF FF FF FF 
+0272   1A2A FF FF FF FF 
+0272   1A2E FF FF FF FF 
+0272   1A32 FF FF FF FF 
+0272   1A36 FF FF FF FF 
+0272   1A3A FF FF FF FF 
+0272   1A3E FF FF FF FF 
+0272   1A42 FF FF FF FF 
+0272   1A46 FF FF FF FF 
+0272   1A4A FF FF FF FF 
+0272   1A4E FF FF FF FF 
+0272   1A52 FF FF FF FF 
+0272   1A56 FF FF FF FF 
+0272   1A5A FF FF FF FF 
+0272   1A5E FF FF FF FF 
+0272   1A62 FF FF FF FF 
+0272   1A66 FF FF FF FF 
+0272   1A6A FF FF FF FF 
+0272   1A6E FF FF FF FF 
+0272   1A72 FF FF FF FF 
+0272   1A76 FF FF FF FF 
+0272   1A7A FF FF FF FF 
+0272   1A7E FF FF FF FF 
+0272   1A82 FF FF FF FF 
+0272   1A86 FF FF FF FF 
+0272   1A8A FF FF FF FF 
+0272   1A8E FF FF FF FF 
+0272   1A92 FF FF FF FF 
+0272   1A96 FF FF FF FF 
+0272   1A9A FF FF FF FF 
+0272   1A9E FF FF FF FF 
+0272   1AA2 FF FF FF FF 
+0272   1AA6 FF FF FF FF 
+0272   1AAA FF FF FF FF 
+0272   1AAE FF FF FF FF 
+0272   1AB2 FF FF FF FF 
+0272   1AB6 FF FF FF FF 
+0272   1ABA FF FF FF FF 
+0272   1ABE FF FF FF FF 
+0272   1AC2 FF FF FF FF 
+0272   1AC6 FF FF FF FF 
+0272   1ACA FF FF FF FF 
+0272   1ACE FF FF FF FF 
+0272   1AD2 FF FF FF FF 
+0272   1AD6 FF FF FF FF 
+0272   1ADA FF FF FF FF 
+0272   1ADE FF FF FF FF 
+0272   1AE2 FF FF FF FF 
+0272   1AE6 FF FF FF FF 
+0272   1AEA FF FF FF FF 
+0272   1AEE FF FF FF FF 
+0272   1AF2 FF FF FF FF 
+0272   1AF6 FF FF FF FF 
+0272   1AFA FF FF FF FF 
+0272   1AFE FF FF FF FF 
+0272   1B02 FF FF FF FF 
+0272   1B06 FF FF FF FF 
+0272   1B0A FF FF FF FF 
+0272   1B0E FF FF FF FF 
+0272   1B12 FF FF FF FF 
+0272   1B16 FF FF FF FF 
+0272   1B1A FF FF FF FF 
+0272   1B1E FF FF FF FF 
+0272   1B22 FF FF FF FF 
+0272   1B26 FF FF FF FF 
+0272   1B2A FF FF FF FF 
+0272   1B2E FF FF FF FF 
+0272   1B32 FF FF FF FF 
+0272   1B36 FF FF FF FF 
+0272   1B3A FF FF FF FF 
+0272   1B3E FF FF FF FF 
+0272   1B42 FF FF FF FF 
+0272   1B46 FF FF FF FF 
+0272   1B4A FF FF FF FF 
+0272   1B4E FF FF FF FF 
+0272   1B52 FF FF FF FF 
+0272   1B56 FF FF FF FF 
+0272   1B5A FF FF FF FF 
+0272   1B5E FF FF FF FF 
+0272   1B62 FF FF FF FF 
+0272   1B66 FF FF FF FF 
+0272   1B6A FF FF FF FF 
+0272   1B6E FF FF FF FF 
+0272   1B72 FF FF FF FF 
+0272   1B76 FF FF FF FF 
+0272   1B7A FF FF FF FF 
+0272   1B7E FF FF FF FF 
+0272   1B82 FF FF FF FF 
+0272   1B86 FF FF FF FF 
+0272   1B8A FF FF FF FF 
+0272   1B8E FF FF FF FF 
+0272   1B92 FF FF FF FF 
+0272   1B96 FF FF FF FF 
+0272   1B9A FF FF FF FF 
+0272   1B9E FF FF FF FF 
+0272   1BA2 FF FF FF FF 
+0272   1BA6 FF FF FF FF 
+0272   1BAA FF FF FF FF 
+0272   1BAE FF FF FF FF 
+0272   1BB2 FF FF FF FF 
+0272   1BB6 FF FF FF FF 
+0272   1BBA FF FF FF FF 
+0272   1BBE FF FF FF FF 
+0272   1BC2 FF FF FF FF 
+0272   1BC6 FF FF FF FF 
+0272   1BCA FF FF FF FF 
+0272   1BCE FF FF FF FF 
+0272   1BD2 FF FF FF FF 
+0272   1BD6 FF FF FF FF 
+0272   1BDA FF FF FF FF 
+0272   1BDE FF FF FF FF 
+0272   1BE2 FF FF FF FF 
+0272   1BE6 FF FF FF FF 
+0272   1BEA FF FF FF FF 
+0272   1BEE FF FF FF FF 
+0272   1BF2 FF FF FF FF 
+0272   1BF6 FF FF FF FF 
+0272   1BFA FF FF FF FF 
+0272   1BFE FF FF FF FF 
+0272   1C02 FF FF FF FF 
+0272   1C06 FF FF FF FF 
+0272   1C0A FF FF FF FF 
+0272   1C0E FF FF FF FF 
+0272   1C12 FF FF FF FF 
+0272   1C16 FF FF FF FF 
+0272   1C1A FF FF FF FF 
+0272   1C1E FF FF FF FF 
+0272   1C22 FF FF FF FF 
+0272   1C26 FF FF FF FF 
+0272   1C2A FF FF FF FF 
+0272   1C2E FF FF FF FF 
+0272   1C32 FF FF FF FF 
+0272   1C36 FF FF FF FF 
+0272   1C3A FF FF FF FF 
+0272   1C3E FF FF FF FF 
+0272   1C42 FF FF FF FF 
+0272   1C46 FF FF FF FF 
+0272   1C4A FF FF FF FF 
+0272   1C4E FF FF FF FF 
+0272   1C52 FF FF FF FF 
+0272   1C56 FF FF FF FF 
+0272   1C5A FF FF FF FF 
+0272   1C5E FF FF FF FF 
+0272   1C62 FF FF FF FF 
+0272   1C66 FF FF FF FF 
+0272   1C6A FF FF FF FF 
+0272   1C6E FF FF FF FF 
+0272   1C72 FF FF FF FF 
+0272   1C76 FF FF FF FF 
+0272   1C7A FF FF FF FF 
+0272   1C7E FF FF FF FF 
+0272   1C82 FF FF FF FF 
+0272   1C86 FF FF FF FF 
+0272   1C8A FF FF FF FF 
+0272   1C8E FF FF FF FF 
+0272   1C92 FF FF FF FF 
+0272   1C96 FF FF FF FF 
+0272   1C9A FF FF FF FF 
+0272   1C9E FF FF FF FF 
+0272   1CA2 FF FF FF FF 
+0272   1CA6 FF FF FF FF 
+0272   1CAA FF FF FF FF 
+0272   1CAE FF FF FF FF 
+0272   1CB2 FF FF FF FF 
+0272   1CB6 FF FF FF FF 
+0272   1CBA FF FF FF FF 
+0272   1CBE FF FF FF FF 
+0272   1CC2 FF FF FF FF 
+0272   1CC6 FF FF FF FF 
+0272   1CCA FF FF FF FF 
+0272   1CCE FF FF FF FF 
+0272   1CD2 FF FF FF FF 
+0272   1CD6 FF FF FF FF 
+0272   1CDA FF FF FF FF 
+0272   1CDE FF FF FF FF 
+0272   1CE2 FF FF FF FF 
+0272   1CE6 FF FF FF FF 
+0272   1CEA FF FF FF FF 
+0272   1CEE FF FF FF FF 
+0272   1CF2 FF FF FF FF 
+0272   1CF6 FF FF FF FF 
+0272   1CFA FF FF FF FF 
+0272   1CFE FF FF FF FF 
+0272   1D02 FF FF FF FF 
+0272   1D06 FF FF FF FF 
+0272   1D0A FF FF FF FF 
+0272   1D0E FF FF FF FF 
+0272   1D12 FF FF FF FF 
+0272   1D16 FF FF FF FF 
+0272   1D1A FF FF FF FF 
+0272   1D1E FF FF FF FF 
+0272   1D22 FF FF FF FF 
+0272   1D26 FF FF FF FF 
+0272   1D2A FF FF FF FF 
+0272   1D2E FF FF FF FF 
+0272   1D32 FF FF FF FF 
+0272   1D36 FF FF FF FF 
+0272   1D3A FF FF FF FF 
+0272   1D3E FF FF FF FF 
+0272   1D42 FF FF FF FF 
+0272   1D46 FF FF FF FF 
+0272   1D4A FF FF FF FF 
+0272   1D4E FF FF FF FF 
+0272   1D52 FF FF FF FF 
+0272   1D56 FF FF FF FF 
+0272   1D5A FF FF FF FF 
+0272   1D5E FF FF FF FF 
+0272   1D62 FF FF FF FF 
+0272   1D66 FF FF FF FF 
+0272   1D6A FF FF FF FF 
+0272   1D6E FF FF FF FF 
+0272   1D72 FF FF FF FF 
+0272   1D76 FF FF FF FF 
+0272   1D7A FF FF FF FF 
+0272   1D7E FF FF FF FF 
+0272   1D82 FF FF FF FF 
+0272   1D86 FF FF FF FF 
+0272   1D8A FF FF FF FF 
+0272   1D8E FF FF FF FF 
+0272   1D92 FF FF FF FF 
+0272   1D96 FF FF FF FF 
+0272   1D9A FF FF FF FF 
+0272   1D9E FF FF FF FF 
+0272   1DA2 FF FF FF FF 
+0272   1DA6 FF FF FF FF 
+0272   1DAA FF FF FF FF 
+0272   1DAE FF FF FF FF 
+0272   1DB2 FF FF FF FF 
+0272   1DB6 FF FF FF FF 
+0272   1DBA FF FF FF FF 
+0272   1DBE FF FF FF FF 
+0272   1DC2 FF FF FF FF 
+0272   1DC6 FF FF FF FF 
+0272   1DCA FF FF FF FF 
+0272   1DCE FF FF FF FF 
+0272   1DD2 FF FF FF FF 
+0272   1DD6 FF FF FF FF 
+0272   1DDA FF FF FF FF 
+0272   1DDE FF FF FF FF 
+0272   1DE2 FF FF FF FF 
+0272   1DE6 FF FF FF FF 
+0272   1DEA FF FF FF FF 
+0272   1DEE FF FF FF FF 
+0272   1DF2 FF FF FF FF 
+0272   1DF6 FF FF FF FF 
+0272   1DFA FF FF FF FF 
+0272   1DFE FF FF FF FF 
+0272   1E02 FF FF FF FF 
+0272   1E06 FF FF FF FF 
+0272   1E0A FF FF FF FF 
+0272   1E0E FF FF FF FF 
+0272   1E12 FF FF FF FF 
+0272   1E16 FF FF FF FF 
+0272   1E1A FF FF FF FF 
+0272   1E1E FF FF FF FF 
+0272   1E22 FF FF FF FF 
+0272   1E26 FF FF FF FF 
+0272   1E2A FF FF FF FF 
+0272   1E2E FF FF FF FF 
+0272   1E32 FF FF FF FF 
+0272   1E36 FF FF FF FF 
+0272   1E3A FF FF FF FF 
+0272   1E3E FF FF FF FF 
+0272   1E42 FF FF FF FF 
+0272   1E46 FF FF FF FF 
+0272   1E4A FF FF FF FF 
+0272   1E4E FF FF FF FF 
+0272   1E52 FF FF FF FF 
+0272   1E56 FF FF FF FF 
+0272   1E5A FF FF FF FF 
+0272   1E5E FF FF FF FF 
+0272   1E62 FF FF FF FF 
+0272   1E66 FF FF FF FF 
+0272   1E6A FF FF FF FF 
+0272   1E6E FF FF FF FF 
+0272   1E72 FF FF FF FF 
+0272   1E76 FF FF FF FF 
+0272   1E7A FF FF FF FF 
+0272   1E7E FF FF FF FF 
+0272   1E82 FF FF FF FF 
+0272   1E86 FF FF FF FF 
+0272   1E8A FF FF FF FF 
+0272   1E8E FF FF FF FF 
+0272   1E92 FF FF FF FF 
+0272   1E96 FF FF FF FF 
+0272   1E9A FF FF FF FF 
+0272   1E9E FF FF FF FF 
+0272   1EA2 FF FF FF FF 
+0272   1EA6 FF FF FF FF 
+0272   1EAA FF FF FF FF 
+0272   1EAE FF FF FF FF 
+0272   1EB2 FF FF FF FF 
+0272   1EB6 FF FF FF FF 
+0272   1EBA FF FF FF FF 
+0272   1EBE FF FF FF FF 
+0272   1EC2 FF FF FF FF 
+0272   1EC6 FF FF FF FF 
+0272   1ECA FF FF FF FF 
+0272   1ECE FF FF FF FF 
+0272   1ED2 FF FF FF FF 
+0272   1ED6 FF FF FF FF 
+0272   1EDA FF FF FF FF 
+0272   1EDE FF FF FF FF 
+0272   1EE2 FF FF FF FF 
+0272   1EE6 FF FF FF FF 
+0272   1EEA FF FF FF FF 
+0272   1EEE FF FF FF FF 
+0272   1EF2 FF FF FF FF 
+0272   1EF6 FF FF FF FF 
+0272   1EFA FF FF FF FF 
+0272   1EFE FF FF FF FF 
+0272   1F02 FF FF FF FF 
+0272   1F06 FF FF FF FF 
+0272   1F0A FF FF FF FF 
+0272   1F0E FF FF FF FF 
+0272   1F12 FF FF FF FF 
+0272   1F16 FF FF FF FF 
+0272   1F1A FF FF FF FF 
+0272   1F1E FF FF FF FF 
+0272   1F22 FF FF FF FF 
+0272   1F26 FF FF FF FF 
+0272   1F2A FF FF FF FF 
+0272   1F2E FF FF FF FF 
+0272   1F32 FF FF FF FF 
+0272   1F36 FF FF FF FF 
+0272   1F3A FF FF FF FF 
+0272   1F3E FF FF FF FF 
+0272   1F42 FF FF FF FF 
+0272   1F46 FF FF FF FF 
+0272   1F4A FF FF FF FF 
+0272   1F4E FF FF FF FF 
+0272   1F52 FF FF FF FF 
+0272   1F56 FF FF FF FF 
+0272   1F5A FF FF FF FF 
+0272   1F5E FF FF FF FF 
+0272   1F62 FF FF FF FF 
+0272   1F66 FF FF FF FF 
+0272   1F6A FF FF FF FF 
+0272   1F6E FF FF FF FF 
+0272   1F72 FF FF FF FF 
+0272   1F76 FF FF FF FF 
+0272   1F7A FF FF FF FF 
+0272   1F7E FF FF FF FF 
+0272   1F82 FF FF FF FF 
+0272   1F86 FF FF FF FF 
+0272   1F8A FF FF FF FF 
+0272   1F8E FF FF FF FF 
+0272   1F92 FF FF FF FF 
+0272   1F96 FF FF FF FF 
+0272   1F9A FF FF FF FF 
+0272   1F9E FF FF FF FF 
+0272   1FA2 FF FF FF FF 
+0272   1FA6 FF FF FF FF 
+0272   1FAA FF FF FF FF 
+0272   1FAE FF FF FF FF 
+0272   1FB2 FF FF FF FF 
+0272   1FB6 FF FF FF FF 
+0272   1FBA FF FF FF FF 
+0272   1FBE FF FF FF FF 
+0272   1FC2 FF FF FF FF 
+0272   1FC6 FF FF FF FF 
+0272   1FCA FF FF FF FF 
+0272   1FCE FF FF FF FF 
+0272   1FD2 FF FF FF FF 
+0272   1FD6 FF FF FF FF 
+0272   1FDA FF FF FF FF 
+0272   1FDE FF FF FF FF 
+0272   1FE2 FF FF FF FF 
+0272   1FE6 FF FF FF FF 
+0272   1FEA FF FF FF FF 
+0272   1FEE FF FF FF FF 
+0272   1FF2 FF FF FF FF 
+0272   1FF6 FF FF FF FF 
+0272   1FFA FF FF FF FF 
+0272   1FFE FF FF FF FF 
+0272   2002 FF FF FF FF 
+0272   2006 FF FF FF FF 
+0272   200A FF FF FF FF 
+0272   200E FF FF FF FF 
+0272   2012 FF FF FF FF 
+0272   2016 FF FF FF FF 
+0272   201A FF FF FF FF 
+0272   201E FF FF FF FF 
+0272   2022 FF FF FF FF 
+0272   2026 FF FF FF FF 
+0272   202A FF FF FF FF 
+0272   202E FF FF FF FF 
+0272   2032 FF FF FF FF 
+0272   2036 FF FF FF FF 
+0272   203A FF FF FF FF 
+0272   203E FF FF FF FF 
+0272   2042 FF FF FF FF 
+0272   2046 FF FF FF FF 
+0272   204A FF FF FF FF 
+0272   204E FF FF FF FF 
+0272   2052 FF FF FF FF 
+0272   2056 FF FF FF FF 
+0272   205A FF FF FF FF 
+0272   205E FF FF FF FF 
+0272   2062 FF FF FF FF 
+0272   2066 FF FF FF FF 
+0272   206A FF FF FF FF 
+0272   206E FF FF FF FF 
+0272   2072 FF FF FF FF 
+0272   2076 FF FF FF FF 
+0272   207A FF FF FF FF 
+0272   207E FF FF FF FF 
+0272   2082 FF FF FF FF 
+0272   2086 FF FF FF FF 
+0272   208A FF FF FF FF 
+0272   208E FF FF FF FF 
+0272   2092 FF FF FF FF 
+0272   2096 FF FF FF FF 
+0272   209A FF FF FF FF 
+0272   209E FF FF FF FF 
+0272   20A2 FF FF FF FF 
+0272   20A6 FF FF FF FF 
+0272   20AA FF FF FF FF 
+0272   20AE FF FF FF FF 
+0272   20B2 FF FF FF FF 
+0272   20B6 FF FF FF FF 
+0272   20BA FF FF FF FF 
+0272   20BE FF FF FF FF 
+0272   20C2 FF FF FF FF 
+0272   20C6 FF FF FF FF 
+0272   20CA FF FF FF FF 
+0272   20CE FF FF FF FF 
+0272   20D2 FF FF FF FF 
+0272   20D6 FF FF FF FF 
+0272   20DA FF FF FF FF 
+0272   20DE FF FF FF FF 
+0272   20E2 FF FF FF FF 
+0272   20E6 FF FF FF FF 
+0272   20EA FF FF FF FF 
+0272   20EE FF FF FF FF 
+0272   20F2 FF FF FF FF 
+0272   20F6 FF FF FF FF 
+0272   20FA FF FF FF FF 
+0272   20FE FF FF FF FF 
+0272   2102 FF FF FF FF 
+0272   2106 FF FF FF FF 
+0272   210A FF FF FF FF 
+0272   210E FF FF FF FF 
+0272   2112 FF FF FF FF 
+0272   2116 FF FF FF FF 
+0272   211A FF FF FF FF 
+0272   211E FF FF FF FF 
+0272   2122 FF FF FF FF 
+0272   2126 FF FF FF FF 
+0272   212A FF FF FF FF 
+0272   212E FF FF FF FF 
+0273   2132             board2:		
+0274   2132             
+0275   2132             
+0276   2132             .end
+0277   2132             
+tasm: Number of errors = 0

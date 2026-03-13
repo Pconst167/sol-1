@@ -1,0 +1,13 @@
+                              SPY TREK
+                              --------
+  (You start in a coffin) PUSH LID, PULL CURTAINS (so you won't be seen), EXAMINE SUIT, SEARCH INSIDE POCKET, GET PILL, GET WALLET, EXAMINE WALLET (contains 10 coins), SWALLOW PILL (you fall asleep and end up in a storeroom), OPEN BRIEFCASE, GET BEARD, WEAR IT, GET WIG, WEAR IT, PULL GRATING HARD (it comes off), ENTER HOLE, W, PUSH BUTTON (the conveyor belt starts), E, E, SIT ON BELT (you wind up in the airport), EXAMINE TRAMP, READ SIGN (he's got wife + 6 kids to feed, so...), GIVE COIN * 7 (he gives you a key and an umbrella), GET KEY, GET UMBRELLA, E, BUY CRISPS, UNYON (actually, it's 'onion'! A man - pilot - gets a drink in his eyes - notice this), GET PACKET, OPEN IT, GET ONION, GET PASSPORT (so much for the free stuff in Kellogg's packs!), W, N (here you must wear both wig and beard), SHOW PASSPORT, N, ENTER PLANE, W, OPEN DRAWER, GET KNIFE (the pilot screams...), E, E, TALK PILOT (he can't see), PEEL ONION (with the knife - this helps him), W (the plane lands in Paris)
+
+  LEAVE PLANE, N, W, READ BOARD, ENTER TAXI (to Eiffel Tower), UNLOCK GATE (with the key from the tramp - the stairs are lit), U, D, U, D, U (you've lost some weight), ENTER BALLOON (you're off to Switzerland)
+
+  U, GET SPADE, ENTER CAR, PULL LEVER (the car rises), E (ah! The lake has thawed - need to get there quick, though!), DIG, GET ROD, EXAMINE UMBRELLA (the handle is insulated!), HOOK UMBRELLA ON CABLE, SLIDE DOWN CABLE (to the lake), CAST LINE (you catch a fish), W, GIVE FISH TO CAT (it leaves), GET SKIS, E, S, U, ENTER CAR, PULL LEVER, E, E (you slide downwards), DROP SKIS, ENTER COACH (to get to Venice!)
+
+  E, E, EXAMINE TABLE, GET TABLECLOTH (waiter says "...make a habit" - HINT HINT!!), W, ASK WOMAN TO MAKE HABIT (she makes a monk's suit), GET HABIT, WEAR IT, W, U, U, ENTER GATE (you must wear the habit), W, GET CHOPPER, E, CHOP GOALPOST, GET POLE (for steering the gondola), S, D, D, S, ENTER GONDOLA, E (using the pole), E, GET DOLL, W, W, JUMP, N, U, U, ENTER GATE, E, GIVE DOLL (the girl drops a bible), EXAMINE BIBLE (another hint), W, S, D, D, S, ENTER GONDOLA, E, E, TURN STONE (a passage opens), ENTER PASSAGE (to the chapel - this is the way to get a lit candle out), ASK GIRL TO LIGHT CANDLE, GET CANDLE, ENTER PASSAGE (with the extra light you notice something), REMOVE BRICK (Congratulations, you found some secret plans - dunno what they're for (it's probably in the manual!!))
+
+- Jacob Gunness (sometime in 1992)
+
+

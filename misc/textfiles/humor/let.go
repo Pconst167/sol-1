@@ -1,0 +1,120 @@
+From graeme@zengrange.co.uk Sun Jul 30 18:58:16 1989
+Path: santra!kth!mcvax!uunet!cs.utexas.edu!inebriae!looking!funny-request
+From: graeme@zengrange.co.uk (Graeme Cawsey)
+Newsgroups: rec.humor.funny
+Subject: Like ships in the night
+Keywords: chuckle
+Message-ID: <3714@looking.on.ca>
+Date: 28 Jul 89 10:30:04 GMT
+Sender: funny@looking.on.ca
+Lines: 105
+Approved: funny@looking.on.ca
+Reply-Path: cs.heriot-watt.ac.uk!graeme%zengrange.co.uk
+
+X-Mailer: Elm [version 2.1 PL1]
+
+
+I found the following report, from a ship's master, printed in the August
+1987 edition of 'The Log' journal - it's exact history is unclear but I
+think you might find it amusing.
+
+Reproduced with permission.
+
+
+It is with regret and haste that I write this letter to you, regret that
+such a small misunderstanding could lead to the following circumstances,
+and haste in order that you will get this report before you form your own
+pre-conceived opinions from reports in the world press, for I am sure that
+they will tend to overdramatise the affair.
+
+We had just picked up the pilot and the apprentice had returned from
+changing the 'G' flag for the 'H' and, it being his first trip, was having
+difficulty rolling the 'G' flag up, I therefore proceeded to show  him how.
+Coming to the last part, I told him to 'let go', the lad although willing is
+not too bright, necessitating my having to repeat the order in a sharper
+tone.
+
+At this moment the chief officer appeared from the chart room, having been
+plotting the vessel's progress and, thinking that it was the anchors that
+were being referred to, repeated the 'let go' to the third officer on the
+fo'cstle.  The port anchor having been cleared away but not walked out, was
+promptly let go.  The effect of letting the anchor drop from the 'pipe'
+while the vessel was proceeding at full harbour speed proved too much for
+the windlass brake, and the entire length of the port cable was pulled out
+'by the roots'.  I fear that the damage to the chain locker may be
+extensive.  The braking effect of the port anchor naturally caused the
+vessel to sheer in that direction, right towards the swing bridge that
+spans the tributary to the river up which we were proceeding.
+
+The swing bridge operator showed great presence of mind by opening the
+bridge for my vessel.  Unfortunately, he did not think to stop vehicular
+traffic, the result being that the bridge partly opened and deposited a
+volkswagen, two cyclists, and a cattle truck on the foredeck.  My ship's
+company are at present rounding up the contents of the latter, which from
+the noise I would say were pigs.  In his efforts to stop the progress of
+the vessel, the third officer dropped the starboard anchor, too late to be
+of prcatical use, for it fell on the swing bridge operator's control cabin.
+
+After the port anchor was let go and the vessel started to sheer, I gave a
+double ring full astern on the engine room telegraph and personally rang
+the engine room to order maximum astern revolutions.  I was informed that
+the sea temperature was 53 degs and asked if there was a film tonight.  My
+reply would not add constructively to this report.
+
+Up to now I have confined my report to the activities at the forward end of
+the vessel.  Down aft they were having their own problems.
+
+At the moment the port anchor was let go, the second officer was
+supervising the making fast of the after tug and was lowering the ship's
+towing spring down onto the tug.
+
+The sudden braking effect on the port anchor caused the tug to run in under
+the stern of my vessel just at the moment when the propellers was answering my
+double ring full astern.  The prompt action of the second officer in securing
+the inboard end of the towing spring delayed the sinking of the tug by some
+minutes, and thereby the safe abandoning of that vessel.
+
+It is strange but at the very same moment of letting go the port anchor
+there was a power cut ashore.  The fact that we were passing over a cable
+area at that time might suggest we may have touched something on the river
+bed.  It is perhaps lucky that the high tension cables brought down be the
+foremast were not live, possibly being replaced by the underwater cable, but
+owing to the shore blackout, it is impossible to say where the pylon fell.
+
+It never fails to amaze me the actions and behaviour of foreigners during
+moments of minor crisis.  The pilot for instance is at this moment huddled
+in the corner of my day cabin alternately crooning to himself and crying
+after having consumed a bottle of gin in a time that is worthy of inclusion
+in the Guinness Book of Records.
+
+The tug captain on the other hand reacted violently and had to be
+forcibly restrained by the steward, who has him handcuffed in the ship's
+hospital, where he is telling me to do impossible things with my ship and
+my crew.
+
+I enclose the names and addresses of the drivers and insurance companies of
+the vehicles on my foredeck, which the third officer collected after his
+somewhat hurried evacuation of the fo'cstle.  These particulars will enable
+us to claim for the damage that they did to the railing of the no. one
+hold.
+
+I am enclosing this preliminary report for I am finding it difficult to
+concentrate with the sound of police sirens and their flashing lights.
+
+It is sad to think that had the apprentice realised that there is no need
+to fly pilot flags after dark, none of this would have happened.
+
+For weekly accountability report I will assign the following casualty
+numbers T/750101 to T750119 inclusive.
+
+Yours truly
+Master
+
+
+--
+Edited by Brad Templeton.  MAIL, yes MAIL your jokes to funny@looking.ON.CA
+Attribute the joke's source if at all possible.  I will reply, mailers willing.
+
+Remember: PLEASE spell check and proofread your jokes.
+
+

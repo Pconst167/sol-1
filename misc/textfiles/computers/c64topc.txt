@@ -1,0 +1,146 @@
+This article describes how to connect a Commodore 64 compatible printer to
+an IBM PC compatible computer.  The information originally appeared in an
+article that I wrote for the Tech Forum section of the March 1995 issue of
+Nuts & Volts magazine.  This information may be used and distributed so
+long as proper credit is given to the author and Nuts & Volts magazine.
+Copyright (C) 1995 by John Keyerleber and Nuts & Volts Magazine.
+
+The problem with Commodore 64 compatible printers is that these devices use
+the Commodore synchronous serial interface to communicate with the C64.  An
+IBM PC compatible printer port is a parallel interface, however it is
+possible to use this parallel port to emulate the C64 serial interface by
+constructing a special cable and writing a little bit of software.
+
+The cable is used to connect the PC DB25 pin parallel printer port to the 6
+pin DIN serial port on the C64 compatible printer.  The parts needed are
+one DB25 male connector (Radio Shack #276-1429), one 6 pin DIN plug (RS
+#274-020), and some six conductor cable (RS #278-874 or equivalent).  Note
+that the cable length should be kept to less than six feet.  The wiring
+connections and signal descriptions for this cable are given as follows:
+
+Commodore 64 DIN plug pin:    Parallel printer DB25 connector pin:
+     1 (SRQ IN)                    2 (DATA0)
+     2 (GND)                  20 (GND)
+     3 (SER ATN)                   3 (DATA1)
+     4 (SER CLK)                   4 (DATA2)
+     5 (SER DAT)                   5 (DATA3) and 11 (BUSY)
+     6 (RST)                  6 (DATA4)
+
+The software uses the PC parallel port to emulate a C64 serial port.  The
+example program, C64.C (Listing 1), is written in Borland's Turbo C.  It
+reads input and sends each character to the printer.  It can be used as a
+filter in an MS-DOS command line pipe.  For example, DOS commands such as:
+dir | c64 would print a directory listing, or type a_file | c64 would print
+the contents of a file.
+
+I have also written an MS-DOS device driver which can be used to allow any
+PC application to print to a C64 compatible printer, and it supports
+multiple printers connected to a single PC parallel port.  The listing for
+this software is too lengthy to print, however I will make this software
+and assembled cables available to Commodore 64 enthusiasts for a nominal
+charge; just write me for details.  With these C64 compatible printers
+often selling for less than $25 at garage sales and flea markets, it's easy
+to add a couple of additional "scratch" printers to any PC system.
+
+John Keyerleber
+26300 Chardonview Drive
+Cleveland, OH  44143
+(216) 261-9676
+E-mail:  jkeyerleber@bailey.com
+
+Listing 1:
+
+#include <stdio.h>
+#include <ctype.h>
+#include <dos.h>
+
+#define   PORTADR   0x378     // LPT1=0x378, LPT2 = 0x278
+#define   PRINTADR  0x04      // C64 compatible printer address
+#define   SRQ       0x01      // C64 SRQ IN signal
+#define   ATN       0x02      // C64 ATN signal
+#define   CLK       0x04      // C64 CLK signal
+#define   DATOUT    0x08      // C64 DAT signal (output)
+#define   DATIN     0x80      // C64 DAT signal (input)
+#define   RST       0x10      // C64 RST signal
+
+// function prototypes
+void initc64(void);
+void putc64(unsigned char);
+void puts64(char *);
+void putbyte(unsigned char, unsigned char);
+
+// function main() loops to read input characters and send them to the printer
+void main(void)
+{
+     char buff[128], *ptr;
+
+     initc64();
+     while(fgets(buff, 80, stdin))
+     {
+          for(ptr = buff; *ptr; putc64(*ptr++));
+     }
+}
+
+// function init64() initializes the driver and the C64 compatible printer
+void initc64(void)
+{
+     // set initial port output value to all bits high
+     outportb(PORTADR, RST | SRQ | ATN | CLK | DATOUT);
+
+     // set interface to output
+     outportb(PORTADR + 2, 0x00);
+
+     // initialize printer: RST=0, then RST=1
+     outportb(PORTADR, SRQ | ATN | CLK | DATOUT);
+     delay(250);
+     outportb(PORTADR, RST | SRQ | ATN | CLK | DATOUT);
+     delay(2250);
+
+     // Set printer to listener: ATN and CLK low, printer will ACK with DAT low
+     outportb(PORTADR, RST | SRQ | DATOUT);
+     while(!(inportb(PORTADR + 1) & DATIN));
+
+     // Send printer address (currently set for address 4)
+     putbyte(0x20 | PRINTADR, 0);
+
+     // Send printer mode
+     putbyte(0x67, 0);
+}
+
+// function putc64() sends a byte of data (byteval) to the C64 compatible printer
+void putc64(unsigned char byteval)
+{
+     // Check for upper/lower case conversion
+     if (isalpha(byteval))
+     {
+          byteval = (isupper(byteval)) ? tolower(byteval) : toupper(byteval);
+     }
+     // Send character
+     putbyte(byteval, ATN);
+}
+
+// function putbyte clocks the actual byte to the C64 compatible printer bit by bit
+void putbyte(unsigned char byteval, unsigned char mode)
+{
+     register int bitloop;
+
+     // Set CLK high, printer will ACK with DAT high
+     outportb(PORTADR, RST | SRQ | CLK | DATOUT | mode);
+     while(inportb(PORTADR + 1) & DATIN);
+
+     // Loop to output bits of data
+     delay(1);
+     for (bitloop=0; bitloop<8; bitloop++)
+     {
+          outportb(PORTADR, RST | SRQ | ((byteval & 1) ? DATOUT : 0) | mode);
+          delay(1);
+          outportb(PORTADR, RST | SRQ | CLK | ((byteval & 1) ? DATOUT : 0) | mode);
+          delay(1);
+          byteval >>= 1;
+     }
+
+     // Set CLK low and DAT high for end of byte, printer will ACK with DAT low
+     outportb(PORTADR, RST | SRQ | DATOUT | mode);
+     while(!(inportb(PORTADR + 1) & DATIN));
+}
+

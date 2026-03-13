@@ -1,0 +1,289 @@
+
+Programming the Sound Blaster ADC/DAC:
+
+2x6h    DSP Reset Port                       Write Only
+2xAh    DSP Read Data Port                   Read Only
+2xCh    DSP Write Data or Command            Write
+2xCh    DSP Write Buffer Status (bit 7)      Read
+2xEh    DSP Data Available Status Bit 7)     Read Only
+
+x = 1,2,3,4,5,6 for the Sound Blaster <= 1.5
+x = 1,2,3,4,5,6 for the Sound Blaster Micro Channel Version
+x = 2,4 for the Sound Blaster 2.0
+x = 2,4 for the Sound Blaster Pro
+
+The DSP: -----------------------------------------------------------------------
+
+Due to the different mode and the hardware performance of different audio
+cards, the maximum sampling rate is different.
+
+Input (ADC):
+Sound Blaster (<=1.5)   Mono/Normal mode:       8-bit only  4KHz to 13KHz
+Sound Blaster (2.0)     Mono/Normal mode:       8-bit only  4KHz to 13KHz
+                        Mono/High Speed mode:   8-bit only  13KHz to 15KHz
+Sound Blaster Pro       Mono/Normal mode:       8-bit only  4KHz to 23KHz
+                        Mono/High Speed mode:   8-bit only  23KHz to 44.1KHz
+
+Output (DAC):
+Sound Blaster (<=1.5)   Mono/Normal mode:       8-bit only  4KHz to 23KHz
+Sound Blaster (2.0)     Mono/Normal mode:       8-bit only  4KHz to 23KHz
+                        Mono/High Speed mode:   8-bit only  23KHz to 44.1KHz
+Sound Blaster Pro       Mono/Normal mode:       8-bit only  4KHz to 23KHz
+                        Mono/High Speed mode:   8-bit only  23KHz to 44.1KHz
+
+Some DSP Commands:
+
+10h  Direct mode 8-bit DAC (single byte data transfer)
+14h  DMA mode 8-bit DAC
+20h  Direct mode 8-bit ADC (single byte data transfer)
+24h  DMA mode 8-bit ADC
+40h  Set Time Constant
+48h  Set Block Size
+91h  High Speed DMA mode 8-bit DAC
+99h  High Speed DMA mode 8-bit ADC
+D1h  Turn on Speaker
+D3h  Turn off Speaker
+D0h  Halt DMA in progress
+D4h  Continue DMA
+E1h  Get DSP version (read major ver then minor)
+
+To reset the DSP:
+
+1.  Write a 01h to port 2x6h
+2.  Wait for 3 microseconds
+3.  Write a 00h to port 2x6h
+4.  Read port 2xAh until a 0AAh is read (see below for how to read from 2xAh)
+
+If there is no 0AAh after about 100 reads, abort and declare that there is no
+Sound Blaster present (or error)
+
+To write to the DSP (all writes to 2xCh MUST follow this procedure)
+
+1.  Read 2xCh until bit 7 is clear
+2.  Write to 2xCh
+
+To read from the DSP (all reads from 2xAh MUST follow this procedure)
+
+1.  Read 2xEh until bit 7 is set
+2.  Read from 2xAh
+
+Interrupts:
+
+    In DMA DAC and DMA ADC modes, a single interrupt will occur after the
+block of data has been read/written.  To clear the interrupt, read 2xEh
+once (as well as clearing the PIC).
+
+Ignoring Interrupts:
+
+    The interrupt can be ignored if you poll the DMAC (DMA Controller).
+Once the DMAC reports a count of 0FFFFh the transfer is finished, read
+2xEh once and you are finished.  You can also poll the DMA status register
+and wait for the Terminal Count reached bit to be set (I found that the first
+read after starting the transfer had the bit set, but not the second).
+
+Note to VESA/Local Bus Video users:
+
+    These video cards use DMA channel 1 which is the DMA channel used by
+the Sound Blaster.  Any video accesses will screw up the output of the
+Sound Blaster.
+
+Calculating the Time Constant:
+    Normal Speed:
+        Time Constant = 256 - (1,000,000 / sampling rate)
+                      = 256 - (1,000,000 / 8,000 )
+                      = 131
+
+    High Speed:
+        Time Constant = (MSByte of) 65536 - (256,000,000 / sampling rate)
+                      = (MSByte of) 65536 - (256,000,000 / 44,100)
+                      = (MSByte of) 59731
+                      = (MSByte of) 0E953h
+                      = 0E9h
+
+Direct mode DAC:
+
+1.  Write a D1h to 2xCh
+2.  Write a 10h to 2xCh
+3.  Write the 8-bit data sample to 2xCh
+4.  Wait for the correct timing (must do your own timing)
+    Repeat steps 2-4 until end of data
+5.  Write a D3h to 2xCh
+
+Normal speed DMA mode DAC:
+
+1.  Write a D1h to 2xCh
+2.  Setup Interrupt service routine
+3.  Write a 40h to 2xCh
+4.  Write Time Constant to 2xCh
+5.  Program the DMAC (DMA Controller)
+6.  Write 14h to 2xCh
+7.  Write the LSByte of Data Length - 1
+8.  Write the MSByte of Data Length - 1
+9.  Service Interrupt (may need to repeat steps 5-7 in the ISR)
+10. Restore original Interrupt Service Routine
+11. Write a D3h to 2xCh
+
+Commands can be written to the DSP while waiting for the interrupt
+
+High speed DMA mode DAC:
+
+1.  Write a D1h to 2xCh
+2.  Setup Interrupt service routine
+3.  Write a 40h to 2xCh
+4.  Write Time Constant to 2xCh
+5.  Program the DMAC (DMA Controller)
+6.  Write 48h to 2xCh
+7.  Write the LSByte of Data Length - 1
+8.  Write the MSByte of Data Length - 1
+9.  Write 91h to 2xCh
+10. Service Interrupt (may need to repeat steps 5-7 in the ISR)
+11. Restore original Interrupt Service Routine
+12. Write a D3h to 2xCh
+
+Commands CANNOT be written to the DSP while waiting for the interrupt
+Resetting the DSP is the procedure used to halt DMA in progress
+
+Direct mode ADC:
+
+1.  Write a 20h to 2xCh
+2.  Read the 8-bit data sample from 2xAh
+3.  Wait for the correct timing (must do your own timing)
+    Repeat steps 1-3 until finished
+
+Normal speed DMA mode ADC:
+
+1.  Setup Interrupt service routine
+2.  Write a 40h to 2xCh
+3.  Write Time Constant to 2xCh
+4.  Program the DMAC (DMA Controller)
+5.  Write 24h to 2xCh
+6.  Write the LSByte of Data Length - 1
+7.  Write the MSByte of Data Length - 1
+8.  Service Interrupt (may need to repeat steps 5-7 in the ISR)
+9.  Restore original Interrupt Service Routine
+
+Commands can be written to the DSP while waiting for the interrupt
+
+High speed DMA mode ADC:
+
+1.  Setup Interrupt service routine
+2.  Write a 40h to 2xCh
+3.  Write Time Constant to 2xCh
+4.  Program the DMAC (DMA Controller)
+5.  Write 48h to 2xCh
+6.  Write the LSByte of Data Length - 1
+7.  Write the MSByte of Data Length - 1
+8.  Write 99h to 2xCh
+9.  Service Interrupt (may need to repeat steps 5-7 in the ISR)
+10. Restore original Interrupt Service Routine
+
+Commands CANNOT be written to the DSP while waiting for the interrupt
+Resetting the DSP is the procedure used to halt DMA in progress
+
+The Mixer:  --------------------------------------------------------------------
+The mixer can only be found on the Sound Blaster Pro.
+
+It mixes the following audio sources:
+-digitized voice
+-FM synthesized music
+-CD-audio
+-line-in
+-microphone input
+-PC speaker output
+
+It allows software to control volume on:
+-digitized voice
+-FM synthesized music
+-CD-audio
+-line-in
+-microphone mixing
+-overall master volume
+
+The mixer setting can be done with 2 I/O ports, 2x4h and 2x5h.
+x=2,4 for the Sound Blaster Pro
+
+2x4h is the address port (write only), 2x5h is the data port (read/write)
+
+The programming sequence is as follows:
+
+1.  Write the address of the mixers register to 2x4h
+2.  Read/Write the mixers register value from/to 2x5h
+
+Mixer registers:
+
+Register| D7 | D6 | D5 | D4 | D3 | D2 | D1 | D0 |
+--------+----+----+----+----+----+----+----+----+
+00h     |               Data Reset              |
+02h     |                Reserved               |
+04h     |   Voice Volume L  |   Voice Volume R  |
+06h     |                Reserved               |
+08h     |                Reserved               |
+0Ah     | x  | x  | x  | x  | x  |  MIC Mixing  |
+0Ch     | x  | x  |  In Filter   |   ADC   | x  |
+0Eh     | x  | x  |DNFI| x  | x  | x  |VSTC| x  |
+20h     |                Reserved               |
+22h     |  Master Volume L  |  Master Volume R  |
+24h     |                Reserved               |
+26h     | FM Volume L       | FM Volume R       |
+28h     | CD Volume L       | CD Volume R       |
+2Ah     |                Reserved               |
+2Ch     |                Reserved               |
+2Eh     |   Line Volume L   |   Line Volume R   |
+
+x=don't care
+Reserved=preserve original value
+
+Register Descriptions:
+
+  Reset Register (00h):
+    You can write any 8-bit value to this register to reset the mixer
+
+  Voice Volume Register (04h):
+    d[7..4] voice volume left
+    d[3..0] voice volume right
+    The default level is 9.
+
+  Microphone Mixing Register (0Ah):
+    The default level is 0.
+
+  Input Setting Register (0Ch):
+    ADC - input source:
+    d[2] d[1]
+      0    0    Microphone (default)
+      0    1    CD audio
+      1    0    Microphone
+      1    1    Line-in
+    In Filter - filter select:
+    d[5] d[4] d[3]
+      0    x    0   Low Filter (default)
+      0    x    1   High Filter
+      1    x    x   No Filter
+
+  Output Setting Register (0Eh):
+    This register specifies the voice output features.
+    DNFI  0 output filter is ON (default)
+          1 output filter is bypassed
+    VSTC  0 Mono voice mode (default)
+          1 stereo voice mode
+
+  Master Volume Register (22h):
+    d[7..4]  master volume left
+    d[3..0]  master volume right
+    The default level is 9.
+
+  FM Volume Register (26h):
+    d[7..4] fm volume left
+    d[3..0] fm volume right
+    The default level is 9.
+
+  CD Volume Register (28h):
+    d[7..4] cd volume left
+    d[3..0] cd volume right
+    The default level is 0
+
+  Line-In Volume Register (2Eh):
+    d[7..4] line-in volume left
+    d[3..0] line-in volume right
+    The default level is 0
+
+

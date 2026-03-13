@@ -1,0 +1,376 @@
+0001   0000             .include "lib/bios.exp"
+0001+  0000             boot_origin      .EQU  $8004
+0002+  0000             bios_uart        .EQU  $0002
+0003+  0000             bios_ide         .EQU  $0003
+0004+  0000             bios_reset_vector .EQU  $0190
+0005+  0000             ide_buffer       .EQU  $8404
+0006+  0000             inode_buffer     .EQU  $8c04
+0007+  0000             noname._stack_start .EQU  $ff7f
+0008+  0000             noname._ram_start .EQU  $8000
+0009+  0000             noname.__print_u16x .EQU  $0230
+0010+  0000             noname.__xput_u8 .EQU  $0278
+0011+  0000             noname.__puts    .EQU  $028c
+0012+  0000             noname.__print_u16d .EQU  $03b3
+0002   0000             
+0003   8004             .org boot_origin
+0004   8004             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0005   8004             ; system constants / equations
+0006   8004             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0007   8004             _uart0_data      .equ $ff80            ; data
+0008   8004             _uart0_dlab_0    .equ $ff80            ; divisor latch low byte
+0009   8004             _uart0_dlab_1    .equ $ff81            ; divisor latch high byte
+0010   8004             _uart0_ier       .equ $ff81            ; interrupt enable register
+0011   8004             _uart0_fcr       .equ $ff82            ; fifo control register
+0012   8004             _uart0_lcr       .equ $ff83            ; line control register
+0013   8004             _uart0_lsr       .equ $ff85            ; line status register
+0014   8004             
+0015   8004             _ide_base        .equ $ffd0            ; ide base
+0016   8004             _ide_r0          .equ _ide_base + 0    ; data port
+0017   8004             _ide_r1          .equ _ide_base + 1    ; read: error code, write: feature
+0018   8004             _ide_r2          .equ _ide_base + 2    ; number of sectors to transfer
+0019   8004             _ide_r3          .equ _ide_base + 3    ; sector address lba 0 [0:7]
+0020   8004             _ide_r4          .equ _ide_base + 4    ; sector address lba 1 [8:15]
+0021   8004             _ide_r5          .equ _ide_base + 5    ; sector address lba 2 [16:23]
+0022   8004             _ide_r6          .equ _ide_base + 6    ; sector address lba 3 [24:27 (lsb)]
+0023   8004             _ide_r7          .equ _ide_base + 7    ; read: status, write: command
+0024   8004             
+0025   8004             inode_table_start .equ 2048 * 7
+0026   8004             inode_table_sect_start .equ 28 ; inode table starts at sector 28
+0027   8004             
+0028   8004             ;  ------------------------------------------------------------------------------------------------------------------;
+0029   8004             ;  DISK LAYOUT:
+0030   8004             ;  Metadata               | Size (bytes)      | Blocks (2048 bytes)              |Start Block |  Comment
+0031   8004             ;  ---------------------- | ----------------- | -------------------------------- |------------|-----------------------------------
+0032   8004             ;  Bootloader/MBR         | 1024 bytes        | 0.5 (2 sectors)                  |  0         |
+0033   8004             ;  Superblock             | 1024 bytes        | 1 block (2048 bytes, must align) |  0         |
+0034   8004             ;                         |                   | 1 block (2048 bytes)             |  1         | reserved
+0035   8004             ;  Block Bitmap           | 8,192 bytes       | 4 blocks                         |  2         | 4*2048*8 = 4*16384 = 65536 raw data blocks.  65536*2048 bytes = 134217728 bytes of disk space = 128MB
+0036   8004             ;  Inode Bitmap           | 2,048 bytes       | 1 block                          |  6         | 2048*8=16384. total of 16384 bits, meaning 16384 inodes, which is 1 inode per 8KB of disk space
+0037   8004             ;  Inode Table            | 2,097,152 bytes   | 1024 blocks                      |  7         | 128bytes per inode entry. 2097152 / 128 = 16384 inodes
+0038   8004             ;  Data Blocks            | 134,217,728 bytes | 65528 blocks                     | 1031       | 65528 blocks = 134,201,344 bytes
+0039   8004             ;  
+0040   8004             ;  first 960 bytes: bootloader from 0 to 959, MBR partition table from 960 to 1023 (64 bytes)
+0041   8004             ;  up to 4 partitions, each 16 bytes long
+0042   8004             ;  MBR:
+0043   8004             ;  Byte | Description
+0044   8004             ;  -----|----------------------------
+0045   8004             ;  0    | Boot flag (0x80 active, 0x00 inactive)
+0046   8004             ;  1-3  | Start CHS (head, sector, cylinder)
+0047   8004             ;  4    | Partition type (filesystem ID)
+0048   8004             ;    0x83 = Linux native (ext2/3/4)
+0049   8004             ;    0x07 = NTFS/exFAT
+0050   8004             ;    0x0B = FAT32 CHS
+0051   8004             ;    0x0C = FAT32 LBA
+0052   8004             ;    0x05 = Extended partition
+0053   8004             ;    0x86 = Sol-1 partition
+0054   8004             ;  5-7  | End CHS
+0055   8004             ;  8-11 | Start LBA (little endian)
+0056   8004             ;  12-15| Size in sectors (little endian)
+0057   8004             ;  
+0058   8004             ;  
+0059   8004             ;  the superblock describers the filesystem as a whole such as inode count, free inode count, location of the raw data bitmap, inode table, etc.  
+0060   8004             ;  SUPERBLOCK:
+0061   8004             ;  | Field               | Description                               | Typical Size (bytes) | Notes                           |
+0062   8004             ;  | ------------------- | ----------------------------------------- | -------------------- | ------------------------------- |
+0063   8004             ;  | inodes_count        | Total number of inodes in the filesystem  | 2                    | 16-bit unsigned int             |
+0064   8004             ;  | blocks_count        | Total number of data blocks               | 2                    | 16-bit unsigned int             |
+0065   8004             ;  | free_inodes_count   | Number of free inodes                     | 2                    | 16-bit unsigned int             |
+0066   8004             ;  | free_blocks_count   | Number of free blocks                     | 2                    | 16-bit unsigned int             |
+0067   8004             ;  | block_bitmap        | Block ID of the **block bitmap**          | 2                    | 16-bit unsigned int
+0068   8004             ;  | inode_bitmap        | Block ID of the **inode bitmap**          | 2                    | 16-bit unsigned int
+0069   8004             ;  | inode_table         | Block ID of **inode table**               | 2                    | 16-bit unsigned int
+0070   8004             ;  | first_data_block    | Block ID of the data blocks area          | 2                    | 16-bit unsigned int             |
+0071   8004             ;  | used_dirs_count     | Number of inodes allocated to directories | 2
+0072   8004             ;  | log_block_size      | Block size = 1024 << `s_log_block_size    | 2                    | 16-bit unsigned int             |
+0073   8004             ;  | mtime               | Last mount time                           | 4                    | 32-bit unsigned int (Unix time) |
+0074   8004             ;  | wtime               | Last write time                           | 4                    | 32-bit unsigned int (Unix time) |
+0075   8004             ;  | uuid                | Unique ID of the filesystem               | 16                   | 128-bit UUID                    |
+0076   8004             ;  | volume_name         | Label of the filesystem                   | 16                   | Usually ASCII, padded           |
+0077   8004             ;  | feature_flags       | Compatibility flags                       | 4                    | 32-bit unsigned int             |
+0078   8004             ;  
+0079   8004             ;  inode for root dir is #2, #0 and #1 not used
+0080   8004             ;  raw data block #0 is not used. because 0 as a block ID means not used
+0081   8004             ;  block size: 2048
+0082   8004             ;  inode-table format:
+0083   8004             ;  | Field         | Size (bytes) | Description                                                                                  |
+0084   8004             ;  | ------------- | ------------ | -------------------------------------------------------------------------------------------- |
+0085   8004             ;  | `mode`        | 2            | File type and permissions                                                                    |
+0086   8004             ;  | `uid`         | 2            | Owner user ID                                                                                |
+0087   8004             ;  | `size`        | 4            | Size of the file in bytes                                                                    |
+0088   8004             ;  | `atime`       | 4            | Last access time (timestamp)                                                                 |
+0089   8004             ;  | `ctime`       | 4            | Creation time (timestamp)                                                                    |
+0090   8004             ;  | `mtime`       | 4            | Last modification time (timestamp)                                                           |
+0091   8004             ;  | `dtime`       | 4            | Deletion time (timestamp)                                                                    |
+0092   8004             ;  | `gid`         | 2            | Group ID                                                                                     |
+0093   8004             ;  | `links_count` | 2            | Number of hard links                                                                         |
+0094   8004             ;  | `blocks`      | 2            | Number of 2048-byte blocks allocated                                                         |
+0095   8004             ;  | `flags`       | 4            | File flags                                                                                   |
+0096   8004             ;  | `block`       | 47 * 2 = 94  | Pointers to data blocks (47 direct only) 
+0097   8004             ;
+0098   8004             ;
+0099   8004             ;  DIRECTORY ENTRY
+0100   8004             ;  this is the structure for file entries inside a directory.
+0101   8004             ;  2048 / 64 = 32 entries
+0102   8004             ;
+0103   8004             ;  each entry is 64 bytes wide
+0104   8004             ;  uint16_t inode;      // Inode number (0 if entry is unused)
+0105   8004             ;  char     name[62];   // File name (null terminated)
+0106   8004             
+0107   8004             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0108   8004             ; setting up kernel process.
+0109   8004             ; 32 pages of 2kb = 64kb
+0110   8004             ; bl = ptb
+0111   8004             ; bh = page number (5bits)
+0112   8004             ; a = physical address
+0113   8004             ; for kernel, a goes from 0 to 31, but for the last page, bit '11' must be 1 for device space
+0114   8004             ; bl = 0
+0115   8004             ; bh(ms 5 bits) = 0 to 31
+0116   8004             ; a = 0000_1000_000_00000
+0117   8004             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0118   8004             setup_kernel_mem:
+0119   8004 3B 11 81      mov d, s_boot1
+0120   8007 07 8C 02      call __puts
+0121   800A               
+0122   800A 3B 29 81      mov d, s_kernel_setup
+0123   800D 07 8C 02      call __puts
+0124   8010             ; map pages 0 to 30 to normal kernel ram memory.
+0125   8010 2E 00         mov bl, 0             ; set ptb = 0 for kernel
+0126   8012 A7 00         mov bh, 0             ; start at page 0
+0127   8014 10 00 00      mov a, 0              ; set mem/io bit to memory.  this means physical address starting at 0, but in memory space as opposed to device space.
+0128   8017             map_kernel_mem_l1:
+0129   8017 02            pagemap               ; write page table entry
+0130   8018 55 00 08      add b, $0800          ; increase page number (msb 5 bits of bh only)
+0131   801B 7A            inc al                ; increase both 
+0132   801C B9 1F         cmp al, 31            ; check to see if we reached the end of memory for kernel
+0133   801E C7 17 80      jne map_kernel_mem_l1
+0134   8021               
+0135   8021             ; here we map the last page of kernel memory, to device space, or the last 2kb of bios memory so that the kernel has access to io devices.
+0136   8021 89 00 08      or a, $0800           ; set mem/io bit to device, for physical address
+0137   8024 02            pagemap               ; write page table entry
+0138   8025               
+0139   8025 19 00         mov al, 0
+0140   8027 01            setptb                ; set process number to 0 (strictly not needed since we are in supervisor mode)
+0141   8028                                     ; which forces the page number to 0
+0142   8028 3B 4A 81      mov d, s_boot
+0143   802B 07 8C 02      call __puts
+0144   802E             
+0145   802E             
+0146   802E               ; load kernel from disk
+0147   802E 14 02 84      mov a, [boot_origin + 1022] ; get kernel inode number from bootloader chunk in ram
+0148   8031             
+0149   8031 07 04 81      call get_ino_entry_sect_ofst ; sector in a, remainder in bl
+0150   8034 53 1C 00      add a, inode_table_sect_start  ; add start lba of inode table
+0151   8037 DD            push bl                        ; save entry offset  
+0152   8038 27            mov b, a                       
+0153   8039 38 00 00      mov c, 0                       ; set sector number
+0154   803C 3B 04 8C      mov d, inode_buffer    ; we read into the inode buffer
+0155   803F 10 02 01      mov a, $0102        ; disk read, 1 sector
+0156   8042 05 03         syscall bios_ide      ; read sector 
+0157   8044             
+0158   8044 3B 04 8C      mov d, inode_buffer
+0159   8047 EA            pop bl
+0160   8048 A7 00         mov bh, 0
+0161   804A FD 9F 07      shl b, 7          ; multiply the offset integer by 128
+0162   804D 5A            add d, b          ; inode entry plus entry offset: points at kernel inode entry
+0163   804E DA            push d
+0164   804F             
+0165   804F 3B 67 81      mov d, s_filesize
+0166   8052 07 8C 02      call __puts
+0167   8055 E7            pop d
+0168   8056 2B 04 00      mov b, [d + 4]
+0169   8059 DA            push d
+0170   805A 07 30 02      call __print_u16x
+0171   805D 3B 14 82      mov d, s_comma
+0172   8060 07 8C 02      call __puts
+0173   8063 E7            pop d
+0174   8064 2B 1C 00      mov b, [d + 28]
+0175   8067 FD 42 0D 81   mov [kernel_blocks], b   ; save the number of blocks that make up kernel file
+0176   806B DA            push d
+0177   806C 07 30 02      call __print_u16x
+0178   806F             
+0179   806F 3B 8C 81      mov d, s_kernel_blocks
+0180   8072 07 8C 02      call __puts
+0181   8075             
+0182   8075               ; now read the block numbers from the inode entry
+0183   8075 E7            pop d
+0184   8076 58 22 00      add d, 34
+0185   8079 26 00 00      mov b, 0
+0186   807C             loop_block:
+0187   807C DA            push d
+0188   807D 3B 0F 82      mov d, s_hash
+0189   8080 07 8C 02      call __puts
+0190   8083 E7            pop d      
+0191   8084 15            mov a, [d]
+0192   8085 07 B3 03      call __print_u16d  ; print block number
+0193   8088 DA            push d
+0194   8089 3B A7 81      mov d, s_read_ok
+0195   808C 07 8C 02      call __puts
+0196   808F               ; now using the pointers to the kernel blocks, load the kernel file into ram
+0197   808F               ; Data Blocks            | 134,217,728 bytes | 65528 blocks                     | 1031       | 65528 blocks = 134,201,344 bytes
+0198   808F D8            push b
+0199   8090 07 D6 80      call load_block_and_copy  ; copy the block from disk to kernel memory
+0200   8093 E5            pop b
+0201   8094 07 B6 80      call test_blk0_copy_rst_vec ; this function tests for block #0 and if so, copies kernel reset vector into kernel_reset_vector variable
+0202   8097 E7            pop d
+0203   8098 58 02 00      add d, 2
+0204   809B FD 77         inc b
+0205   809D 14 0D 81      mov a, [kernel_blocks]
+0206   80A0 B0            cmp a, b      ; see if we reached the total number of kernel blocks that compose the file
+0207   80A1 C7 7C 80      jne loop_block
+0208   80A4             
+0209   80A4             
+0210   80A4 3B B2 81      mov d, s_bios2
+0211   80A7 07 8C 02      call __puts
+0212   80AA             
+0213   80AA             ; now we start the kernel.
+0214   80AA 14 0F 81      mov a, [kernel_reset_vector] ; retrieve kernel reset vector
+0215   80AD             
+0216   80AD FD D7 FF FF   push word $ffff             ; stack. dummy value since the real value is set in the kernel code
+0217   80B1 FD DB 08      push byte %00001000         ; mode=supervisor, paging=on
+0218   80B4 D7            push a                      ; pc
+0219   80B5 06            sysret
+0220   80B6             
+0221   80B6             ; this function exists solely to test if we have just read block 0 
+0222   80B6             ; and if so, then copy the kernel reset vector from location 16 in it
+0223   80B6             test_blk0_copy_rst_vec:
+0224   80B6 C0 00 00      cmp b, 0       ; if block number is 0
+0225   80B9 C6 BD 80      je copy_reset_vec
+0226   80BC 09            ret
+0227   80BD             copy_reset_vec:
+0228   80BD 14 14 84      mov a, [ide_buffer + 16]   ; kernel reset vector always at location 16 = 0x10
+0229   80C0 42 0F 81      mov [kernel_reset_vector], a
+0230   80C3 3B E3 81      mov d, s_reset_vec
+0231   80C6 07 8C 02      call __puts
+0232   80C9 D8            push b
+0233   80CA 27            mov b, a
+0234   80CB 07 30 02      call __print_u16x
+0235   80CE E5            pop b
+0236   80CF 3B 19 82      mov d, s_nl
+0237   80D2 07 8C 02      call __puts
+0238   80D5 09            ret
+0239   80D6             
+0240   80D6             ; inputs:
+0241   80D6             ;   a: block number in disk
+0242   80D6             ;   b: block cycle number for loading blocks into kernel memory in sequence
+0243   80D6             load_block_and_copy:
+0244   80D6 D8            push b
+0245   80D7               ;          CH       CL       BH       BL
+0246   80D7               ;form:  00000000 000000bb bbbbbbbb bbbbbb00
+0247   80D7 26 00 00      mov b, 0
+0248   80DA 3A 01         mov cl, 1
+0249   80DC FD 99         shl a
+0250   80DE FD E8         rlc b, cl
+0251   80E0 FD 99         shl a
+0252   80E2 FD E8         rlc b, cl
+0253   80E4 FD 39         mov c, b
+0254   80E6 27            mov b, a
+0255   80E7 55 1C 10      add b, 4124 ; add to c|b the start LBA offset of the data blocks section of the disk. 1031 * 2048 / 512 = 4124
+0256   80EA 5E 00 00      adc c, 0
+0257   80ED 3B 04 84      mov d, ide_buffer           ; we read into the bios ide buffer
+0258   80F0 10 02 04      mov a, $0402                ; disk read, 4 sectors = 1 block
+0259   80F3 05 03         syscall bios_ide            ; read sector
+0260   80F5             
+0261   80F5               ; now copy block from bios memory to kernel process memory
+0262   80F5 38 00 08      mov c, 2048                 ; 4 sectors = 1 block to copy
+0263   80F8 FD 4D 04 84   mov si, ide_buffer
+0264   80FC E4            pop a                       ; pop 'b' that we pushed earlier into 'a'
+0265   80FD FD 9D 0B      shl a, 11                   ; multiply cycle number by 2048
+0266   8100 4F            mov di, a                  
+0267   8101 FD 08         supcpy                      ; now copy data from bios mem to kernel mem
+0268   8103 09            ret
+0269   8104             
+0270   8104             ; inputs:
+0271   8104             ; a: inode number
+0272   8104             ; outputs:
+0273   8104             ; bl: offset/remainder
+0274   8104             ; a: sector
+0275   8104             get_ino_entry_sect_ofst:
+0276   8104 D7            push a                       ; save inode in stack
+0277   8105 87 03         and al, %00000011            ; he least 2 bits are the remainder mod 128
+0278   8107 2F            mov bl, al
+0279   8108 E4            pop a
+0280   8109 FD A1 02      shr a, 2                     ; shifting right by 2, gives the multiple of 512 which represents the sector number
+0281   810C 09            ret
+0282   810D             
+0283   810D 00 00       kernel_blocks:       .dw 0
+0284   810F 00 00       kernel_reset_vector: .dw 0
+0285   8111             
+0286   8111 73 74 61 72 s_boot1:        .db "starting bootloader...\n", 0
+0286   8115 74 69 6E 67 
+0286   8119 20 62 6F 6F 
+0286   811D 74 6C 6F 61 
+0286   8121 64 65 72 2E 
+0286   8125 2E 2E 0A 00 
+0287   8129 6D 61 70 70 s_kernel_setup: .db "mapping virtual memory table...\n", 0
+0287   812D 69 6E 67 20 
+0287   8131 76 69 72 74 
+0287   8135 75 61 6C 20 
+0287   8139 6D 65 6D 6F 
+0287   813D 72 79 20 74 
+0287   8141 61 62 6C 65 
+0287   8145 2E 2E 2E 0A 
+0287   8149 00 
+0288   814A 6C 6F 61 64 s_boot:         .db "loading kernel from disk...\n", 0
+0288   814E 69 6E 67 20 
+0288   8152 6B 65 72 6E 
+0288   8156 65 6C 20 66 
+0288   815A 72 6F 6D 20 
+0288   815E 64 69 73 6B 
+0288   8162 2E 2E 2E 0A 
+0288   8166 00 
+0289   8167 6B 65 72 6E s_filesize:     .db "kernel file size, number of blocks: ", 0
+0289   816B 65 6C 20 66 
+0289   816F 69 6C 65 20 
+0289   8173 73 69 7A 65 
+0289   8177 2C 20 6E 75 
+0289   817B 6D 62 65 72 
+0289   817F 20 6F 66 20 
+0289   8183 62 6C 6F 63 
+0289   8187 6B 73 3A 20 
+0289   818B 00 
+0290   818C 0A 72 65 61 s_kernel_blocks:.db "\nreading kernel blocks...\n", 0
+0290   8190 64 69 6E 67 
+0290   8194 20 6B 65 72 
+0290   8198 6E 65 6C 20 
+0290   819C 62 6C 6F 63 
+0290   81A0 6B 73 2E 2E 
+0290   81A4 2E 0A 00 
+0291   81A7 20 72 65 61 s_read_ok:      .db " read OK.\n", 0
+0291   81AB 64 20 4F 4B 
+0291   81AF 2E 0A 00 
+0292   81B2 65 6E 74 65 s_bios2:        .db "entering protected-mode\n"
+0292   81B6 72 69 6E 67 
+0292   81BA 20 70 72 6F 
+0292   81BE 74 65 63 74 
+0292   81C2 65 64 2D 6D 
+0292   81C6 6F 64 65 0A 
+0293   81CA 6E 6F 77 20                 .db "now starting kernel...\n\n", 0
+0293   81CE 73 74 61 72 
+0293   81D2 74 69 6E 67 
+0293   81D6 20 6B 65 72 
+0293   81DA 6E 65 6C 2E 
+0293   81DE 2E 2E 0A 0A 
+0293   81E2 00 
+0294   81E3 66 6F 75 6E s_reset_vec:    .db "found kernel reset vector: ", 0
+0294   81E7 64 20 6B 65 
+0294   81EB 72 6E 65 6C 
+0294   81EF 20 72 65 73 
+0294   81F3 65 74 20 76 
+0294   81F7 65 63 74 6F 
+0294   81FB 72 3A 20 00 
+0295   81FF             
+0296   81FF 30 31 32 33 s_hex_digits:   .db "0123456789ABCDEF"
+0296   8203 34 35 36 37 
+0296   8207 38 39 41 42 
+0296   820B 43 44 45 46 
+0297   820F             
+0298   820F 23 00       s_hash:         .db "#", 0
+0299   8211 3A 20 00    s_colon:        .db ": ", 0
+0300   8214 2C 20 00    s_comma:        .db ", ", 0
+0301   8217 20 00       s_sp:           .db " ", 0
+0302   8219 0A 00       s_nl:           .db "\n", 0
+0303   821B             
+0304   821B             
+0305   821B             
+0306   821B             .end
+tasm: Number of errors = 0

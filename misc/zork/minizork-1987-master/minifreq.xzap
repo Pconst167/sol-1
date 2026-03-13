@@ -1,0 +1,200 @@
+	.FSTR FSTR?1,"the "	;736	369
+	.FSTR FSTR?2,"The "	;624	209
+	.FSTR FSTR?3,"You "	;294	99
+	.FSTR FSTR?4,", "	;240	241
+	.FSTR FSTR?5,"your "	;210	71
+	.FSTR FSTR?6,"is "	;208	209
+	.FSTR FSTR?7,"and "	;192	97
+	.FSTR FSTR?8,"There "	;165	34
+	.FSTR FSTR?9,"you "	;156	79
+	.FSTR FSTR?10,"of "	;150	151
+	.FSTR FSTR?11,". "	;150	151
+	.FSTR FSTR?12,"with "	;150	51
+	.FSTR FSTR?13,"to "	;135	136
+	.FSTR FSTR?14,"are "	;120	61
+	.FSTR FSTR?15,"large "	;108	28
+	.FSTR FSTR?16,"This "	;108	28
+	.FSTR FSTR?17,"cyclops "	;90	16
+	.FSTR FSTR?18,"that "	;87	30
+	.FSTR FSTR?19,"from "	;87	30
+	.FSTR FSTR?20,"have "	;81	28
+	.FSTR FSTR?21,"through "	;78	14
+	.FSTR FSTR?22,"here"	;76	39
+	.FSTR FSTR?23,"in "	;73	74
+	.FSTR FSTR?24,"It's "	;70	15
+	.FSTR FSTR?25,"which "	;68	18
+	.FSTR FSTR?26,"small "	;60	16
+	.FSTR FSTR?27,"room "	;54	19
+	.FSTR FSTR?28,"closed"	;52	14
+	.FSTR FSTR?29,"A "	;50	51
+	.FSTR FSTR?30,"can't "	;50	11
+	.FSTR FSTR?31,"You're "	;49	8
+	.FSTR FSTR?32,"into "	;48	17
+	.FSTR FSTR?33,"Room"	;48	17
+	.FSTR FSTR?34,"Your "	;48	13
+	.FSTR FSTR?35,"grating "	;48	9
+	.FSTR FSTR?36,"already "	;48	9
+	.FSTR FSTR?37,"Frigid "	;48	9
+	.FSTR FSTR?38,"isn't "	;45	10
+	.FSTR FSTR?39,"It "	;44	23
+	.FSTR FSTR?40,"thief "	;44	12
+	.FSTR FSTR?41,"be "	;43	44
+	.FSTR FSTR?42,"that"	;42	22
+	.FSTR FSTR?43,"for "	;40	21
+	.FSTR FSTR?44,"water "	;40	11
+	.FSTR FSTR?45,"leads "	;40	11
+	.FSTR FSTR?46,"won't "	;40	9
+	.FSTR FSTR?47,"narrow "	;40	9
+	.FSTR FSTR?48,"cannot "	;40	9
+	.FSTR FSTR?49,"but "	;38	20
+	.FSTR FSTR?50,"not "	;36	19
+	.FSTR FSTR?51,"this "	;36	13
+	.FSTR FSTR?52,"south "	;36	10
+	.FSTR FSTR?53,"seems "	;36	10
+	.FSTR FSTR?54,"ground"	;36	10
+	.FSTR FSTR?55,"about "	;36	10
+	.FSTR FSTR?56,"passage "	;36	7
+	.FSTR FSTR?57,"appears "	;36	7
+	.FSTR FSTR?58,"don't "	;35	8
+	.FSTR FSTR?59,"southwest"	;35	6
+	.FSTR FSTR?60,"on "	;33	34
+	.FSTR FSTR?61,"west "	;33	12
+	.FSTR FSTR?62,"north "	;32	9
+	.FSTR FSTR?63,"There's "	;32	5
+	.FSTR FSTR?64,"his "	;30	16
+	.FSTR FSTR?65,"feet "	;30	11
+	.FSTR FSTR?66,"east "	;30	11
+	.FSTR FSTR?67,"door "	;30	11
+	.FSTR FSTR?68,"cyclops"	;30	7
+	.FSTR FSTR?69,"can "	;28	15
+	.FSTR FSTR?70,"white "	;28	8
+	.FSTR FSTR?71,"That "	;28	8
+	.FSTR FSTR?72,"probably "	;28	5
+	.FSTR FSTR?73,"Maze"	;27	10
+	.FSTR FSTR?74,"an "	;26	27
+	.FSTR FSTR?75,"too "	;26	14
+	.FSTR FSTR?76,"has "	;26	14
+	.FSTR FSTR?77,"wooden "	;25	6
+	.FSTR FSTR?78,"In "	;24	13
+	.FSTR FSTR?79,"south"	;24	9
+	.FSTR FSTR?80,"north"	;24	9
+	.FSTR FSTR?81,"How "	;24	9
+	.FSTR FSTR?82,"would "	;24	7
+	.FSTR FSTR?83,"With "	;24	7
+	.FSTR FSTR?84,"sentence"	;24	5
+	.FSTR FSTR?85,"rainbow "	;24	5
+	.FSTR FSTR?86,"lurking "	;24	5
+	.FSTR FSTR?87,"looking "	;24	5
+	.FSTR FSTR?88,"leading "	;24	5
+	.FSTR FSTR?89,"darkness"	;24	5
+	.FSTR FSTR?90,"candles "	;24	5
+	.FSTR FSTR?91,"against "	;24	5
+	.FSTR FSTR?92,"treasures "	;24	4
+	.FSTR FSTR?93,"staircase "	;24	4
+	.FSTR FSTR?94,"northeast "	;24	4
+	.FSTR FSTR?95,"one "	;22	12
+	.FSTR FSTR?96,"now "	;22	12
+
+
+;word frequency table of 96 most common words
+
+WORDS::	.TABLE
+	FSTR?1
+	FSTR?2
+	FSTR?3
+	FSTR?4
+	FSTR?5
+	FSTR?6
+	FSTR?7
+	FSTR?8
+	FSTR?9
+	FSTR?10
+	FSTR?11
+	FSTR?12
+	FSTR?13
+	FSTR?14
+	FSTR?15
+	FSTR?16
+	FSTR?17
+	FSTR?18
+	FSTR?19
+	FSTR?20
+	FSTR?21
+	FSTR?22
+	FSTR?23
+	FSTR?24
+	FSTR?25
+	FSTR?26
+	FSTR?27
+	FSTR?28
+	FSTR?29
+	FSTR?30
+	FSTR?31
+	FSTR?32
+	FSTR?33
+	FSTR?34
+	FSTR?35
+	FSTR?36
+	FSTR?37
+	FSTR?38
+	FSTR?39
+	FSTR?40
+	FSTR?41
+	FSTR?42
+	FSTR?43
+	FSTR?44
+	FSTR?45
+	FSTR?46
+	FSTR?47
+	FSTR?48
+	FSTR?49
+	FSTR?50
+	FSTR?51
+	FSTR?52
+	FSTR?53
+	FSTR?54
+	FSTR?55
+	FSTR?56
+	FSTR?57
+	FSTR?58
+	FSTR?59
+	FSTR?60
+	FSTR?61
+	FSTR?62
+	FSTR?63
+	FSTR?64
+	FSTR?65
+	FSTR?66
+	FSTR?67
+	FSTR?68
+	FSTR?69
+	FSTR?70
+	FSTR?71
+	FSTR?72
+	FSTR?73
+	FSTR?74
+	FSTR?75
+	FSTR?76
+	FSTR?77
+	FSTR?78
+	FSTR?79
+	FSTR?80
+	FSTR?81
+	FSTR?82
+	FSTR?83
+	FSTR?84
+	FSTR?85
+	FSTR?86
+	FSTR?87
+	FSTR?88
+	FSTR?89
+	FSTR?90
+	FSTR?91
+	FSTR?92
+	FSTR?93
+	FSTR?94
+	FSTR?95
+	FSTR?96
+	.ENDT
+
+	.ENDI

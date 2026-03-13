@@ -1,0 +1,775 @@
+
+                                 FORM TDDD
+                                 ---------
+                       Imagine 3.0 Object File Format
+
+                         Rev 3.0  05-19-94 S.Kirvan
+                Copyright 1994 Impulse Inc., Mpls, MN 55444
+
+    Disclaimer:
+        All information contained herein is subject to change without
+        notice.  Knowledge is dangerous - use at your own risk.  No
+        warranties are made or implied, and no liability or responsibility
+        is assumed.     Good luck.
+
+SCOPE:
+=====
+
+This text will describe Imagine 3.0's basic object file format.  It is
+beyond the scope of this text to describe any of the file formats used for
+spline objects, deform tool, or any other object types not mentioned below.
+However, some of the data described below may apply to some of these
+undocumented object formats.  It is also not the intent of this document to
+explain the implementation of the information contained in the TDDD files
+(ie. what equations we use to represent Imagine's paths - lighting models -
+forms geometry - tweening algorithms, etc.).
+
+GENERAL INFO:
+============
+
+FORM TDDD is used by Impulse's Imagine 3.0 for 3D rendering data.  TDDD
+stands for "3D data description".  The files contain 3D object
+definitions, and can be extended to describe different types of object
+information.
+
+The TDDD file is stored in Amiga (680x0) format, and conforms to the "IFF"
+file format on that computer.  On IBM (80x86) based machines, much of the
+data refered to below will have to be byte reversed before it makes sense.
+
+The IFF (interchange file format) format stores data in packets called
+"chunks."  Each chunk begins with a long word identifier <ID> in ascii
+format.  This identifier is immediately followed by a long word data-size.
+The data-size is measured in bytes and descrbes how much data, following
+the data-size long word, is part of the chunk identified by the <ID>.  
+Imagine's IFF structure supports nesting of these chunks.  For more info on
+the IFF standard, see the "Amiga ROM Kernal Reference Manual: Devices (3rd
+Edition)."
+
+Currently, in "standard IFF" terms, a FORM TDDD has only one supported chunk
+type:  an OBJ chunk describing the object heirarchy.
+
+The OBJ chunk, in turn, is made up of smaller chunks with the standard IFF
+structure:  <ID> <data-size> <data>.
+
+The OBJ "sub-chunks" support object heirarchies.  Currently, there are 2
+types of supported OBJ sub-chunks:  A DESC chunk, describing one node of a
+heirarchy; and a TOBJ chunk marking the end of a heirarchy chain.  For each
+DESC chunk, there must be a corresponding TOBJ chunk.
+
+In Imagine, the structure of the object heirarchy is as follows:  Each
+heirarchy has a head (parent) object. The parent may have child objects.
+The children may have grandchildren, and so on. An object with children is
+a "grouped" object within Imagine.
+
+Each object heirarchy is written in an OBJ chunk, along with all its
+descendants.  The descendant heirarchy is supported as follows:
+
+   starting with the head (parent) object,
+
+   1)  A DESC chunk is written, describing the object.
+   2)  If the object in 1) has children, steps 1) thru 3) are performed
+                for each child.
+   3)  A TOBJ chunk is written, marking the end of the object description.
+
+The TOBJ sub-chunks have zero size -- and no data.  The DESC sub-chunks are
+made up of "sub-sub-chunks", again, with the standard IFF structure:
+<ID> <data-size> <data>.
+
+Reader software WILL FOLLOW the standard IFF procedure of skipping over any
+un-recognized chunks -- and "sub-chunks" or "sub-sub-chunks".  The
+<data-size> field indicates how many bytes to skip.  In addition it WILL
+OBSERVE the IFF rule that an odd <data-size> may appear, in which case the
+corredponding <data> field will be padded at the end with one extra byte to
+give it an even size.
+
+DATA TYPES:
+==========
+
+First, there are several numerical fields appearing in the data, describing
+object positions, rotation angles, scaling factors, etc.  They are stored as
+"32-bit fractional" numbers, such that the true number is the 32-bit number
+divided by 65536.  So as an example, the number 3.14159 is stored as
+(hexadecimal) 0x0003243F (ie. 0x0003243F / 65536 = 3.14159).  This allows
+the data to be independant of any particular floating point format.  Numbers
+stored in this format are typedef'ed as "FRACT"s below.
+
+Second, there are several color (or RGB) fields in the data.  They are
+always stored as three UBYTEs representing the red, green and blue
+components of the color.  Red is always first, followed by green, and then
+blue.  For some of the data chunks, Imagine reads the color field into the
+24 LSB's of a LONGword.  In such cases, the 3 RGB bytes are preceded by a
+zero byte in the file.
+
+    The three basic data types that will be refered to herein are:
+
+    BYTE        :  a single byte of data (char)
+    WORD        :  a two byte data field (short)
+    LONG        :  a four byte data field (long)
+
+    A "U" (ie. UBYTE) means unsigned.
+
+    The following "typedef"s are used below:
+
+    typedef LONG    FRACT;                /* 4 bytes */
+    typedef UBYTE   COLOR[3];             /* 3 bytes */
+
+    typedef struct vectors {
+        FRACT X;          /* 4 bytes */
+        FRACT Y;          /* 4 bytes */
+        FRACT Z;          /* 4 bytes */
+    } VECTOR;             /* 12 bytes total */
+
+    typedef struct matrices {
+        VECTOR I;         /* 12 bytes */
+        VECTOR J;         /* 12 bytes */
+        VECTOR K;         /* 12 bytes */
+    } MATRIX;             /* 36 bytes total */
+
+    typedef struct _tform {
+        VECTOR r;         /* 12 bytes - position */
+        VECTOR a;         /* 12 bytes - x axis */
+        VECTOR b;         /* 12 bytes - y axis */
+        VECTOR c;         /* 12 bytes - z axis */
+        VECTOR s;         /* 12 bytes - size */
+    } TFORM;              /*  60 bytes total */
+
+    typedef struct _pthd {
+        TFORM   PData;    /* axis data */
+        UWORD   inFrom;   /* previous axis number */
+        UWORD   outTo;    /* next axis number */
+        UWORD   flags;    /* flags for this axis */
+                          /*   Bit 0 - reserved - zero for "Detail Editor" paths
+                          /*   Bit 1 - an axis connects in to this axis
+                          /*   Bit 2 - an axis connects out of this axis
+                          /*   Bits 3 thru 15 - reserved
+        UWORD   pad;      /* reserved */
+    } PTHD;
+
+DESC SUB-SUB-CHUNKS:
+===================
+
+NAME - size 18
+
+    BYTE    Name[18];       ; a name for the object.
+
+    Object's name as it appears in the attributes requester.  Used for
+    tracking, etc.
+
+SHP2 - size 4
+
+    WORD    Shape;          ; number indicating object type
+    WORD    Lamp;           ; bit field indicating lamp type
+
+    Valid shape numbers are:
+
+        0 - Sphere
+        2 - Axis            ; custom objects with points/faces
+        5 - Ground
+        1, 3, and 4 are reserved, and should never appear in TDDD files.
+
+    Perfect spheres have thier radius set by the X size parameter (see SIZE
+    chunk).  A ground object is an infinte plane perpendicular to the world
+    Z axis.  Its Z coordinate sets its height, and the X and Y coordinates
+    are only relevant to the position of the "hot point" used in selecting
+    the object in the editor (see POSI chunk).  Custom objects have points,
+    edges and triangles associated with them.  Imagine's primative objects
+    are cumstom (type 2) objects.  The size fields are relevant only for
+    drawing the object axes in the editor.
+
+    Lamp numbers are composed of several bit fields:
+
+    Bit 0  - Point light source.
+    Bit 1  - Parallel light source.
+    Bit 2  - Round shape.
+    Bit 3  - Rectangular shape.
+
+    Bit 4  - No Lens Flare FX flag.
+    Bit 5  - 1/R Diminishing intensity.
+    Bit 6  - Controlled falloff.
+    Bit 7  - Cast Shadows.
+
+    Bits 8 to 14 - reserved.
+    Bit 15 - Bright object.
+
+    For a light casting object, bit 0 or 1 must be set - all other bits are
+    optional.  All lights emminate from the object's axes (see POSI, SIZE,
+    and AXIS chunk) and shadow casting lights will be blocked by faces that
+    have neither fog nor transparent attributes.
+
+POSI - size 12
+
+    VECTOR  Position;       ; the object's position.
+
+    This is the position (in world coordinates) of the object's axes.  Legal
+    coordinates are in the range -32768 to 32767 and 65535/65536.
+
+AXIS - size 36
+
+    VECTOR  XAxis;
+    VECTOR  YAxis;
+    VECTOR  ZAxis;
+
+    These are direction vectors for the object coordinate system.  They must
+    be "orthogonal unit vectors" (ortho-normal) - i.e. the sum of the
+    squares of the vector components must equal one (or close to it), and
+    the vectors must be perpendicular.
+
+SIZE - size 12
+
+    VECTOR  Size;       ; object size info
+
+    See SHAP chunk above.  The sizes are used in a variety of ways depending
+    on the object shape.  For custom objects and lights, they are the
+    lengths of the coordinate axes drawn in the editor.
+
+BBOX - size 24
+
+    FRACT bounds[6];           ;bounding box data
+
+    The descriptions of the bounds array is as follows:
+
+    bounds[0] - negative X boundary (relative to object axis position)
+    bounds[1] - negative Y boundary
+    bounds[2] - negative Z boundary
+    bounds[3] - posative X boundary
+    bounds[4] - posative Y boundary
+    bounds[5] - posative Z boundary
+
+    This chunk contains the objects bounding box info for use in improving
+    redraw and loading speed when using Imagine's quick stage mode.
+
+STND - variable size
+
+    The data in an STND chunk consists only of smaller sub-chunks.
+    STID and STDT are the only types defined so far.
+
+    This is Imagine's state data chunk.  There is a STND chunk for each
+    (named) state in an object.  Each STND chunk will contain a STID
+    (state ID) chunk followed by one or several STDT (state data) chunks.
+    (see STID and STDT chunks)
+
+STID - size 20
+
+    BYTE stid[18];      ; state name
+    UWORD stFlags;      ; state flags
+                        ;   Bit 0 - contains axis data (group)
+                        ;   Bit 1 - contains shape data (points)
+                        ;   Bit 2 - contains color/properties data
+                        ;   Bits 3 thru 15 - reserved
+
+    This chunk contains the state name and a description of the type of data
+    assiciated with this state.  This chunk will only appear within a STND
+    chunk and is usually followed by one or more STDT chunks.
+
+STDT - variable size
+
+    WORD tag;               ; state data type tags
+                            ;   tag values are as follows:
+                            ;   101 - contains object axis info
+                            ;   102 - contains point (vertex) data
+                            ;   103 - contains path data
+                            ;   104 - contains axis size data
+                            ;   105 - contains face color data (CLST)
+                            ;   106 - contains face filter data (TLST)
+                            ;   107 - contains face reflect data (RLST)
+                            ;   108 - contains object attribute data
+                            ;   all other values are reserved
+    WORD flags;             ; state data flags
+    BYTE stateData[size];   ; state data - variable size
+
+    This is the state data chunk.  The tag value describes what kind of
+    information is actually stored within the stateData[] array.  This chunk
+    will only appear within a STND chunk and will be preceded by either a
+    STID chunk or another STDT chunk.  The stateData[] array is interpreted
+    as follows depending upon the tag type:
+
+        tag = 101 - contains object axis info - saved with grouping
+            VECTOR axis_r;           ; axis position vector
+            MATRIX axis_m;           ; axis alignment vectors
+            (48 bytes total)
+
+            See AXIS and POSI chunks.
+
+        tag = 102 - contains point (vertex) data - saved with shape
+            VECTOR obj_points[point_count];     ; object's points in 3 space
+            (12 * point_count bytes total)
+
+            point_count = point count for object - e.g. from PNTS chunk
+
+        tag = 103 - contains path data - saved with shape
+            PTHD pdata[ACount];        ; path data for object
+            (68 * ACount bytes total)
+
+            ACount = axis count for object - e.g. from PTH2 chunk
+
+        tag = 104 - contains axis size data - saved with shape
+            VECTOR size;            ; object size info
+            (12 bytes total)
+
+            See SIZE chunk.
+
+        tag = 105 - contains face color data (CLST) - saved with properties
+            COLOR   colors[face_count];          ; color values
+            (face_count * 3 bytes total)
+
+            face_count = face count for object - e.g. from FACE/CLST,...
+
+        tag = 106 - contains face filter data (TLST) - saved with properties
+            COLOR   filter[face_count];          ; filter values
+            (face_count * 3 bytes total)
+
+            face_count = face count for object
+
+        tag = 107 - contains face reflect data (RLST) - saved with properties
+            COLOR   reflect[face_count];          ; reflect values
+            (face_count * 3 bytes total)
+
+            face_count = face count for object
+
+        tag = 108 - contains object attribute data - saved with properties
+            UBYTE   props[8];           ; object properties (PRP1 chunk)
+            UWORD   lamp;               ; bit field - lamp type (SHP2 chunk)
+            UWORD   flags;              ; reserved
+            VECTOR  intensity;          ; light intensity (INT1 chunk)
+            FRACT   foglen;             ; value of foglength (FOGL chunk)
+            UBYTE   color[4];           ; object color  (COLR chunk)
+            UBYTE   reflect[4];         ; object reflectance (REFL chunk)
+            UBYTE   filter[4];          ; object transparency (TRAN chunk)
+            UBYTE   specular[4];        ; object specularity (SPC1 chunk)
+            (44 bytes total)
+
+            Note that the properties state does not save texture/brush info,
+            only object base attributes.  See PRP1, SHP2, INT1, FOGL, COLR,
+            REFL, TRAN, SPC1 chunks.
+
+PNTS - size 2 + 12 * point count
+
+    UWORD   PCount;                    ; point count
+    VECTOR  Points[point_count];       ; points
+
+    This chunk has all the points for custom (type 2 - axis) objects.
+    point_count is the total number of points on the object.  Edges will
+    refer to these points by thier position in the Points[] array (i.e.
+    the point numbers appearing below run from 0 through point_count - 1).
+
+EDGE - size 2 + 4 * edge_count
+
+    UWORD   ECount;                   ; edge count
+    UWORD   Edges[edge_count][2];     ; edges
+
+    This chunk contins the edge list for custom objects.  The Edges[][2]
+    array is pairs of point numbers that are connected by the edges.  The
+    values of Edges[n][0] and Edges[n][1] will thus be between 0 and
+    point_count - 1, and the Points[] array will have to be refered to to
+    find the endpoint positions of this edge.  Faces will refer to these
+    edges by thier position in the Edges[][] array (i.e. the edge numbers
+    appearing below run from from 0 to edge_count - 1). (See PTNS chunk)
+
+FACE - size 2 + 6 * face count
+
+    UWORD   FCount;         ; face count
+    UWORD   Faces[][3];     ; faces
+
+    This chunk contains the triangle (face) list for custom objects.  The
+    Faces[][3] array is triples of edge numbers that are connected to form
+    triangles.  This back references through the Edge list and then through
+    the Point list to find the 3 space coordinates of the face's vertexes.
+    (See EDGE and PNTS chunks)  Note: it is possible that the edge numbers
+    given for a face would use more than 3 point numbers all together ...
+    this should be considered as an error ... however, Imagine doesn't
+    enforce the desired constsistency when objects are loaded.  This can
+    lead to some confusion when testing "first time" code, since Imagine
+    sometimes uses only the first two edge numbers, assumeing that the
+    3rd edge is constsient with the 1st two.
+
+PTH2 - size 2 + 68 * axis count
+
+    UWORD   ACount;         ; axis count
+    PTHD    PData[ACount];  ; path (axis) data
+
+    This chunk contains the axis data for Imagine "path" objects.  ACount is
+    the number of axes in the path object.  The PData array contains a bit
+    of data for each point (axis) along the path.  A closed path is made
+    by setting the value of the inFrom[] variable of the first axis to the
+    number of the last axis, and setting the outTo[] variable of the last
+    axis to the number of the first axis (1).  An open path will have to
+    have the flags[] bits 1 (or 2) clear, showing that the first (or last)
+    axis is only connected on one side ... the 1st axis should show a
+    "connected out" flag, and the last axis should show a "connected in"
+    flag only.
+
+COLR - size 4
+REFL - size 4
+TRAN - size 4
+SPC1 - size 4
+
+    BYTE    pad;            ; pad byte - must be zero
+    COLOR   col;            ; RGB color
+
+    These are the main object RGB color, and reflection, transmission and
+    specularity coefficients.
+
+CLST - size 2 + 3 * face_count
+RLST - size 2 + 3 * face_count
+TLST - size 2 + 3 * face_count
+
+    UWORD   face_count;                  ; number of faces
+    COLOR   colors[face_count];          ; colors
+
+    These are the color, reflection and transmission coefficients for each
+    face in custom (type 2 - axis) objects. The face_count has to match the
+    face count in the FACE chunk. The ordering corresponds to the face
+    order.  When the objects main attributes are altered, the new color
+    values are copied into the whole colors[] array.  Modifying color
+    values in face mode or choosing "randomize colors" from the attributes
+    requester will independantly alter the values in the colors[][] array.
+    This chunk appears in all custom (type 2 - axis) objects.
+
+TXT3 - variable size
+
+    UWORD   Flags;          ; texture flags:
+                            ;     Bit  0         - apply to child objs
+                ;     Bits 1 thru 15 - reserved
+    TFORM   TForm;          ; local coordinates of texture axes.
+    FRACT   Params[16];     ; texture parameters
+    UBYTE   PFlags[16];     ; parameter flags for texture requester
+                            ;   Bit 0 - alter red color in color chip
+                            ;   Bit 1 - alter green color in color chip
+                            ;   Bit 2 - alter blue color in color chip
+                            ;   Bit 3 - alter parameter when resizing object
+                            ;   Bits 4 thru 7 - reserved
+    BYTE    SubGr[18];      ; Subrgoup to restrict texture to
+    BYTE    LockState[18];  ; State name for "texture tacking"
+    UBYTE   Length;         ; length of texture file name
+    UBYTE   Name[Length];   ; texture file name (not NULL terminated)
+    UBYTE   optionalpad;    ; appears only if the name string has an even
+                            ; length -- so the total length of the name
+                ; "block" (length + name + pad?) comes out even
+
+    This chunk contains the texture data necessary for the renderer to
+    communicate with Imagine's procedural texture modules and for
+    positioning textures on objects.  Subgr[], if used, restricts the
+    texture application to the named subgroup.  LockState[], if used, will
+    lock (tack) the texture to the object's faces for object morphing
+    without texture sliding.  The values in Params[] are tweened
+    (interpolated) internally by Imagine when morphing/animating textures.
+    A TXT3 chunk appears for each texture applied to an object.
+
+BRS4 - variable size
+
+    UWORD   Flags;          ; brush type:
+                            ;    0 - Color
+                            ;    1 - Reflectivity
+                            ;    2 - Filter
+                            ;    3 - Altitude
+                            ;    4 - Reflection
+    UWORD   WFlags;         ; brush wrapping flags:
+                            ;    Bit 0 - wrap x
+                            ;    Bit 1 - wrap z
+                            ;    Bit 2 - apply to children
+                            ;    Bit 3 - repeat brush
+                            ;    Bit 4 - mirror with repeats
+                            ;    Bit 5 - inverse video
+                            ;    Bit 6 - Use genlock
+    TFORM   TForm;          ; local coordinates of brush axes.
+    UWORD   FullScale;      ; full scale value
+    UWORD   MaxSeq;         ; highest number for sequenced brushes
+    BYTE    SubGr[18];      ; Subrgoup to restrict brush to
+    BYTE    LockState[18];  ; Brush lockstate
+    UBYTE   Length;         ; length of brush file name
+    UBYTE   Name[Length];   ; brush file name (not NULL terminated)
+    UBYTE   optionalpad     ; if name has even length (see TXT3 description)
+
+    This chunk contains the brush data necessary for the renderer to load
+    and position brush maps (texture maps) on objects.  FullScale is used
+    to map the highest color value within a brush map to full-scale 255 for
+    Imagine's internal interpritation of the brush.  Subgr[], if used,
+    restricts the brush application to the named subgroup.  LockState[], if
+    used, will lock (tack) the brush to the object's faces for object
+    morphing without texture sliding.  The value in MaxSeq is tweened
+    (interpolated) internally, from 1 to MaxSeq, by Imagine when animating
+    brushes - this way, brush morphing can be accomplished.  A BRS4 chunk
+    appears for each brush map applied to an object.
+
+
+FOGL - size 4
+
+    FRACT foglen;           ; value of foglength attribute
+
+    This is the object foglength set in Imagine's attributes requester.
+
+PRP1 - size 8
+
+    UBYTE   IProps[8];       ; more object properties
+
+    The discriptions of the IProps array is as follows:
+
+    IProps[0] - dithering factor (0-255)
+    IProps[1] - hardness factor (0-255)
+    IProps[2] - roughness factor (0-255)
+    IProps[3] - shinyness factor (0-255)
+    IProps[4] - index of refraction - ir = (float)IProps[4] / 100.0 + 1.0;
+    IProps[5] - quickdraw type: 0=none, 1=bounding box, 2=quick edges
+    IProps[6] - flag - Phong shading on/off
+    IProps[7] - flag - Genlock on/off
+
+    The dithering factor controls the amount of color dithering used on the
+    object - 255 is fully dithered.  The hardness factor controls how tight
+    the specular spot should be - 0 is a big soft spot, 255 is a tight hot
+    spot  The roughness factor controls how rough the object should appear
+    - 0 is smooth, 255 is max roughness.  The shiny factor in interaction
+    with the object's filter values controls how shiny the object appears.
+    Setting it to anything but zero forces the object to be non-transparent
+    since then the filter values are used in the shiny (reflection)
+    calculations.  A value of 255 means maximum shinyness.
+
+INT1 - size 12
+
+    VECTOR  Intensity;      ; light intensity
+
+    This has seperate R, G & B intensities for the light objects.  Note
+    that these color values are stored as FRACT's and are not limited to
+    the 0 to 255 range of the usual UBYTE color values so lights can be
+    brighter than 255 255 255.
+
+ANID - size 64
+
+    LONG    Cellno;         ; cell number ("key" cell)
+    TFORM   TForm;          ; object position/axes/size in that cell.
+
+    For Imagine's "Cycle" objects, within EACH DESC chunk in the file -
+    that is, for each object of the group, there will be a series of ANID
+    chunks.  The cell number sequences of each part of the group must agree
+    with the sequence for the head object, and the first cell number must
+    be zero.
+
+FOR2 - size 56 + 12 * PC + 2 * keys
+
+    WORD    NumC;               ; number of cross section points
+    WORD    NumF;               ; number of slices
+    WORD    Flags;              ; forms object type flag
+                                ;   Bit 0 - X-Y Cross Section
+                                ;   Bit 1 - One Former View
+                                ;   Bit 2 - One Spacer View
+                                ;   Bits 3 thru 15 - reserved
+                                ;   (bit 0 off means Y-Z Cross Section)
+                                ;   (bits 1 and 2 off means Two Former Views)
+    WORD    keys;               ; number of defined key sections
+    MATRIX  TForm;              ; object rotation/scaling transformation
+    VECTOR  Shift;              ; object translation
+    VECTOR  Points[PC];         ; "Forms" editor points
+    WORD    sexions[keys];      ; list of key sections by number
+
+    For Imagine's "Forms" objects, the "PNTS" chunk above is not written
+    out, but this structure is written instead.  The object's real points
+    are then calculated from these using a proprietary algorithm.  The
+    tranformation parameters above allow the axes of the real object be
+    moved around relative to the "Forms" points.  The value, PC, is
+    calculated as follows:
+
+        for Two Former Views:
+            PC = keys * NumC + 4 * NumF;
+
+        for One Former View:
+            PC = keys * NumC + 2 * NumF;
+
+        for One Spacer View:
+            PC = keys * NumC + 1 * NumF;
+
+PART - size 6
+
+    WORD type;          ; tells what type of particles to use
+                        ;   bits 0-3:  shape
+                        ;       0x0000 - faces (no particles)
+                        ;       0x0001 - tetrahedrons
+                        ;       0x0002 - pyramids
+                        ;       0x0003 - octahedrons
+                        ;       0x0004 - cubes
+                        ;       0x0005 - blocks
+                        ;       0x0006 - dodecahedrons
+                        ;       0x0007 - spheres
+                        ;       0x0008 - random
+                        ;       0x0009 - use object file
+                        ;   bits 4-7:  centering
+                        ;       0x0000 - inscribed
+                        ;       0x0010 - circumscribed
+                        ;       0x0020 - interpolated
+                        ;       0x0030 - barycentric
+                        ;   bits 8-11:  size
+                        ;       0x0000 - small
+                        ;       0x0100 - large
+                        ;       0x0200 - random
+                        ;       0x0300 - specify
+                        ;   bits 12-15:  alignment
+                        ;       0x0000 - to object
+                        ;       0x1000 - to face
+                        ;       0x2000 - random
+    FRACT size;         ; used with specify size
+
+    This is the main object particalization parameters.  This chunk
+    describes the geometry of the particles to be used in place of the
+    objects faces.  The PTFN chunk contains the file name of the "use
+    object file" type of particles, and the FGR2 chunk contains the
+    particle geometry info for specific sub groups.  Particles only work
+    on custom (type 2 - axis) objects with faces.  (see PTFN and FGR2
+    chunks)
+
+PTFN - variable size
+
+    BYTE length;                 ; number of characters in the file name
+    BYTE PartFileName[length];   ; particle file name (not null terminated)
+    BYTE optionalpad;            ; appears only if name has an even length
+                                 ; (see TXT3 description)
+
+    For Imagine's particalized objects.  This is the filename for the "use
+    object file" type of particlization. (see PART chunk)
+
+FGR2 - variable size
+
+    UWORD faceCount;            ; the number of faces in this subgroup
+    BYTE  subGrName[18];        ; the name of the subgroup
+    UWORD faceNums[faceCount];  ; the list of faces in this subgroup
+    UWORD pType;                ; subgroup particle type - see PART chunk
+    FRACT pSize;                ; subgroup particle size - see PART chunk
+    UBYTE pFNSize;              ; character count in the particle file name
+    BYTE  pFName[pFNSize];      ; particle filename - see PTFN chunk
+    BYTE  optionalpad;          ; appears only if name has an even length
+
+    This is the Subgroup info for Imagine's custom (type 2 - axis) objects
+    which have subgroups - the mnemonic, FGR2, stands for face group.
+    pType, pSize, pFNSize, and pFName all deal with particalized subgroups.
+    The faceNums[] array is a list of faces by numerical position in the
+    face list as described in the FACE chunk.  Valid face numbers run from
+    zero through object_face_count - 1.
+
+BBSG - size 18
+
+    BYTE bbsg[18];      ; big bone subgroup name
+
+    This is the Big Bone SubGroup name used with the bones function in
+    Imagine.  By design, BBSG will appear in the DESC chunk of a particular
+    bone (usually an axis), and will refer to a subgroup name in a FGR2
+    chunk of the parent object of this entire group.  (note: the "Bones"
+    functions also assume that a state named DEFAULT appears in the state
+    list of the group's parent object, containing at least "shape" and
+    "grouping" data) (also, see SBSG chunk below)
+
+SBSG - size 18
+
+    BYTE sbsg[18];      ; small bone subgroup name
+
+    This is the Small Bone SubGroup name used with the bones function in
+    Imagine.  By design, SBSG will appear in the DESC chunk of a particular
+    bone (usually an axis), and will refer to a subgroup name in a FGR2
+    chunk of the parent of this entire group.  (see BBSG chunk above)
+
+EFLG - 2 + edge_count
+
+    WORD    edge_count;                 ; the number of edges on the object
+    UBYTE   edgeFlag[edge_count];       ; array of edge flags for each edge
+                                        ;   Bits 0 thru 5 - reserved
+                                        ;   Bit 6 - quick edge
+                                        ;   Bit 7 - sharp edge
+
+    This chunk contains the flag values for all the edges of custom (type
+    2 - axis) objects with edges.  These flags currently support the quick
+    edge and sharp edge flags.  (Note: Imagine writes this chunk only if
+    one or more edges in the object actually has bit 6 or 7 set)
+
+DESC notes
+----------
+
+Again, most of these fields are optional, and some defaults are supplied.
+However, if there is a FACE chunk, there must also be a CLST chunk, an RLST
+chunk and a TLST chunk -- all with matching "count" fields.  The SHAP chunk
+is not optional.
+
+Your best bet in understanding the relationship between chunks (what's
+required, and what's not) will probably be through creating objects within
+Imagine, saving them out, and then interrogating and comparing the TDDD
+files.
+
+The order in which the chunks appear is somewhat irrelevant.  Some of
+the chunks contain a point count, or something similar, and some of them
+(STDT chunks) don't actually contain a count, but are based on a count.
+Imagine assigns the appropriate count based on the first occurence of
+a chunk whose size would depend on the count, and then enforces consitency
+as succeding chunks are processed.
+
+For TXT3 and BRS4 (texture and brush) chunks, the order in which the chunks
+appear in the file determines the order they are listed in Imagine, and
+also the order in which they are applied during rendering.
+
+For Imagine's "Quick Stage" mode, the DESC chunks are processed only until
+a certain minimum amount of data has been read in, and then it skips to the
+end of the DESC chunk.  The "required" fields (in order to skip to the end)
+are NAME,POSN,ALGN,SIZE,SHP2 and BBOX.  If state data (i.e. Bones data) is
+required from the object for stage animation, then it must appear before
+at least one of the "required" fields listed above, or it will be ignored
+-- similarly for cycle editor data (ANID chunks), and path (PTH2) data.
+For example, Imagine does the following:  1) writes all of the "required"
+chunks listed above except for the BBOX chunk, 2) writes ANID chunks (if any),
+3) writes STND chunks (if any), 4) writes a PTH2 chunk (if reqd),
+5) writes a BBOX chunk, and finally, 6) writes the rest of the data.
+
+Unfortunately, Impulse does not have the support staff available to answer
+technical questions about the information included in this document.
+Hopefully, this will be a good starting point.  How far you get with it will,
+most likely, be dependent upon hard work and perseverance.
+
+Good Luck and Enjoy.
+
+PC (80x86 CPU) notes
+====================
+
+The IFF file format originated on machines in which the byte order for
+LONG (4 byte) and WORD (2 byte) data is "most significant byte first".
+This concept has been preserved in the "PC" versions of Imagine.
+
+What it means, is that if you are writing code for the "other" type of CPU
+(80386 code, for example), you will need to reverse the byte ordering in
+(U)LONG, FRACT, and (U)WORD data wherever it appears (e.g. the FRACTs in
+a VECTOR structure must be (separatly) byte reversed ... the size field
+following a chunk identifier is another good example)
+
+IFF file format notes
+---------------------
+
+In case you are unfamiliar with the IFF file structure, the TDDD files
+have the following (simple, "single FORM") IFF structure:
+
+form_ID           4 characters:  'F','O','R','M'
+form_size         LONG size   : -- MSB(yte) first
+form_type         4 characters:  'T','D','D','D'
+chunks:
+    chunk_ID      4 characters: e.g. 'O','B','J',' '
+    chunk_size    LONG size   : -- byte reversed if appropriate
+    chunk_data    'size' bytes:
+    chunk_pad     0 or 1 bytes: -- pad to even length if 'size' is odd
+
+Note: The "form_size" field appearing after the "form_ID" is the total
+      length of the data that FOLLOWS it, INCLUDING the 4-byte (TDDD) id.
+      Also the "chunk_size" fields list the size of the data in the
+      "chunk_data" blocks that follow.  In other words, the size fields
+      when rounded up to an even number, always list the number of bytes
+      (after the size field) to skip forward in the file if, based on the
+      ID field preceding the size, the reader can not or does not wish to
+      interpret the data ... so, in particular, the sizes that appear DO NOT
+      include the length of the ID and size fields themselves, and the
+      'form_size' DOES include 4 bytes for the 'form_type' field that
+      follows it.
+      
+Imagine uses "extended sub-chunks" -- where for some chunk types, the
+data actually consists of a series of smaller chunks, in the same IFF
+form: ID/Size/Data/pad_byte_if_neccesary.  In fact, the only "true" IFF
+chunk that imagine recognizes is the 'OBJ ' chunk -- which contains the
+complete data for a single heirarchy (group) of objects.  Things are as
+they are, mainly for historical reasons ... once upon a time, TDDD files
+were also used to hold all the data for a single frame in an animation,
+and several 'OBJ ' chunks could appear, as well as more chunks giving
+data about the camera position, etc.  Now, when Imagine writes a TDDD
+file, it contains only a single 'OBJ ' chunk.  Imagine will still process
+a file containing multiple 'OBJ ' chunks, but in all cases, except when
+it loads a file into its "Detail Editor", it ignores all but the first
+object heirarchy.
+

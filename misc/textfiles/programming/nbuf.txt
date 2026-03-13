@@ -1,0 +1,430 @@
+                USE A BUFFERING FIFO QUEUE TO OUTPUT YOUR GFX
+
+  --------------------------------------------------------------------------
+  This little text was originally placed in the Imphobia MAG 12.  I've added
+  some little things and I want it to be available for every programmers and
+  not only sceners.  I hope you'll like it and I encourage you to D/L the
+  Imphobia MAGs (great MAG, Darky !!!) available on ftp.cdrom.com /pub/demos
+  and ftp.arosnet.se to read other amazing programming tricks and more...
+  --------------------------------------------------------------------------
+
+
+  Maybe this article has no interest for you, but i think  it's  important  to
+be clear about how to display frames on your screen in a clean manner. 
+
+  There are many demos done by respectable groups, full of nice 3D algorithms,
+nice distos, ...  which suffer of a bad display of the frames (ugly horizontal
+cuts in the frames). The problem is similar with many games (except DOOM which
+is perfect in this domain ;-) ).
+
+  In the good old time of Mode-X, there weren't such problems because everyone
+was using  the multiple pages offered by this scheme of adressing, in order to
+get a perfect double (or triple) buffered display. I know  that  many  of  you
+will argue that ModeX is slow, that now we have PCI/VLB adapters wich run damn
+fast in Mode 13h, and so why to support Mode-X again ... 
+
+  The reply is simple: i don't say that we must support Mode-X... no ! We have
+a better tool now, called UNIVBE 5.1, which offer  many  extended  modes  with
+multiple pages (unlike Mode 13h).
+
+Others will argue: pffff... i don't want to get my 3D engine idle loosing time
+to synchronise with the VGA display and to support double-buffering.
+
+  The reply is : It is possible to get your engine 100% efficient and to get a
+perfect  synchronised  display,  without  "ugly cuts" ,...  Even without using
+UniVBE, if you still want to use your favourite Mode 13h and you have at least
+a VLB/PCI adapter, there is a way to get  a  single-buffered  display  without
+cuts (no, Wizard, it's not with a HBL handler ;-)), and without idle graphics.
+
+
+                                 =============
+                                 1: THE BASICS
+                                 =============
+
+  I  just  put  here  some  lines grabbed from my Open GL user guide, and some
+personnal comments:
+
+  In a movie, motion's achieved by taking a sequence of pictures (24 per sec),
+and then projecting them at 24/s on the screen.  In Computer Graphics, screens
+typically refresh (redraw the picture) approximately 60 to 76/s, and some even
+run at about 120 refreshes/sec.  The usual video modes used in demos and games
+have 70,60, and eventually 50 Hz refresh.
+
+  The 'key' idea that makes motion picture projection work  is that when it is
+displayed, EACH FRAME IS COMPLETED. This is NOT the case if you fill the video
+page during its display  (single-buffering),  because  you  alter  the  screen
+while the video processor decodes it !!!. So the video processor decodes a mix
+of your old and your new frame, and you get those ugly cuts.  You can say that
+a  "rep movsd"  or  "rep stosd" is faster than the decoding of video memory on
+your PCI/VLB adapter in Mode 13h, and it is impossible to "see" the update  of
+the screen.  Right,  if you work with a small video mode (like 64 Kb video mem
+update) and if you are SYNCHRONISED with the screen DURING the modification.
+
+  Now,  suppose  that  you  want  to  display  your million-frame movie with a
+program like this (we suppose the screen refreshes at 70Hz, ie. Mode 13h):
+
+init_gfxmode();
+for (i = 0; i < 1000000; i++)
+{
+    clear_screen();
+    draw_frame(i);
+    SYNC / wait_until_a_70th_of_a_second_is_over();
+    i = i + number of frames to skip to get a constant speed on every machine;
+}
+
+  If  you  add the time taken by your system to clear the screen and to draw a
+typical frame, this program gives more and more disturbing  results  depending
+on  how  close  to 1/70 second it takes to clear and draw. Suppose the drawing
+takes nearly a full 1/70 second. Items drawn first are visible  for  the  full
+1/70  second  and  present a solid image on the screen; items drawn toward the
+end are instantly cleared as the programs starts on the next  frame,  so  they
+present at best a ghostlike image,  since for most of the 1/70 second your eye
+is viewing the cleared background  instead  of  the  items  that  were  enough
+unlucky  to  be  drawn  last. The problem is that this program doesn't display
+completely drawn frames; instead, you watch the drawing as it happens.
+
+********************* 0    solid scanlines
+********************* .
+********************* .
+--------------------- .    ghost scanlines !!!
+--------------------- 199
+
+There are many solutions to this problem:
+
+A) WORK IN A BUFFER IN CENTRAL MEMORY, AND THEN COPY THIS BUFFER TO THE SCREEN 
+   (REP MOVSD)
+
+The code becomes:
+
+init_gfxmode();
+for (i = 0; i < 1000000; i++)
+{
+    copy my buff to video;
+    clear my buff
+    draw_frame(i) in my buff;
+    SYNC / wait_until_a_70th_of_a_second_is_over();
+    i = i + number of frames to skip to get a constant speed on every machine;
+}
+
+  This is better ...  But if you work in a Hi-res GFX mode (ex. 640x400x16M =>
+768k or 1M),  may  be  the  copy  will take more than 1/70, and you will see a
+piece of the previous frame at the bottom of the screen  (instead of the ghost
+frame described before).  This is not esthetic. Moreover you will need to work
+in central mem and then copy to video mem, this is far to be optimal  when  we
+think  that  the recent Video cards have a flat linear display in which we can 
+work directly.
+
+********************* 0    portion of frame i
+********************* .
+********************* .    frontier 
+--------------------- .    portion of frame i-1
+--------------------- 199
+
+  The frontier is +- constant thanks to the SYNC  (assuming the calculation of
+a frame take a constant time... this can be true for plasmas, but not for 3D).
+
+  But concretely, this is worse because the SYNC line is often removed because
+it takes time we could use for the calculation of effects.
+
+  In this case the code becomes:
+
+init_gfxmode();
+for (i = 0; i < 1000000; i++)
+{
+    copy my buff to video;
+    clear my buff
+    draw_frame(i) in my buff;
+    i = i + number of frames to skip to get a constant speed on every machine;
+}        
+
+  This means that there is no more synchronisation with  the  retrace  of  the
+screen.  In this case the frontier between the old (at the bottom) and the new
+frame will move on the screen, and this is REALLY ugly and visible.
+
+i   ******************   i+1 *******************   i+2 ******************
+    ******************       *******************       ******************
+    ******************   i   -------------------       ******************
+i-1 ------------------       -------------------       ******************
+    ------------------       -------------------   i+1 ------------------
+
+      AND EVEN : (!)
+i+2 ------------------       If you look carefully many 3D phong, mapped,  
+    ------------------       bumped demos, you will often see such things. 
+i+3 ******************       (Look them on a 486 DX2-66, Fast Pentiums can 
+    ******************       false the results on demos designed for 486). 
+    ******************
+
+
+  So, this is NOT the right thing to do if you want a quality animation.
+
+B) USE DOUBLE BUFFERING
+    ...
+
+
+                             ===================
+                             2: DOUBLE BUFFERING
+                             ===================
+
+  Double buffering is a radical way to remove the problems  described  before.
+The  idea  is to have 2 video pages, one is displayed while the other is being
+drawn.  When the drawing of a frame is complete,  the two buffers are swapped.
+So the one that was being viewed is now used for drawing, and vice versa. It's
+like  a  movie  projector  with  only two frames in a loop; while one is being
+projected on the screen, an artist is desperately erasing  and  redrawing  the
+frame that is not visible.  As long as the artist is quick enough,  the viewer
+notices  no difference between this setup and one where all frames are already
+drawn  and  the  projector is simply displaying them one after the other. With
+double-bufering,  every frame is shown only when the drawing is complete ; the
+viewer never sees a partially drawn frame.
+
+  This is a sample of code:
+
+  init_gfxmode();
+  j = 0; k = 1;
+  SYNC
+  SetVisualPage(j)
+  for (i = 0; i < 1000000; i++)  {
+    clear page(k)
+    draw_frame(i) in page(k);
+    SYNC / wait_until_a_70th_of_a_second_is_over();
+    k <=> j
+    SetVisualPage(j) // must wait the vertical retrace to set new values to
+                     // the video registers
+    i = i + number of frames to skip to get a constant speed on every machine;
+  }        
+
+The benefits are:
+
+- You  can  work  directly in video mem and use the possibility of FLAT linear
+  adressing. 
+- It is impossible to have interferences between the new and the old frames.
+- Because  you  are  working  directly  in  video memory, you can even use the
+  BitBLT accelerator of  your  card  to  "clear page(k)"  or  to  set  a  nice
+  background,  or to draw lines,  sprites, ... (There are very few cards which
+  have a BitBLT able to work in central memory,  even  if  you  just  want  to
+  specify  a  source  in central mem... so in the single buffering scheme, the
+  copy buff to screen must be done by hand :-( ).  With the new UniVBE 5.2 and
+  the  VBE/AI,  BitBLT  will  be a reality !!! Think about that !!! I'll speak
+  about BitBLT in a next article, both customs routines and VBE/AI support...
+
+The prob:
+
+- You MUST be synchronised with the screen !!! So your graphics engine is idle
+  until the vertical retrace is done, and that is time lost for calculation.
+
+  With the SYNC line, you wait until the current screen refresh period is over
+so that the previous buffer is completely displayed. Assuming that your system
+refreshes  the  display 70 times per second, this means that the fastest frame
+rate you can achieve is 70 frames per second, and if all your  frames  can  be
+cleared  and  drawn  in under 1/70 second, your animation will run smoothly at
+that rate.
+
+  What  often happens on such a system is that the frame is too complicated to
+draw in 1/70 second, so each frame  is  displayed  more  than  once.  If,  for
+example,  it  takes 1/45 second to draw a frame, you get 35 frames per second,
+and the graphics are idle for 1/35-1/45=1/157 second per frame.  Altough 1/157
+second  of  wasted  time might not sound bad, it's wasted each 1/35 second, so
+actually more than 1/5 of the time is wasted.
+
+  That  means  that  if  you're  writing  an  application and gradually adding
+features, at first  each  feature  you  add  has  no  effect  on  the  overall
+performance  -  you still get 70 frames per second. Then, all of a sudden, you
+add one new feature, and your performance is cut in half  because  the  system
+can't  quite draw the whole thing in 1/70 of a second. A similar thing happens
+when the drawing time per frame is more than  1/35 second  -  the  performance
+drops to 35 to 23 frames per  second, and so on (70/1, 70/2, 70/3, 70/4, 70/5,
+...).
+
+
+                      ====================================
+                      3: N-BUFFERING / THE BUFFERING QUEUE
+                      ====================================
+
+  How to get cuts-free animation without idle graphics ?
+
+  The idea is to think in a different manner the couple CPU/Video.  We can see
+this  as  the  classical  problem of producer/consummer: here the CPU produces
+frames and the Video consummes them in parallel.
+
+  The CPU produces the frames as fast as it cans, and the Video  consumes  the
+frames  at  its own independant rate (ex. 70 frames/s). The frames produced by
+the CPU are placed in a FIFO Queue which feeds the Video.
+
+
+              FIFO Queue (N entries max)
+          ---------------------------------
+ CPU ->                        *  *  *  *    -> Video  
+          ---------------------------------
+
+
+  If the FIFO queue is full (the N entries are filled), then the CPU enters in
+a  idle  loop  until  there  is  some  place  free to put the new frame it has
+calculated.
+
+  If the FIFO queue is empty, the Video will keep the old frame displayed, and
+look in the FIFO at the next refresh. 
+
+
+For N=2, we have the double-buffering described before.
+    N=3, we have triple-buffering which is often satisfactory, because it
+         breaks yet the rigid synchronism we had with double-buffering,
+         without using many buffers (3). ID Software have used triple-
+         buffering in their game DOOM, which work in Mode-X (which gives
+         3 pages 320x240x256 or 4 pages 320x200x256).
+    N=4, ...
+    .
+    .
+  The more the buffers,  the  more the CPU can anticipates frames and avoid to
+enter in a idle loop.
+
+  Concretely,  we  can  bufferize the start-adresses of the video pages we are
+working on. In this case, we have a code like that:
+
+
+init_gfxmode();
+install_interrupt_handler();
+
+// CPU (Producer)                             // Interrupt handler (Consummer)
+                                                 (Handler called at each
+j = 1;                                            Vertical retrace)
+InQ(0);
+
+for (i = 0; i < 1000000; i++) 
+{                                                if (EmptyQ() == false) 
+    clear page(j); // use BitBLT                 {   
+    draw_frame(i) in page(j);                     new_start = OutQ(); 
+    while (FullQ() == true) {}; // idle loop      SetVisualPage(new_start);
+    InQ(j);                                      }
+    j = (j + 1) MOD N;                           iret 
+    i = i + number of frames to
+            skip to get a constant 
+            speed on every machine;
+
+}        
+
+Yep, that's quite cool, uh ??? 
+
+Note: to do an interrupt handler synchronized with a refresh of 70Hz, you just
+      have to reprogram the PC timer to a clock a bit faster like 75 Hz,  wait
+      for the VR bit in 3DAh (resynchronisation) and restart the timer...(this
+      is  called  a  semi-active wait). There are many VR-Handler available on
+      FTP sites or BBSes (look for example at the Starport  BBS  intro  source
+      code, ... ). 
+
+  Well, this code work fine if you have a multipage display ...  This is not a
+problem for SVGA modes: if we  consider  a  1M  board,  which  is  the  actual
+standard,  we  have  8  pages  in  320x200x65K,  16 pages 320x200x256, 4 pages
+640x400x256, 3 pages 640x480x256, ... (at least if you use UniVBE).
+
+  But 320x200x256 16 pages doesn't work on all cards, and so the good old Mode
+13h  has  still  a reason to exist. No problem, remember what i told before in
+"The basics",  don't use (physical) synchronised single-buffering with  an Hi-
+Resolution mode...  Ok, but Mode 13h is a small mode which can be updated very
+fast on PCI/VLB cards (64k to fill).  The idea is to use a Logical N-buffering
+combined with a synchronised Physical single buffering.
+
+  In a synchronised Physical single buffering, we work in buffers  in  central
+memory,  and  then  copy  them  into  the  video memory. So, we can imagine to
+bufferize the addresses of those buffers (we place the addresses in the FIFO),
+and then to have an interrupt handler (synchronised with the VR) which get the
+address of the new buffer to display (= to copy) and invoke a copy routine for
+this buffer.
+
+  Warning !!!  This  invoquation can not be a simple call, because if the copy
+routine takes too much time, this can result in a total misfunctionning of the
+interrupt handler (Remember that such periodic interrupt handler is a critical
+code which has some real time constraints and which cannot miss an event !!!).
+In  order  to  avoid  problems,  the  copy  rout  must be interruptible by the
+handler.  This  is obtained if we invoke the copy rout using a context-switch:
+we pop the stack layers  until  we  reach  the  return  address  of  the  code
+interrupted  by  the  handler, and we insert the address of the copy-rout, and
+then we re-push the layers, and when we'll do an "iret"  at  the  end  of  the
+handler,  we'll  jump to the copy-rout (which is interruptible by the handler,
+because it's seen as a normal user application),  at the end of the copy rout,
+we do an iret to restore the code interrupted previously by the handler.
+  
+
+  STACK
+
+| Var 1 |               | Var 1 |
+| Var 2 |  insert Adr 2 | Var 2 |
+| Adr 1 |      --->     | Adr 2 | 
+| ..... |               | Adr 1 |
+
+  You don't have to forget that just before the return address,  there is also
+the status flag, and you have to consider it when you push/pop  if  you  don't
+want  to  obtain  awesome crashes. Just refer you to your 8x86/80x86 manual to
+see how the instructions iret, iretd, ret, ... work. In particular,  when  you
+push the address  (which is in the form segment:offset/selector:offset) of the
+Copy_rout, you must push a dummy flag,  because  it  will  be  invoked  by  an
+iret/iretd (you just have to do a pushf/pushfd).
+
+
+The code becomes:
+
+init_gfxmode(13h);
+install_interrupt_handler();
+
+// CPU (Producer)                             // Interrupt handler (Consummer)
+                                                 (Handler called at each
+j = 1;                                            Vertical retrace)
+InQ(0);
+
+for (i = 0; i < 1000000; i++) 
+{                                                 if (EmptyQ() == false) 
+    clear buffer(j); // use CPU                   {   
+    draw_frame(i) in buffer(j);                    Adr_Buffer = OutQ(); 
+    while (FullQ() == true) {}; // idle loop       Pop all local variables;
+    InQ(j);                                        pushfd;
+    j = (j + 1) MOD N;                             Push Adr of Copy_Rout; 
+    i = i + number of frames to                    RePush all local variables;
+            skip to get a constant                } 
+            speed on every machine;               iretd; // this handler MUST             
+                                                         // be short !!!!
+}                                                
+                                                  Adr_Buffer: Integer;
+                                                  Copy_Rout:  
+                                                  (assume ds/es -> 0)
+                                                  mov esi, Adr_Buffer
+                                                  mov ecx,16000
+                                                  mov edi,0a0000h
+                                                  rep movsd
+                                                  iretd
+
+
+  This is the idea... With this scheme of work, we get 100% efficient code and
+100% synchronisation with the  display.  Moreover,  there are many interesting
+properties  of  the buffering queue, but i let you imagine that ;-). Good luck
+with your implementation.
+
+
+                     ___________________________________
+
+
+
+Greets  to  all  my friends, all TFL-TDV members, all kewl guyz of the scene i
+got a nice chat with, and all guyz who will greet me (us) in the future ;-)
+   
+I specially thanx Karma and Bismarck/TFL-TDV for inspirating me, and Karma for
+playing with the bugs during the implementation of a N-Bufferized Mode 13h for
+his Descent-like part in Hurtless ;-)
+
+(C) 1996 Type One / TFL-TDV 
+
+Contact me at the following addresses:
+
+  llardin@is1.ulb.ac.be                 Laurent Lardinois
+  (until october 1996, after            271 chausse de Saint Job
+  jusk ask jcardin@is1.ulb.ac.be        1180 Bruxelles, Belgium
+  my new email)
+
+อออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออ
+  The  N-Buffering (up to 8 buffers used !) feature was implemented in the demo 
+"HURTLESS"  we  presented  at  Wired 95.  It featured 320x200/640x200 Hi-Color, 
+320x200x256  chained  multipages,  BitBLT,  FLAT LINEAR,  and Video RAM booster 
+support,  WITH  or  WITHOUT  UniVBE.  Have  a look if you want to see the thing
+working  (however  the  demo  might be unstable because of the intensive use of
+Mikmod 2.03 virtual timers...  but  maybe  we'll  do  a  special release with a 
+new version of Mikmod. The SB support is really random).  It  is  available  on 
+ftp.cdrom.com, ftp.arosnet.se, and hagar.arts.kuleuven.ac.be .
+อออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออ

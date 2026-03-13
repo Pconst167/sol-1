@@ -1,0 +1,241 @@
+CHAPTER 5   SOME EXCLUSIVE FEATURES OF A86
+
+
+The IF Statement
+
+As a "nudge" in the direction of structured programming, A86
+offers the IF statement.  Suppose you want to conditionally skip
+around just one instruction.  Ordinarily, this would require, for
+example:
+
+  JNZ >L1    ; skip the following move if NZ
+  MOV AX,BX  ; make this move only if Z
+L1:          ; this label exists only for the above skip
+
+You may replace the above code with the single line:
+
+  IF Z MOV AX,BX
+
+The above line generates exactly the same code as the previous 3
+lines-- a conditional jump of the opposite condition, around the
+statement given in the tail of the IF statement.  The statement
+can be a macro call, giving you the opportunity to skip something
+more complicated.
+
+You may use any condition that would follow the "J" in a
+conditional jump instruction, except CXZ, which does not have a
+reverse condition.  The assembler interprets the condition by
+appending a "J" to the beginning of the condition; so that the
+symbols "C", "NC", "Z", "NZ", etc. are not reserved by the
+assembler, and can be defined in other contexts.
+
+
+Multiple operands to PUSH, POP, INC, DEC
+
+A86 will accept any number of register operands for the
+instructions PUSH, POP, INC, and DEC; it will generate the
+appropriate machine instruction for each operand.  For example,
+the statement PUSH AX,BX is the same as the two statements PUSH
+AX and PUSH BX.
+
+A numeric operand appearing in an INC or DEC statement will cause
+the previous INC(s) or DEC(s) to be propagated that number of
+times.  For example, the statement INC AX,4 will generate 4 INC
+AX instructions.  The statement DEC AL,BX,2 will generate DEC AL,
+DEC BX, DEC AL, DEC BX.  Sorry, numeric operands are not allowed
+if any of the operands affected was a forward reference or
+relocatable quantity; e.g., INC FOO,2 where FOO is undefined.  In
+most such cases, you'll want to code the more efficient ADD FOO,2
+anyway.
+                                                              5-2
+
+Conditional Return Instructions
+
+Programmers accustomed to the conditional return instructions of
+the 8080/Z80 will appreciate the following feature: A86 allows
+the operand to a conditional jump instruction to be one of the
+three RET instructions RET, RETF, or IRET.  The assembler will
+find a nearby return instruction of the indicated flavor, and use
+that as the target for the conditional jump.  For example, JZ RET
+is the replacement for the 8080's RZ return-if-zero instruction.
+In other 8086 assembly languages, you have to find the nearby
+instruction yourself, attach a label to it, and use that label.
+Note that it does not suffice to attach a label to a single RET
+instruction and use that label throughout the program: the range
+of conditional jumps is only 128 bytes in either direction.
+
+What happens if A86 does not find a nearby return instruction? In
+that case, A86 issues an error, "02 Jump > 128", for the next
+matching return instruction in the program.  If there is no
+subsequent return instruction, the return mnemonic will appear as
+an undefined symbol at the end of the program.   In either case,
+you correct the problem by inserting a free-standing return
+instruction at some nearby point in the program, where it will
+not affect the existing code (typically following an
+unconditional JMP instruction).  If there is no good place to
+insert a return instruction, you can always replace the "Jcond
+RET" with an "IF cond RET".
+
+
+A86 extensions to the MOV and XCHG instructions
+
+There are a number of MOV and XCHG instructions available in A86
+that are not a part of the machine instruction set.
+
+First, moves between segment registers, and of immediate
+constants into segment registers are allowed.  For example, if
+you code MOV ES,DS , the assembler will generate a PUSH DS
+followed by a POP ES; which will effect the move that you
+intended.   If you code MOV DS,0 , the assembler will generate
+PUSH AX; MOV AX,0; MOV DS,AX; POP AX.  This is mainly a
+convenience for D86 users to load segment registers manually.
+
+Second, MOV allows 3 operands.  A statement MOV x,y,z is
+equivalent to the two statements MOV y,z followed by MOV x,y.
+Sorry, but segment overrides are not allowed in conjunction with
+3-operand MOVs.  The override preceding the MOV is ambiguous in
+its meaning; and overrides within operands cannot be handled
+correctly by A86.  You'll have to code two MOV instructions if
+you want either or both to have a segment override.
+
+Third, A86 accepts a MOV of a word-sized memory operand into
+another word-sized memory operand.  A86 handles this the same way
+it handles a MOV of segment registers: it generates a PUSH of the
+source followed by a POP of the destination.
+                                                              5-3
+
+Finally, A86 allows the XCHG of a segment register (except CS)
+with any other word-sized quantity, as well as the XCHG of two
+word-sized memory quantities.  If there is no machine instruction
+available for XCHG a,b, then A86 generates PUSH a followed by MOV
+a,b followed by POP b.
+
+
+Local Symbols
+
+If you examine most assembly language program symbol tables, you
+will find that the symbols can be partitioned into two levels of
+significance.   About half the symbols are the names of
+procedures and variables having global significance.  If the
+names of these symbols are chosen intelligently and carefully,
+the program's readability improves drastically. (They usually
+aren't chosen well, most often because the assembler restricts
+symbols to 6 letters, or because the programmer's habits are
+influenced by such assemblers.)
+
+The other half of the symbols in a program have a much lower,
+local significance.  They are only place markers used to
+implement small loops and local branching (e.g., "skip the next 2
+instructions if the Z-flag is set").  Assigning full-blown names
+to these symbols reduces the readability of your program in two
+ways:  First, it is harder to recognize local jumps for what they
+are-- they are usually the assembly language equivalent of high
+level language constructs like IF statements and WHILE loops.
+
+Second, it is harder to follow the global, significant symbols
+because they are buried in a sea of the place marker symbols in
+the symbol table.
+
+A86 solves this problem with local symbols.  If a symbol in your
+program consists of a single letter followed by one or more
+decimal digits (L3, X123, Y37, etc.), then the symbol is a local
+symbol.  Local symbols do not appear in the A86 XREF
+cross-reference listing.  They can also be redefined to something
+completely different later in the program.  Local symbols can be
+of any type: labels, memory variables, etc.
+
+Because local symbols can be redefined, you must take care to
+specify which one you are referring to in your program.  If your
+reference is a forward reference (the label occurs further down
+in the program from the reference), then the reference must be
+preceded by a ">".  For example,
+
+L2:
+  MOVSB
+  INC BX
+  LOOP L2    ; lack of ">" means L2 is above this statement
+  .
+  .
+  JNZ >L2    ; ">" indicates L2 is below this statement
+  .
+  JMP >L2    ; JMP L2 is disallowed here: cannot overlap ranges
+  .
+L2:
+                                                              5-4
+
+I recommend that you assign all your local labels the names L0
+through L9.  If your program is so complex that it needs more
+than 10 place holders in any one stretch of code, then that
+stretch needs to be rewritten.
+
+
+
+Operands to AAM and AAD Instructions
+
+Those of you who have examined 86 family opcodes with an eagle
+eye will have noticed a somewhat spurious "0A" opcode generated
+after every AAM or AAD instruction.  The opcode is there to
+provide the constant divisor or multiplicand for the instruction.
+Believe it or not, there wasn't enough room in the microcode of
+the original 8086 to hold this constant!  Although Intel has
+never announced the generality of AAM and AAD, it is there: you
+can substitute any other constant for 0A (decimal 10), and that
+constant will be used.  A86 supports this by letting you give a
+constant byte-sized operand to AAM or AAD.  Particularly useful
+are the instructions AAM 16, which unpacks AL into nibbles AH and
+AL; and AAD 16, which reverses the process, packing nibbles AH
+and AL into AL.
+
+WARNING: A couple of my users point out to me that the AAD
+instruction with a general operand won't work on the NEC V20 and
+V30 chips.  The operand is assumed to be 10 no matter what it
+really is.  Since a large number of PC "speed up" kits involve
+switching to NEC chips, this will be seen on many PC's.  You
+should not use AAD with an operand if you want your program to
+run on everybody's machine.  Too bad.  AAM works fine, though.
+
+
+Single-Operand Forms of the TEST Instruction
+
+A86 allows the TEST instruction to have a single operand, to set
+the flags according to the value of the operand.  If the operand
+is a register, A86 generates a TEST of the register with itself.
+If the operand is a memory quantity, A86 generates a TEST of the
+memory with the constant -1 (i.e., the quantity will be ANDed
+with an all 1's constant).  For example, instead of TEST DL,DL,
+you can code simply TEST DL.  Instead of TEST WVAR,0FFFF, you can
+code simply TEST WVAR.
+
+
+Optimized LEA Instruction
+
+Many assembly-language programmers are in the habit of using, for
+example, LEA SI,MEMLOC instead of the equivalent MOV SI,OFFSET
+MEMLOC to load an immediate value that represents the pointer to
+a memory location.  However, the LEA instruction form generates
+one more byte of object code than the MOV form. A86 recognizes
+this situation and generates the more-efficient MOV instruction
+when it can.  This also applies to register moves: MOV AX,BX
+instead of LEA AX,[BX].
+                                                              5-5
+
+I've gotten a little flak from some users about this feature.
+They claim it violates my policy against "behind your back"
+actions.  But I feel that this feature is completely equivalent
+to code optimizations in other situations: the short JMP form
+instead of the equivalent near JMP; a byte operand to ADD SI,4
+instead of a word operand; the one-byte XCHG AX,BX instead of the
+general XCHG rw,ew form; etc, etc, etc. In situations where there
+is absolute functional equivalence between forms, A86 tries to
+generate the most efficient form.  But for those who are not
+convinced, I offer the +L2 switch, described in Chapter 3.
+
+Some users have also gotten the mistaken impression, from reading
+Intel's confusing specs, that the longer LEA is sometimes faster
+than the shorter MOV.  This is never the case-- those users are
+reading the clock counts for the memory-fetch forms of MOV, not
+the register-only or immediate-value forms.  If you don't believe
+it, try timing 1000 consecutive LEA's in a loop that executes
+50000 times, vs. a similar loop with the equivalent MOV.
+
+

@@ -1,0 +1,21 @@
+                      FRANKENSTEIN (CRL)
+                      ------------------
+PART 1:
+(You begin in a cabin in the forest) LOOK, GET MONEY, W, D, EXAMINE ROOM, SIT DOWN, WAIT (your dad arrives. He gives you a knife), STAND UP, EXAMINE CHAIR (ah! Your money has fallen out of your pocket), GET MONEY, EXAMINE CHIMNEY, GET PICTURE, E, SEARCH GARDEN (you find a chest), EXAMINE CHEST, REMOVE HINGES WITH KNIFE (you find and take a rope), E, N, N, E, N, W, LOOK AROUND, CLIMB PINE (a bear is chasing you), WAIT (until it is 4 feet away), JUMP ONTO FLOOR (the scared bear knocks down the tree which forms a bridge over the gap), N, N, N, N (you buy some hemp and some matches), S, S, E, LOOK AROUND, GET BUCKET, ENTER BOAT, UNTIE BOAT (it sails to the middle of the bay(?) But there's a hole in it!), OPEN TIN, REMOVE HEMP FROM TIN, PUT HEMP
+IN LEAK (you may now sail on), PUT MATCHES IN TIN (so they won't get wet), CLOSE TIN, BALE BOAT * 4 (with the bucket. The wind brings you to the opposite shore), E, LOOK AROUND, TIE ROPE TO STUMP, D, DIG (you uncover a stone), GET STONE, N, N, N, W, THROW STONE AT WOLF (the wolf is killed), E, E, N, W, N, E, GET WOOD, W, S, E, S, W, S, W, CUT WOLF (the other wolves pounce on it), N, EXAMINE CAVE, GET STAFF, OPEN TIN,
+REMOVE MATCHES, LIGHT WOOD (the monster appears!), GIVE PICTURE TO MONSTER (while he looks at it you make your escape...)
+
+
+PART 2:
+(You start in a cabin) SAY, WHY ARE YOU CRYING (they tell you about the monster), SLEEP, N (they have commited suicide), S, LOOK AROUND, S, E, E, S, S, W, PRAY (a preacher arrives), SAY, HELLO (a hint), E, N, N, N, E, S, LOOK AROUND, GET HAMMER, HIT ANVIL WITH HAMMER * 3 (the smith appears), SAY, CAN I WORK HERE (you get a job and money), N, E, S, E (to buy some weapons), W, N, N, N, W, S (you buy some food), E, E, LOOK AROUND, N (you ride up the mountain), E (you reach a cabin),
+LOOK AROUND, GET PAPER, READ IT (it is from the monster), DROP
+IT, EXAMINE WINDOW (He is outside!), E, N (he runs up the mountain), S, E, E, E, E, EXAMINE ICE, RUB ICE (a man is frozen into the ice!), N, LOAD GUN, AIM AT ICE, FIRE GUN (the ice breaks, but you are safe), S, GET PICKAXE, N, W, W, MAKE HOLE, U, REST, MAKE HOLE, U, REST, MAKE HOLE, DROP PICKAXE, U, N, N, W, U, E, REMOVE BOARDS (this leaves a hole in the floor), JUMP ACROSS GAP, E, W (He follows you), JUMP ACROSS GAP (He doesn't see it and falls down), W, D, E, LOAD GUN, AIM AT MONSTER, FIRE GUN (the end of Frankenstein's monster. You find his diary... 
+
+
+PART 3:
+(You begin in Frankenstein's lab) THINK, LOOK AROUND, EXAMINE SINK, LOOK INTO WATER (you see yourself!), DRINK WATER, EXAMINE BENCH, GET BOOK, OPEN IT, EXAMINE IT (it makes no sense, since you can't read    - yet), CLOSE IT, N, WATCH COUPLE, LISTEN, W (you are discovered - the man shoots you), RUN (you reach the mountains), E, E, E, S, E, N, SEARCH BEACH, GET SALT, PUT SALT ON WOUND (this cleans your wounds. You faint and wake up later on - almost healed), W, W, N, EXAMINE BUSHES (two fruits on it), GET PECULIAR FRUIT, SMELL PECULIAR FRUIT (it is poisonous), GET STRANGE FRUIT, SMELL STRANGE FRUIT, EAT STRANGE FRUIT (this quenches your hunger), E, N (you walk through the woods for days), E, N (you remember that houses mean people - this gives another 5 IQ points), W, W, N, LISTEN (you overhear some angry voices from the house), E, WAIT (some men go hunting for you), N, LOOK AROUND (there is a shed to the west), EXAMINE SHED, OPEN CAREFULLY DOOR, W, LOOK AROUND, LOOK THROUGH GAPS * 3 (the young couple leaves - the old man stays behind), OPEN CAREFULLY DOOR, E, S, W, N, LOOK AROUND, (you talk to the man and then return to the shed), LOOK THROUGH GAPS * 2 (Time passes. Suddenly, one morning, a lion is outside your shed), CUT PECULIAR FRUIT, PUSH SEGMENT UNDER DOOR (the lion eats this and is no more), LISTEN, LISTEN (months pass. You learn to read), OPEN BOOK, READ IT (you learn the truth about yourself), OPEN CAREFULLY DOOR, E,
+S, W, N, (you get into a fight with the young man who is killed. This is the end of the story!)
+
+Jacob Gunness - d.20/3-1990.
+
+

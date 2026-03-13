@@ -1,0 +1,905 @@
+_AN OBJECT-ORIENTED LOGIC SIMULATOR_
+by Kenneth E. Ayers
+
+
+[LISTIN« ONE]
+
+Object subclass: #LogicLab
+  instanceVariableNames: 
+    'devices signals switches clashes changed topPane analyzer breadboard 
+                                               listSelector currentComponent '
+  classVariableNames: ''
+  poolDictionaries: 
+    'FunctionKeys CharacterConstants ' !
+
+!LogicLab class methods !
+description
+         "Answer a String describing the
+         application and version."
+      ^'LogicLab (Version 1.0 -- 06/26/88)'.!
+new
+        "Answer an initialized LogicLab application."
+    | logicLab |
+    logicLab := super new.
+    logicLab initialize.
+    ^logicLab.! !
+
+!LogicLab methods !
+addComponent: aComponent
+           "Add aComponent to the circuit description.
+         If there is an error, answer nil;  otherwise
+         answer aComponent."
+    | name |
+       name := aComponent name.
+    name size == 0
+         ifTrue: [
+           "
+                User is installing -- get a name.
+            "
+         name := self getNewName.
+          name isNil
+            ifTrue: [^nil].
+          aComponent name: name]
+        ifFalse: [
+           "
+                A name has been supplied -- this implies
+                that the component is being installed from
+                a file.  Need to check for a clash with
+                an existing name.
+            "
+          ((self componentNamed: name) isNil)
+          ifFalse: [
+                "
+                        Had a name clash -- get a synonym
+                        from the user and stash both of them
+                        away in the clashes table.  Then
+                        rename the component.
+                    "
+                 name := self getNewName.
+                name isNilä               ifTrue: [^nil].
+              clashes
+                 at: aComponent name
+                    put: name.
+              aComponent name: name]].
+    changed := true.
+    aComponent isDevice
+           ifTrue:  [devices add: aComponent]
+     ifFalse: [
+           aComponent isSignal
+           ifTrue:  [signals add: aComponent]
+             ifFalse: [
+                switches add: aComponent.
+                analyzer isNil
+                   ifFalse: [analyzer addSwitch: aComponent]]].
+    ^aComponent.!
+allNames
+      "Answer an array of all of the
+         names of installed components."
+    ^((self deviceNames), (self signalNames), (self switchNames)).!
+analyzer: aModel
+       "Set the LogicAnalyzer Application model
+         to aModel."
+       analyzer := aModel.!
+breadboardList
+         "Answer an array of strings according to the
+         current list selector."
+    listSelector isNil
+           ifTrue: [listSelector := #listDevices].
+      ^(self perform: listSelector).!
+breadboardMenu
+           "Private -- answer the menu that processes
+         breadboard functions."
+    MenuPosition := Cursor position.
+    ^(Menu
+          labels: ('Load\Save\Erase\List\',
+                 'Install\Connect\Remove\Disconnect\',
+               'Simulate\',
+            'Quit') withCrs
+      lines: #(4 8 9)
+     selectors: #(load     save     erase   list
+               install  connect  remove  disconnect
+                run
+                quit)).!
+changed
+     "Answer true if the circuit has changed."
+    ^changed.!
+changed: aBoolean
+     "Set the circuit-changed flag to aBoolean."
+    changed := aBoolean.!
+close
+      "Close the LogicLab breadboarding window."
+    topPane dispatcher deactivateWindow closeWindow.!
+closeIt
+        "Close the breadboard application window."ä    self close.!
+componentNamed: aName
+           "Answer the component (device, signal, or switch)
+         whose name is aName.  If no component can be found
+         answer nil."
+    | realName |
+    realName := aName.
+      clashes isNil
+           ifFalse: [
+         (clashes includesKey: aName)
+          ifTrue:  [realName := clashes at: aName]].
+    devices do: [:aDevice|
+         (aDevice name = realName)
+           ifTrue: [^aDevice]].
+      signals do: [:aSignal|
+        (aSignal name = realName)
+         ifTrue: [^aSignal]].
+    switches do: [:aSwitch|
+        (aSwitch name = realName)
+          ifTrue: [^aSwitch]].
+     ^nil.!
+componentTypeMenu: selectorArray
+           "Answer a user-selected action for a
+         component type."
+    ^((Menu
+           labels: 'Device\Signal\Switch' withCrs
+         lines: #()
+           selectors: selectorArray) popUpAt: MenuPosition).!
+connect
+        "Make a user-specified connection."
+    | from to |
+    from := self getNode.
+    from isNil
+     ifTrue: [^nil].
+    to := self getNode.
+       to isNil
+       ifTrue: [^nil].
+    from connect: to.
+       changed := true.
+    currentComponent := from model.
+      listSelector := #listComponentConnections.
+    breadboard update.!
+description
+          "Answer a string with a description of the receiver."
+    ^(self class description).!
+deviceNames
+         "Answer a collection of all of the
+         names of installed devices."
+    | list |
+    list := OrderedCollection new: (devices size).
+    devices  do: [:aDevice| list add: aDevice name].
+      ^list.!
+devices
+        "Answer the list of installed devices."
+       ^devices.!ädisconnect
+           "Remove a user-specified connection."
+    | node |
+    node := self getNode.
+    node isNil
+           ifTrue: [^nil].
+      node disconnect.
+    changed := true.
+      currentComponent := node model.
+    listSelector := #listComponentConnections.
+       breadboard update.!
+erase
+       "After user-verification, erase
+         the circuit description."
+    Cursor offset: MenuPosition.
+    (self verify: 'Erase circuit description?')
+       ifFalse: [^nil].
+    self eraseCircuit.
+    listSelector := #listDevices.
+    changed := true.
+      breadboard update.!
+eraseCircuit
+     "Erase the circuit description."
+    devices  do: [:aDevice|
+        self removeComponent: aDevice].
+    signals  do: [:aSignal|
+          self removeComponent: aSignal].
+     switches do: [:aSwitch|
+        self removeComponent: aSwitch].
+       self initialize.!
+getExistingComponent
+        "Answer a user-specified component."
+    | name component reply list |
+     name := self getName.
+      name isNil
+        ifTrue: [^nil].
+    component := self componentNamed: name.
+      component isNil
+     ifFalse: [^component].
+       Cursor offset: MenuPosition.
+       (Menu message:
+         (name, ' not installed -- select from list?')) isNil
+     ifTrue: [^nil].
+    Cursor offset: MenuPosition.
+    reply := self componentTypeMenu:
+                 #(deviceNames signalNames switchNames).
+       Cursor offset: MenuPosition.
+       reply isNil
+          ifTrue: [^nil].
+     list := self perform: reply.
+     (list size == 0)
+     ifTrue: [
+          Menu message: 'None installed'.
+          Cursor offset: MenuPosition.
+          ^nil].ä       name := VariableMenu selectFrom: list.
+    name isNil
+           ifTrue: [^nil].
+      name := list at: name.
+    ^(self componentNamed: name).!
+getExistingName
+     "Answer a user-specified name of
+         an existing component."
+    | component |
+    component := self getExistingComponent.
+     component isNil
+        ifTrue: [^nil].
+       ^(component name).!
+getFile
+         "Answer a FileStream for a
+         user-specified filename."
+    | name |
+     name := self getFilename.
+    name isNil
+        ifTrue: [^nil].
+       ^(File pathName: name).!
+getFilename
+          "Answer a user-specified filename."
+    | name |
+     Cursor offset: MenuPosition.
+     name :=
+        Prompter
+         prompt: 'Enter filename'
+            default: ''.
+    Cursor offset: MenuPosition.
+    ^name.!
+getName
+          "Answer a user-specified name."
+     | name |
+    Cursor offset: MenuPosition.
+    name :=
+        Prompter
+            prompt: 'Enter component name'
+           default: ''.
+      Cursor offset: MenuPosition.
+      ^name.!
+getNewName
+       "Answer a user-specified name for
+         a new component."
+      | name |
+    Cursor offset: MenuPosition.
+    name :=
+         Prompter
+          prompt: 'Enter name for new component'
+            default: ''.
+       Cursor offset: MenuPosition.
+       name isNil
+         ifTrue: [^nil].
+    [(self componentNamed: name) isNil]
+       whileFalse: [ä         name :=
+            Prompter
+                prompt: 'Name exists -- enter NEW name'
+                default: name.
+         Cursor offset: MenuPosition.
+         name isNil
+               ifTrue: [^nil]].
+      ^name.!
+getNode
+        "Answer a user-specified LogicNode."
+    | component |
+     component := self getExistingComponent.
+    component isNil
+       ifTrue: [^nil].
+    ^(component getNode).!
+initialize
+          "Private -- initialize a new
+         LogicLab application."
+    devices  := OrderedCollection new.
+       signals  := OrderedCollection new.
+     switches := OrderedCollection new.
+    changed := true.!
+install
+           "Install a user-specified component."
+    | component |
+     component := LogicComponent install.
+     component isNil
+        ifTrue: [^nil].
+       self addComponent: component.
+    listSelector := self listSelectorFor: component.
+    breadboard update.
+    ^component.!
+installClassFrom: aStream
+       "Install a LogicComponent subclass
+         whose name is the next word on aStream."
+      | className |
+       className := aStream nextWord.
+    (Smalltalk includesKey: className asSymbol)
+        ifFalse: [
+          self error: ('Class: ', className, ' not installed')].!
+installComponentFrom: aStream
+      "Install a LogicComponent instance
+         whose name is the next word on aStream."
+     | className class component |
+      className := aStream nextWord.
+    class := LogicComponent classNamed: className.
+    class isNil
+     ifTrue: [
+          self error: ('Unknown class: ', className).
+         ^nil].
+    component := class new installFrom: aStream.
+    component isNil
+          ifTrue: [^nil].
+     ^(self addComponent: component).!
+installConnectionFrom: aStreamä        "Install a connection from aStream."
+    | fromName from toName to fromNode toNode |
+    fromName := aStream nextWord.
+    from := self componentNamed: fromName.
+      from isNil
+        ifTrue: [
+          self error: ('Unknown component: ', fromName).
+            ^nil].
+    fromNode := from getNodeFrom: aStream.
+    fromNode isNil
+         ifTrue: [
+           self error: ('Unknown node on: ', fromName).
+           ^nil].
+    toName := aStream nextWord.
+       to := self componentNamed: toName.
+     to isNil
+     ifTrue: [
+          self error: ('Unknown component: ', toName).
+          ^nil].
+    toNode := to getNodeFrom: aStream.
+    toNode isNil
+      ifTrue: [
+           self error: ('Unknown node on: ', toName).
+         ^nil].
+    ^(fromNode connect: toNode).!
+installFrom: aStream
+        "Load a circuit from the description
+         on aStream."
+    | keyWord |
+    clashes := Dictionary new.
+      [(aStream atEnd)
+      or: [(keyWord := aStream nextWord) isNil]]
+        whileFalse: [
+         keyWord = 'LOAD'
+              ifTrue:  [
+                 self installClassFrom: aStream]
+           ifFalse: [
+                 keyWord = 'INSTALL'
+                 ifTrue:  [
+                    self installComponentFrom: aStream]
+                  ifFalse: [
+                     keyWord = 'CONNECT'
+                        ifTrue:  [
+                           self installConnectionFrom: aStream]
+                          ifFalse: [
+                        self error:
+                            ('Unknown command: ',
+                              keyWord)]]]].
+      clashes release.
+    clashes := nil.!
+list
+      "Process a user-specified list request."
+    | selection |
+    selection :=
+       (Menuä         labels: ('Components\Connections\',
+                  'Circuit Description') withCrs
+          lines: #()
+         selectors: #(listComponents
+                      listConnections
+                      listCircuit))
+         popUpAt: MenuPosition.
+    selection isNil
+          ifTrue: [^nil].
+     listSelector := selection.
+    breadboard update.!
+listCircuit
+         "Answer a collection of strings with
+         the circuit description."
+    | name stream list |
+    CursorManager execute change.
+    name := 'logiclab.tmp'.
+       stream := File pathName: name.
+    list := OrderedCollection new.
+    stream
+         nextPutAll: '****  Circuit Description  ****';
+       cr;
+          cr.
+    self storeOn: stream.
+    stream flush.
+    stream position: 0.
+    [stream atEnd]
+        whileFalse: [list add: stream nextLine].
+    stream close.
+     File remove: name.
+    CursorManager normal change.
+    ^list.!
+listComponentConnections
+          "Answer a collection of strings listing
+         the connection chain(s) for the
+         'currentComponent'."
+    currentComponent isNil
+        ifTrue:  [^#()]
+       ifFalse: [
+          ^(#('****  Connection List  ****' ' '),
+              currentComponent connectionList)].!
+listComponents
+         "Answer a collection of strings containing
+         a list of installed components."
+    | selection |
+    selection :=
+     self componentTypeMenu:
+             #(listDevices listSignals listSwitches).
+    selection isNil
+       ifTrue: [^#()].
+    ^(self perform: selection).!
+listConnections
+     "Answer a collection of strings listing
+         the connection chain(s) for a
+         user-specified component."ä    | component |
+    component := self getExistingComponent.
+     component isNil
+        ifTrue: [^#()].
+       currentComponent := component.
+    ^self listComponentConnections.!
+listContaining: aComponent
+           "Answer the list (devices, signals, or switches)
+         that includes aComponent."
+    (devices includes: aComponent)
+        ifTrue: [^devices].
+       (signals includes: aComponent)
+     ifTrue: [^signals].
+    ^switches.!
+listDevices
+          "Answer a collection of strings containing
+         a list of all the installed devices."
+      | size list |
+       size := devices size.
+    size == 0
+         ifTrue: [^#('No devices installed')].
+    size := size + 1.
+       list := OrderedCollection new: size.
+       list add: 'DEVICES'.
+       devices do: [:aDevice| list add: ('  ', (aDevice identify))].
+    ^list.!
+listSelectorFor: aComponent
+          "Answer the list selector method used
+         to produce the list for aComponent's type."
+       aComponent isDevice
+          ifTrue: [^#listDevices].
+      aComponent isSignal
+         ifTrue: [^#listSignals].
+     ^#listSwitches.!
+listSignals
+        "Answer a collection of strings containing
+         a list of all the installed input signals."
+    | size list |
+    size := signals size.
+    size == 0
+     ifTrue: [^#('No signals installed')].
+      size := size + 1.
+    list := OrderedCollection new: size.
+    list add: 'SIGNALS'.
+    signals do: [:aSignal| list add: ('  ', (aSignal identify))].
+    ^list.!
+listSwitches
+       "Answer a collection of strings containing
+         a list of all the installed swithces."
+    | size list |
+     size := switches size.
+       size == 0
+        ifTrue: [^#('No switches installed')].
+    size := size + 1.
+       list := OrderedCollection new: size.ä       list add: 'SWITHCES'.
+    switches do: [:aSwitch| list add: ('  ', (aSwitch identify))].
+    ^list.!
+load
+     "Load a circuit description from
+         a user-specified file."
+    | file |
+     file := self getFile.
+      file isNil
+        ifTrue: [^nil].
+    self installFrom: file.
+      listSelector := #listDevices.
+       breadboard update.!
+noDelay
+         "Setup all components to ignore
+         propagation delays."
+    signals  do: [:signal| signal noDelay].
+    switches do: [:switch| switch noDelay].
+       devices  do: [:device| device noDelay].!
+noMenu
+     "Private -- answer an empty menu."
+    ^(EmptyMenu new).!
+open
+         "Open the Breadboard and Analyzer windows."
+    | size position |
+     size := (Display boundingBox extent * 3) // 4.
+       position := Display boundingBox center - (size // 2).
+    topPane :=
+          TopPane new
+         label: ((self class description),
+                    ' -- Breadboard');
+         model: self;
+         menu: #noMenu;
+          yourself.
+       topPane addSubpane:
+          (breadboard := ListPane new
+         name: #breadboardList;
+           model: self;
+           menu: #breadboardMenu;
+          change: #doNothing:;
+          framingRatio: (0 @ 0 extent: 1 @ 1)).
+      topPane reframe: (position extent: size).
+    topPane dispatcher openWindow scheduleWindow.!
+quit
+     "Quit this LogicLab."
+      (self verify: 'Quit this LogicLab?')
+          ifFalse: [^nil].
+      self eraseCircuit.
+    signals := switches := devices := nil.
+      analyzer isNil
+        ifFalse: [
+          analyzer closeWindow.
+           analyzer := nil].
+    breadboard dispatcher deactivateWindow closeWindow.
+       Scheduler systemDispatcher redraw.ä     Scheduler resume.!
+remove
+     "Remove a user-specified component."
+     | component |
+      component := self getExistingComponent.
+    component isNil
+        ifTrue: [^nil].
+    changed := true.
+       listSelector := self listSelectorFor: component.
+    self removeComponent: component.
+       breadboard update.!
+removeComponent: aComponent
+     "Remove aComponent from the circuit."
+      analyzer isNil
+        ifFalse: [analyzer removeComponent: aComponent].
+    (self listContaining: aComponent) remove: aComponent.
+    aComponent remove.!
+reset
+         "Reset all components."
+    signals     do: [:signal| signal reset].
+     switches do: [:switch| switch reset].
+      devices  do: [:device| device reset].!
+restoreDelay
+        "Setup all components to use
+         propagation delays."
+     signals  do: [:signal| signal restoreDelay].
+     switches do: [:switch| switch restoreDelay].
+     devices  do: [:device| device restoreDelay].!
+resume
+        "Resume the breadboarding application
+         after running the simulation."
+    Cursor offset: breadboard frame center.
+    topPane dispatcher scheduleWindow.!
+run
+         "Invoke the LogicAnalyzer to run the simulation."
+      analyzer isNil
+        ifTrue: [
+         analyzer := LogicAnalyzer new.
+           analyzer openOn: self]
+         ifFalse: [analyzer activate].!
+save
+           "Store the circuit description in
+         a user-specified file."
+    | file |
+    file := self getFile.
+     file isNil
+       ifTrue: [^nil].
+    CursorManager execute change.
+    self storeOn: file.
+    file
+      flush;
+        close.
+      CursorManager normal change.!
+selectName
+     "Answer a user-selected name from a listä         of the names of installed components."
+    | names index |
+    names := self allNames.
+      (names size == 0)
+       ifTrue: [^nil].
+    index := VariableMenu selectFrom: names.
+      index isNil
+         ifTrue: [^nil].
+    ^(names at: index).!
+signalNames
+           "Answer a collection of all of the
+         names of installed signals."
+      | list |
+    list := OrderedCollection new: (signals size).
+    signals     do: [:aSignal| list add: aSignal name].
+    ^list.!
+signals
+      "Answer the list of installed signals."
+    ^signals.!
+simulate
+           "Simulate one pseudo-time interval."
+    signals  do: [:signal| signal simulate].
+       switches do: [:switch| switch simulate].
+    devices  do: [:device| device simulate].!
+storeClassesOn: aStream
+           "Write a record of each component class
+         used by the circuit on aStream."
+       | classes |
+      classes := Set new.
+     devices  do: [:aDevice| classes add: aDevice class].
+     signals  do: [:aSignal| classes add: aSignal class].
+     switches do: [:aSwitch| classes add: aSwitch class].
+     classes do: [:aClass|
+          aStream
+          nextPutAll: ('LOAD ', (aClass name));
+           cr].!
+storeComponentsFrom: aCollection on: aStream
+       "Write a record of each logic component from
+         aCollection installed in the circuit on aStream."
+    aCollection do: [:aComponent|
+      aStream nextPutAll: 'INSTALL '.
+     aComponent storeOn: aStream.
+         aStream cr].!
+storeConnectionsOn: aStream
+         "Write a record of each connection
+         in the circuit on aStream."
+    devices  do: [:aDevice| aDevice storeConnectionsOn: aStream].
+    signals     do: [:aSignal| aSignal storeConnectionsOn: aStream].
+     switches do: [:aSwitch| aSwitch storeConnectionsOn: aStream].
+      devices  do: [:aDevice| aDevice unMark].
+    signals  do: [:aSignal| aSignal unMark].
+      switches do: [:aSwitch| aSwitch unMark].!
+storeDevicesOn: aStream
+      "Write a record of each logic device
+         installed in the circuit on aStream."ä    self storeComponentsFrom: devices on: aStream.!
+storeOn: aStream
+           "Write a description of the circuit on
+         aStream in a form that can be recovered
+         by the 'installOn:' method."
+    self
+      storeClassesOn: aStream;
+      storeDevicesOn: aStream;
+      storeSignalsOn: aStream;
+      storeSwitchesOn: aStream;
+       storeConnectionsOn: aStream.!
+storeSignalsOn: aStream
+           "Write a record of each logic signal
+         installed in the circuit on aStream."
+    self storeComponentsFrom: signals on: aStream.!
+storeSwitchesOn: aStream
+        "Write a record of each logic switch
+         installed in the circuit on aStream."
+      self storeComponentsFrom: switches on: aStream.!
+switches
+      "Answer the list of installed switches."
+    ^switches.!
+switchNames
+        "Answer a collection of all of the
+         names of installed swithces."
+    | list |
+    list := OrderedCollection new: (switches size).
+    switches     do: [:aSwitch| list add: aSwitch name].
+    ^list.!
+verify: aPrompt
+      "Ask the user to verify some condition."
+    Cursor offset: MenuPosition.
+    ^((Menu message: aPrompt) notNil).! !
+ ç
+
+[LISTIN« TWO]
+
+LogicSwitch subclass: #ToggleSwitch
+  instanceVariableNames: ''
+  classVariableNames: ''
+  poolDictionaries: '' !
+
+!ToggleSwitch class methods !
+
+type
+        "Answer a string with the receiver's type."
+    ^'Toggle Switch'.! !
+!ToggleSwitch methods !
+identify
+        "Answer a string identifying the receiver."
+    ^((self name),
+        ' (', (self type), ')').!
+push: aButton
+        "Simulate pushing a toggle switch by
+         inverting its state."
+    node invert.
+    node isHigh
+        ifTrue:  [aButton lampOn]
+        ifFalse: [aButton lampOff].
+    (model isNil or: [changeSelector isNil])
+        ifFalse: [model perform: changeSelector].!
+reset
+        "Reset the receiver."
+    button isNil
+        ifFalse: [
+            node isHigh
+                ifTrue:  [button lampOn]
+                ifFalse: [button lampOff]].!
+simulate
+        "Simulate a toggle switch."
+    node output.! !
+
+
+[LISTIN« THREE]
+
+LogicSwitch subclass: #PulserSwitch
+  instanceVariableNames: 
+    'rest time timer '
+  classVariableNames: ''
+  poolDictionaries: '' !
+
+!PulserSwitch class methods !
+
+type
+        "Answer a string with the receiver's type."
+    ^'Pulser'.! !
+!PulserSwitch methods !
+identify
+        "Answer a string identifying the receiver."
+    ^((self name),
+        ' (', (self type), ' -- ',
+            (LogicNode
+                statePrintString: (LogicNode not: rest)), ': ',
+            (TimeInterval timePrintString: time), ')').!
+initialize
+        "Initialize a new PulserSwitch."
+    super initialize.
+    rest := false.
+    time := timer := 0.!
+
+install
+        "Answer the receiver with user-specified
+         rest state and pulse time."
+    rest := LogicNode getState.     "User will select pulse state"
+    rest isNil
+        ifTrue: [^super release].
+    rest := LogicNode not: rest.
+    time := TimeInterval getTimeFor: 'pulse'.
+    time isNil
+        ifTrue: [^super release].
+    ^self.!
+installFrom: aStream
+        "Answer a new PulserSwitch initialized with
+         parameters read from aStream."
+    super installFrom: aStream.
+    rest := LogicNode stateNamed: aStream nextWord.
+    node state: rest.
+    time  := aStream nextWord asInteger.
+    ^self.!
+push: aButton
+        "Simulate pushing a Pulser Switch."
+    timer == 0
+        ifTrue: [node state: (LogicNode not: rest)].
+    timer := time.
+    node isHigh
+        ifTrue:  [aButton lampOn]
+        ifFalse: [aButton lampOff].
+    (model isNil or: [changeSelector isNil])ä        ifFalse: [model perform: changeSelector].!
+reset
+        "Reset the receiver's state to its resting
+         state and its timer to zero."
+    node state: rest.
+    timer := 0.
+    button isNil
+        ifFalse: [
+            node isHigh
+                ifTrue:  [button lampOn]
+                ifFalse: [button lampOff]].!
+simulate
+        "Simulate a Pulser Switch."
+    timer == 0
+        ifTrue: [
+            node state: rest.
+            button isNil
+                ifFalse: [
+                    node isHigh
+                        ifTrue:  [button lampOn]
+                        ifFalse: [button lampOff]]]
+        ifFalse: [timer := timer - 1].
+    node output.!
+storeOn: aStream
+        "Store a record of the receiver on aStream."
+    super storeOn: aStream.
+    aStream
+        nextPutAll: (' ',
+                        (LogicNode statePrintString: rest), ' ',
+                        (time printString)).! !
+
+[LISTIN« FOUR]
+
+LogicDevice subclass: #N74LS00
+  instanceVariableNames: ''
+  classVariableNames: ''
+  poolDictionaries: '' !
+
+!N74LS00 class methods !
+description
+        "Answer a string with a description
+         of the receiver's function."
+    ^'Quad 2-input NAND gate'.!
+type
+        "Answer a string with the receiver's type."
+    ^'74LS00'.! !
+!N74LS00 methods !
+initialize
+        "Private -- initialize the propagation delays
+         for a new 74LS00 LogicDevice."
+    super
+        initialize;
+        initializeDelays:
+            #(  5  5 10    5  5 10    0
+               10  5  5   10  5  5    0 ).!
+simulate
+        "Simulate a 74LS00 device."
+    ((pins at: 1) isHigh and: [(pins at: 2) isHigh])
+        ifTrue:  [(pins at: 3) output: false]
+        ifFalse: [(pins at: 3) output: true].
+    ((pins at: 4) isHigh and: [(pins at: 5) isHigh])
+        ifTrue:  [(pins at: 6) output: false]
+        ifFalse: [(pins at: 6) output: true].
+    ((pins at: 10) isHigh and: [(pins at: 9) isHigh])
+        ifTrue:  [(pins at: 8) output: false]
+        ifFalse: [(pins at: 8) output: true].
+    ((pins at: 13) isHigh and: [(pins at: 12) isHigh])
+        ifTrue:  [(pins at: 11) output: false]
+        ifFalse: [(pins at: 11) output: true].! !
+
+
+[LISTIN« FIVE]
+
+output: aState ç
+
+        "Generate aState as an output from the node." ç
+
+    old := int. ç
+    int := aState. ç
+    int == ext ç
+        ifTrue: [ ç
+            "State is stable" ç
+            timer := 0. ç
+            ^self outputToConnections]. ç
+    "State has changed" ç
+    timer == 0 ç
+        ifTrue: [ ç
+            "No delay in progress -- initiate prop delay" ç
+            delay == 0 ç
+                ifTrue: [ ç
+                    "No delay -- just change state" ç
+                    ext := int] ç
+                ifFalse: [ ç
+                    "Arm delay timer" ç
+                    timer := delay]. ç
+            ^self outputToConnections]. ç
+    "Propagation delay in progress" ç
+    timer := timer - 1. ç
+    timer == 0 ç
+        ifTrue: [ ç
+            "Timer has expired -- update state" ç
+            ext := int]. ç
+    self outputToConnections. ç
+
+
+[LISTIN« SIX]
+
+simulate ç
+
+        "Simulate a 74LS00 device." ç
+
+    ((pins at: 1) isHigh and: [(pins at: 2) isHigh]) ç
+        ifTrue:  [(pins at: 3) output: false] ç
+        ifFalse: [(pins at: 3) output: true]. ç
+    ((pins at: 4) isHigh and: [(pins at: 5) isHigh]) ç
+        ifTrue:  [(pins at: 6) output: false] ç
+        ifFalse: [(pins at: 6) output: true]. ç
+    ((pins at: 10) isHigh and: [(pins at: 9) isHigh]) ç
+        ifTrue:  [(pins at: 8) output: false] ç
+        ifFalse: [(pins at: 8) output: true]. ç
+    ((pins at: 13) isHigh and: [(pins at: 12) isHigh]) ç
+        ifTrue:  [(pins at: 11) output: false] ç
+        ifFalse: [(pins at: 11) output: true]. ç
+ç
+
+

@@ -1,0 +1,216 @@
+
+Attention Game Vendors!
+by Bryce Nesbitt
+* Copyright 1988 Commodore-Amiga, Inc.
+* This information is provided "as is"; no warranties are made.  All 
+* use is at your own risk. No liability or responsibility is assumed.
+* Permission granted to reproduce, provided this notice remains.
+
+
+There are some very nice games for the Amiga that ignore the Operating System
+and take over the machine.  This practice is discouraged, but allowable. 
+Some of these games use the floppy disk hardware in an incorrect manner. 
+Such misuse is *NOT ACCEPTABLE*.
+
+Worse yet, some books by major publishers have advocated incorrect use of the
+disk hardware.  For the benefit of software vendors, Commodore, dealers,
+customers and the Amiga, this must stop.
+
+
+Commodore uses floppy disk drives manufactured by several different vendors. 
+These vendors often upgrade or modernize their disk drive lines, usually
+making the older drive models unavailable.  For this reason, it is impossible
+for a developer to test with all possible drive types.  In order to work
+across this broad spectrum of drives, certain rules must be adhered to.
+
+To make compliance simple, here is complete and ready to use source code. 
+Three functions are provided to correctly implement the three most critical
+drive operations.  This code may be dropped directly into an existing loader
+with no hassle, fuss or mess.
+
+                MOTORON ;Turn the motor on, and properly wait for the
+                                ; drive to reach full speed.
+                MOTOROFF        ;Turn off and deselect all drives
+                STEPHEAD        ;Step the head, and properly wait for the 3.0
+                                ; millisecond step delay on any speed CPU.
+                TEST            ;Test program showing use of above functions.
+
+
+
+
+*  opt l+,c+,w-
+;
+; Low-level "take over the machine" disk drive functions.
+;
+; *** FOR USE ONLY WHEN YOU HAVE TAKEN OVER THE MACHINE ***
+;
+; Written by Bryce Nesbitt, Commodore-Amiga, Inc.
+; No copyright claimed.
+;
+;****** Externally visible functions
+
+        XDEF    MOTORON     ;Turn drive 0 motor ON & wait for READY.
+        XDEF    MOTOROFF    ;Turn off all drive motors.
+        XDEF    STEPHEADS   ;Step the drive head & wait properly.
+
+
+;****** Hard-coded I/O register locations
+;
+CIAA_PRA        EQU $BFE001 ;Port "A" on CIA "A".
+CIAB_PRB        EQU $BFD100 ;Port "B" on CIA "B".
+CIAA_TALO       EQU $BFE401 ;Timer A low
+CIAA_TAHI       EQU $BFE501 ;Timer A high
+CIAA_ICR        EQU $BFED01 ;Interrupt control register
+CIAA_CRA        EQU $BFEE01 ;Timer A control
+
+
+;;;;;;; MOTORON ;;;;;;;
+;
+; Turn off the motors of drives 1-3, then turn on drive 0.
+; This function returns when drive 0 is ON and spinning at full speed.
+; If drive 0 is already spinning, this function returns very quickly.
+;
+; The direction and side lines are untouched.
+;
+MOTORON:
+                or.b    #$F9,CIAB_PRB   ;Set motor line to off, deselect
+                                         ;all drives, and unset STEP line.
+                and.b   #$8F,CIAB_PRB   ;Select drives 1-3 so they see the
+                                         ;motor off setting
+                or.b    #$70,CIAB_PRB   ;Deselect drives 1-3
+
+                and.b   #$7F,CIAB_PRB   ;Set motor ON.  This must be done
+                                         ;*BEFORE* selecting drives!
+                and.b   #$F7,CIAB_PRB   ;Select drive zero.  The drive will
+                                         ;"remember" the motor setting
+                                         ;if the motor was already on,
+                                         ;nothing happens
+
+motor_wait      btst.b  #5,CIAA_PRA     ;Check READY line
+                bne.s   motor_wait      ;Busy-wait until drive is ready
+                rts
+
+
+
+;;;;;;; MOTOROFF ;;;;;;;
+;
+; Turn OFF all drive motors.
+;
+;
+MOTOROFF:
+                or.b    #$F8,CIAB_PRB   ;Deselect all drives and set motor
+                                         ;line to OFF
+                and.b   #$87,CIAB_PRB   ;Select all drives so they see the
+                                         ;new motor setting.
+                or.b    #$F8,CIAB_PRB   ;Deselect all drives
+                rts
+
+
+
+;;;;;;; STEPHEADS ;;;;;;;
+;
+; D0 must contain zero to step te heads inward, and -1 to step the
+; heads toward the outside of the disk.
+;
+; The heads will step in the direction indicated.  After stepping this
+; function will do a processor-independant wait for the required
+; 3.0 milisecond step delay.  Note that some disk drives do not
+; require a full 3.0 miliseconds, but others do.  It is not safe
+; to release a commercial product with a shorter step delay.
+;
+; Note that the STEP line must always start out high, be pulsed
+; low, then return high.
+;
+; Using this timer chip method and interrupts, it is easy to create
+; a loader that keeps on loading while your title music plays.
+;
+STEPHEADS:
+                and.b   #2,d0           ;Remove garbage bits
+                or.b    d0,CIAB_PRB     ;Set direction register FIRST
+
+                ;(Try to be a little bit slow about pulsing the step line)
+                bclr.b  #0,CIAB_PRB     ;Pulse STEP line low
+                bset.b  #0,CIAB_PRB     ;Return STEP high
+;
+; Use the timer chip to waste 3.0 miliseconds
+;
+; The base Amiga crytal frequecies are:
+;           NTSC    28.318181 Mhz
+;           PAL     28.37516  Mhz
+; The two 16 bit timers on the 8520 chips each count down at 1/10
+; the CPU clock, or .715909 Mhz.  That works out to 1.3968255
+; microseconds per count.  Under PAL the countdown is a hair
+; slower, .709379 Mhz.
+;
+; To wait 1/100 second would require waiting 10,000 microseconds.
+; The timer register would be set to (10,000 / 1.3968255 =
+; 7159).
+;
+; To wait 3 miliseconds would require waiting 3000 microsecsonds.
+; The register would be set to (3000 / 1.3968255 = 2148).
+;
+; See the hardware manual for more information on the 8520 chips.
+;
+
+
+;----Setup (really only needs to be done once)
+                move.w  #$7fff,$dff09a      ;Kill all custom chip interrupts
+;----This sets timer A to one-shot mode.
+                move.b  CIAA_CRA,d0         ;Set control register A
+                and.b   #%11000000,d0       ;Don't trash the 60/50Hz flag
+                or.b    #%00001000,d0       ;or serial direction bits
+                move.b  d0,CIAA_CRA
+                move.b  #%01111111,CIAA_ICR ;Clear all 8520 interrupts
+;----end setup
+
+;----Set time (low byte THEN high byte)
+                move.b  #(2148&255),CIAA_TALO  ;Mask off low part
+                move.b  #(2148>>8),CIAA_TAHI  ;Shift high part 8 bits
+
+;----Wait for the timer to count down
+busy_wait:      btst.b  #0,CIAA_ICR         ;Wait for timer expired flag
+                beq.s   busy_wait
+                rts
+
+
+
+
+
+;;;;;;; TEST ;;;;;;;
+;
+; Quick, nasty test program
+;
+
+*               INCDIR  "inc:"
+                INCLUDE "exec/types.i"
+                INCLUDE "exec/ables.i"
+
+                XREF    _LVODisable
+
+
+TEST:           move.l  4,a6
+                jsr     _LVODisable(a6)
+                bsr     MOTORON
+
+                moveq   #10,d3          ;Ten full seeks before end
+fullseek:
+                bset.b  #1,CIAB_PRB     ;Set direction to OUTWARD
+                moveq   #80-1,d2        ;80 tracks
+test4           bsr     STEPHEADS
+                btst.b  #4,CIAA_PRA     ;Check track 00 sensor
+                dbeq    d2,test4        ;Decrement and branch until
+                                        ;EQual or count exceeded
+                moveq   #80-1,d2
+                bclr.b  #1,CIAB_PRB     ;Set direction to INWARD
+test3           bsr     STEPHEADS
+                dbra    d2,test3
+
+                dbra    d3,fullseek
+
+
+                bsr     MOTOROFF
+fish            bra.s   fish
+;
+; We have killed the operating system, so this tester never exits
+;
+

@@ -1,0 +1,1049 @@
+Newsgroups: rec.arts.startrek.misc
+Subject: FAQL: STAR TREK MUSIC
+From: Otto Heuer #3 <ottoh3@cfsmo.honeywell.com>
+Date: Mon, 1 Feb 93 00:06:08 -0600
+Message-ID: <9302010604.AA26162@pserv.CFSMO.Honeywell.COM>
+Organization: mailEnteringNews at Honeywell SRC
+Lines: 1042
+
+	 PERIODIC LIST OF STAR TREK MUSIC (last updated 7/15/92)
+
+"Theme from Star Trek" (The Original Series) 
+Lyrics by Gene Roddenberry 
+ 
+     Beyond 
+          The rim of the star-light 
+     My love 
+          Is wand'ring in star-flight 
+     I know 
+          He'll find in star-clustered reaches 
+     Love 
+          Strange love a star woman teaches. 
+     I know 
+          His journey ends never 
+     His star trek 
+          Will go on forever. 
+     But tell him 
+     While he wanders his starry sea 
+          Remember, remember me. 
+---------------------------------------------------------------------------- 
+"The Goodland"  1:05
+from TOS "The Way to Eden" 
+sung by Adam 
+ 
+     Lookin' for the goodland, 
+          Goin' astray. 
+     Don't cry, 
+          Don't cry. 
+     Oh I can't have honey 
+          And I can't have cream 
+     Goin' live not die, 
+          Goin' live not die. 
+     Standin' in the middle of it all one day. 
+          Look at it shining around me and say. 
+     I'm here, 
+          I'm here. 
+     In the goodland, 
+          in the new land, 
+     I'm here. 
+---------------------------------------------------------------------------- 
+"Hey Out There!" 2:35 
+from TOS "The Way to Eden" 
+sung by Adam and blonde female friend 
+ 
+     I'm talkin' 'bout you, 
+          I'm talkin' 'bout me. 
+     Long time back when the galaxy was new. 
+     Man found out what he had to do. 
+     Found he had to eat and he found he had to drink, 
+          And a long time later he found he had to think. 
+     Yes, think. 
+ 
+     [I'm standing here wondering -- What?] 
+ 
+     If a man tells another man, 
+          How to mow hay.
+     He piles up trouble for himself all day. 
+     But all kinds of trouble will come to an end. 
+     When a man tells another man, 
+          Be my friend. 
+     My friend. 
+ 
+     [Well what's it going to be?] 
+ 
+     There's a mile wide emptiness, 
+          Between you and me. 
+     [Let's|Can't] reach across it, 
+          [On an even sea|Hardly even see]. 
+     Someone ought'a take a step, 
+          One way or other. 
+     Let's say goodbye, 
+          Or let's say brother. 
+ 
+     Brother! 
+          Brother! 
+     Hey out there... 
+          Hey out there. 
+     Hey out there... 
+          Hey out there. 
+     I see you... 
+          I see you. 
+     I see you... 
+          I see you. 
+ 
+     Let's get together and have some fun. 
+ 
+     [I don't know how to do it, 
+          But it's gotta be done.] 
+---------------------------------------------------------------------------- 
+"Heading Out to Eden" 1:35 
+from TOS "The Way to Eden" 
+sung by Adam and blonde female friend 
+ 
+     Heading out to Eden, 
+          Yeah brother. 
+     Heading out to Eden, 
+
+     No more trouble 
+          In my body or my mind. 
+     Goin' to live like a king 
+          On whatever I find. 
+     Eat all the fruit 
+          And throw away the rind. 
+     Yeah brother, yeah. 
+ 
+     Steppin' in to Eden, 
+          Yeah brother. 
+     Steppin' in to Eden, 
+          Yeah brother. 
+     No more trouble 
+          In my body or my mind. 
+     Goin' to live like a king 
+          On whatever I find. 
+     Eat all the fruit 
+          And throw away the rind. 
+     Yeah brother. 
+ 
+note: The two verses are separated by dialogue.  The first half is sung slow, 
+      about 1:05.  The second is sung faster. 
+---------------------------------------------------------------------------- 
+"Charlie's Song"
+from TOS "Charlie X"?
+sung by Uhura
+
+     Now on the Starship Enterprise
+          There [comes a man|is someone who's] in Satan's guise
+     Whose devil ears and devil eyes
+          Will rip your heart from you ...
+
+     At first his look will hypnotise
+          And then his touch will barbarize
+     His alien love will victimize
+          And rip your heart from you.
+
+     And that's why female astronauts 
+          [Are overcome and overwrought|Oh very female astronauts]
+     [Many a female astronaut|Wait terrified and over-wrought]
+          [They know not|To find out] what to he'll do.
+
+     Oh girls in space be wary
+          Be wary
+     Oh girls in space be wary
+          You know not what he'll do.
+
+     Now from a planet out in space
+     There comes a lad not commonplace
+     A-seeking out his first embrace
+          He's saving it for you.
+
+     Oh, Charlie's our new darling,
+          Our darling, our darling.
+     Charlie's our new darling
+          [He knows not what to do|We know not what he'll do]
+---------------------------------------------------------------------------- 
+"The Friendly Angel Song" 
+from TOS "And The Children Shall Lead" 
+sung by The Children 
+
+     Hail, hail,
+          Fire and snow.
+     Call the angel
+          We will go.
+
+     Far away.
+          For to see.
+     Friendly Angel
+          Come to me.
+
+     Hail, hail,
+          Fire and snow.
+     Call the angel
+          We must go.
+
+     Far to come
+          Far to see
+     Friendly Angel
+          Come to me.
+---------------------------------------------------------------------------- 
+"Beyond Antares"
+from TOS "Conscience of the King"
+sung by Uhura
+written (I think) by Gene Coon
+
+     The skies are green and glowing
+          Where my heart is,
+          Where my heart is,
+     Where the scented lunar flower is growing,
+          Somewhere beyond the stars,
+          Beyond Antares.
+
+     I'll be back
+          Though it takes forever.
+          Forever is just a day.
+     Forever is just another journey.
+          Tomorrow I'll stop along the way,
+
+     And let the years go fading
+          Where my heart is,
+          Where my heart is,
+     Where my love eternally is waiting,
+          Somewhere beyond the stars,
+          Beyond Antares.
+---------------------------------------------------------------------------- 
+"Alexander's Song"
+from TOS "Plato's Stepchildren"
+sung by Alexander
+
+     Great pan sounds his horn 
+          Marking time to the rhyme
+     With his hoof, 
+          With his hoof.
+     Forward, forward in [our|his] plan,
+          We proceed as we began....
+     Brekekekex... brekekekex...
+          Kooax... kooax...
+---------------------------------------------------------------------------- 
+"A Serenade From the Laughing Spaceman"
+from TOS "Plato's Stepchildren"
+sung by Spock
+
+     Take care young ladies and value your wine.
+          Be watchful of young men in their velvet prime.
+     Deeply they'll swallow from your finest kegs,
+          Then swiftly be gone, leaving bitter dregs.
+          Ah, bitter dregs.
+
+     Your time hold precious, for youth is your gold.
+          Your beauty, like silver, will tarnish when old.
+     Mem'ries and dreams shall comfort you not.
+          When the flow of your sweetness is gone and forgot.
+          Ah, gone and forgot.
+
+     With smiling words and tender touch,
+          Man offers little and asks for so much.
+     He['ll] love[s] in the breathless excitement of night,
+          [Then|And] leave[s] with your treasure in cold morning light.
+          Ah, [in] cold morning light.
+
+     Come all ye fair and tender girls
+          Who flourish in your prime,
+     Beware, beware, make your garden fair
+          Let no man steal your time, your time
+          Let no man steal your time.
+
+     A woman is a branched tree
+          And a man a singing wind,
+     And from her branches carelessly
+          He'll take what he can find, can find
+          He'll take what he can find.
+
+     And when your time has passed and gone,
+          He'll care no more for you,
+     And every day that your garden is waste,
+          Is covered all over with rue, with rue
+          Is covered all over with rue.
+---------------------------------------------------------------------------- 
+(untitled)
+from TOS "Plato's Stepchildren"
+sung by Kirk (and Spock?)
+
+     I'm Tweedledee, he's Tweedledum.
+          We're spacemen marching to and from.
+     We slythe among the mimsy troves,
+          And tire among the borogroves.
+---------------------------------------------------------------------------- 
+"Good Night Sweetheart"
+from TOS "City on the Edge of Forever"
+heard on radio (and melody continues throughout episode)
+
+     Good Night Sweetheart, tho' I'm not beside you
+          Good Night Sweetheart, still my love will guide you
+     Dreams enfold you, in each one I'll hold you
+          Good Night Sweetheart, Good Night.
+
+---------------------------------------------------------------------------- 
+"I'll Take You Home Again, Kathleen"
+from TOS "The Naked Time"
+sung by Kevin Reiley (calling himself "O'Reiley")
+     
+     I'll take you home again, Kathleen,
+          Across the ocean wild and wide,
+     To where your heart has ever been,
+          Since first you were my bonnie bride.
+     The roses all have left your cheek,
+          I've watched them fade away and die;
+     Your voice is sad whene'er you speak,
+          And tears bedim your loving eyes.
+
+     Oh! I will take you back, Kathleen,
+          To where your heart will feel no pain,
+     And when the fields are fresh and green,
+          I'll take you to your home again.
+     (One More Time!!!)
+---------------------------------------------------------------------------- 
+"Abdullah Bulbul Amir" 
+from TNG "Brothers" 
+sung by Lore (only a few lines) 
+ 
+[version 1] 
+     The sons of the Prophet as valiant and bold, 
+          And quite unaccustomed to fear; 
+     And the bravest of all was a man, so I'm told 
+          Called Abdullah Bulbul Amir. 
+ 
+     When they wanted a man to encourage the van, 
+          Or harass the foe from the rear, 
+     Storm fort or redoubt, they were sure to call out 
+          For Abdullah Bulbul Amir. 
+ 
+     There are heroes in plenty, and well known to fame, 
+          In the legions that fight for the Czar; 
+     But none of such fame as the man by the name 
+          Of Ivan Petrovsky Skovar. 
+ 
+     He could imitate Irving, tell fortunes by cards, 
+          And play on the Spanish guitar; 
+     In fact, quite the cream of the Muscovite guards, 
+          Was Ivan Petrovsky Skovar. 
+ 
+     One day this bold Muscovite shouldered his gun, 
+          Put on his most cynical sneer, 
+     And was walking downtown when he happened to run 
+          Into Abdullah Bulbul Amir. 
+ 
+     "Young man," say Bulbul, "is existence so dull 
+          That you're anxious to end your career? 
+     Then, infidel, know you have trod on the toe 
+          Of Abdullah Bulbul Amir. 
+ 
+     "So take your last look at the sea, sky and brook, 
+          Make your latest report on the war; 
+     For I mean to imply that you are going to die, 
+          O Ivan Petrovsky Skovar." 
+ 
+     So this fierce man he took his trusty chibouk, 
+          and murmuring "Allah Akbar!" 
+     With murder intent he most savagely went 
+          For Ivan Petrovsky Skovar. 
+ 
+     The Sultan rose up, the disturbance to quell 
+          Likewise, give the victor a cheer. 
+     He arrived just in time to bid hasty farewell 
+          To Abdullah Bulbul Amir. 
+ 
+     A loud-sounding splash from the Danube was heard 
+          Resounding o'er meadows afar; 
+     It came from the sack fitting close to the back 
+          Of Ivan Petrovsky Skovar. 
+ 
+     There lieth a stone where the Danube doth roll, 
+          And on it in characters queer 
+     Are "Stranger, when passing by, pray for the soul 
+          Of Abdullah Bulbul Amir." 
+ 
+     A Muscovite maiden her vigil doth keep 
+          By the light of the pale northern star, 
+     And the name she repeats every night in her sleep 
+          Is Ivan Petrovsky Skovar. 
+ 
+[version 2] 
+     The sons of the Prophet were brave men and bold, 
+          And quite unaccustomed to fear. 
+     But the bravest of all was a man I am told 
+          Named Abdullah Bulbul Ameer. 
+ 
+     When they needed a man to encourage the van 
+          Or harass a foe from the rear. 
+     Storm fort or redoubt they had only to shout 
+          For Abdullah Bulbul Ameer. 
+ 
+     This son of the desert in battle aroused 
+          Could split twenty men on his spear. 
+     A terrible creature when sober or soused 
+          Was Abdullah Bulbul Ameer. 
+ 
+     The heroes were plenty and well known to fame 
+          That fought in the ranks of the Czar. 
+     But the greatest of these was a man by the name 
+          Of Ivan Skavinsky Skivar. 
+ 
+     He could imitate Irving, play poker or pool 
+          And strum on the Spanish guitar. 
+     In fact quite the cream of the Muscovite team 
+          Was Ivan Skavinsky Skivar. 
+ 
+     The ladies all loved him, his rivals were few 
+          He could drink them all under the bar. 
+     Come gallant or tank there was no one to rank 
+          With Ivan Skavinsky Skivar. 
+ 
+     One day this bold Russian had shouldered his gun 
+          And donned his most truculent sneer. 
+     Downtown he did go where he trod on the toe 
+          Of Abdullah Bulbul Ameer. 
+ 
+     "Young man", quoth Bulbul, "Has your life grown so dull 
+          That you're eager to end your career? 
+     Vile infidel know you have trod on the toe 
+          Of Abdullah Bulbul Ameer." 
+ 
+     "So take your last look at the sunshine and brook 
+          And send your regrets to the Czar. 
+     By this I imply you are going to die, 
+          Mr. Ivan Skavinsky Skivar." 
+ 
+     Said Ivan, "My friend, your remarks in the end 
+          Will avail you but little, I fear. 
+     For you ne'er will survive to repeat them alive, 
+          Mr. Abdullah Bulbul Ameer." 
+ 
+     Then this bold Mamalouk drew his trusty skibouk 
+          With a cry of "Allah Akbar". 
+     And with murderous intent he ferociously went 
+          For Ivan Skavinsky Skivar. 
+ 
+     They parried and thrust, they sidestepped and cussed 
+          Of blood they spilled a great lot. 
+     The philologist blokes, who seldom crack jokes, 
+          Say that hash was first made on that spot. 
+ 
+     They fought all that night 'neath the pale yellow moon, 
+          The din it was heard from afar. 
+     And multitudes came, so great was the fame, 
+          Of Abdul and Ivan Skivar. 
+ 
+     As Abdul's long knife was extracting the life, 
+          In fact he had shouted, "Huzzah!" 
+     He felt himself struck by that wily Calmuck, 
+          Count Ivan Skavinsky Skivar. 
+ 
+     The Sultan drove by in his red-crested fly, 
+          Expecting the victor to cheer. 
+     But he only drew nigh just to hear the last sigh 
+          Of Abdullah Bulbul Ameer. 
+ 
+     Czar Petrovich too, in his spectacles blue 
+          Drove up in his new crested car. 
+     He arrived just in time to exchange a last line 
+          With Ivan Skavinsky Skivar. 
+ 
+     A tomb rises up where the Blue Danube rolls, 
+          And 'graved there in characters clear, 
+     Is "Stranger when passing, oh pray for the soul 
+          Of Abdullah Bulbul Ameer." 
+ 
+     A splash in the Black Sea one dark moonless night, 
+          Caused ripples to spread near and far. 
+     It was made by a sack fitting close to the back 
+          Of Ivan Skavinsky Skivar. 
+ 
+     A Muscovite maiden her lone vigil keeps, 
+          'Neath the light of the pale polar star. 
+     And the name that she murmurs so oft as she weeps 
+          Is Ivan Skavinsky Skivar. 
+---------------------------------------------------------------------------- 
+"Star Trekkin'" 
+by "The Firm" (not the popular group, another one) 
+ 
+     Chorus: 
+          Star Trekking, across the universe, 
+          On the Starship Enterprise, under Captain Kirk.
+          Star Trekking, across the universe, 
+          Boldly going forward, 'cause we can't find reverse.
+
+     Lt. Uhura, report!
+
+     Uhura:
+          There's Klingons on the starboard bow, 
+          starboard bow, 
+          starboard bow. 
+          There's Klingons on the starboard bow, 
+          starboard bow, Jim.
+ 
+     Analysis, Mr. Spock!
+ 
+     Spock: 
+          It's life, Jim, but not as we know it, 
+          not as we know it, 
+          not as we know it. 
+          It's life, Jim, but not as we know it, 
+          not as we know it, Captain. 
+ 
+     Uhura: 
+          There's Klingons on the starboard bow, 
+          starboard bow, 
+          starboard bow. 
+          There's Klingons on the starboard bow, 
+          starboard bow, again. 
+ 
+     Chorus: 
+          Star Trekking, across the universe, 
+          On the Starship Enterprise, under Captain Kirk.
+          Star Trekking, across the universe, 
+          Boldly going forward, still can't find reverse.
+ 
+     Medical update, Doctor McCoy
+ 
+     McCoy: 
+          It's worse than that, he's dead, Jim.
+          Dead, Jim.
+          Dead, Jim.
+          It's worse than that, he's dead, Jim.
+          Dead, Jim, Dead.
+ 
+     Spock: 
+          It's life, Jim, but not as we know it, 
+          not as we know it, 
+          not as we know it. 
+          It's life, Jim, but not as we know it, 
+          not as we know it, Captain. 
+ 
+     Uhura: 
+          There's Klingons on the starboard bow, 
+          starboard bow, 
+          starboard bow. 
+          There's Klingons on the starboard bow, 
+          starboard bow, Jim! 
+ 
+     Starship Captain, James T. Kirk
+ 
+     Kirk: 
+          Ha-ha! We come in peace, shoot to kill,
+          shoot to kill,
+          shoot to kill.
+          We come in peace, shoot to kill, 
+          shoot to kill, men. 
+ 
+     McCoy: 
+          It's worse than that, he's dead, Jim.
+          Dead, Jim.
+          Dead, Jim.
+          It's worse than that, he's dead, Jim.
+          Dead, Jim, Dead.
+ 
+     Spock: 
+          Well, it's life, Jim, but not as we know it, 
+          not as we know it, 
+          not as we know it. 
+          It's life, Jim, but not as we know it, 
+          not as we know it, Captain. 
+ 
+     Uhura: 
+          There's Klingons on the starboard bow, 
+          starboard bow, 
+          starboard bow. 
+          There's Klingons on the starboard bow, 
+          scrape 'em off, Jim.
+ 
+     Chorus: 
+          Star Trekking, across the universe, 
+          On the Starship Enterprise, under Captain Kirk! 
+          Star Trekking, across the universe, 
+          Boldly going forward, and things are getting worse! 
+ 
+     Engineer, Mister Scott
+
+     Scotty:
+          Ye canna change the laws of physics,
+          laws of physics,
+          laws of physics!
+          Ye canna change the laws of physics,
+          laws of physics, [yet|Jim]
+
+     Kirk:
+          Oh, we come in peace, shoot to kill,
+          shoot to kill,
+          shoot to kill!
+          We come in peace, shoot to kill,
+          Scotty, beam me up!
+
+     McCoy:
+          It's worse than that, he's dead, Jim!
+          Dead, Jim!
+          Dead, Jim!
+          It's worse than that, he's dead, Jim!
+          Dead, Jim, Dead!
+
+     Spock:
+          Well, it's life, Jim, but not as we know it,
+          not as we know it,
+          not as we know it.
+          It's life, Jim, but not as we know it,
+          not as we know it, Captain.
+
+     Uhura:
+          There's Klingons on the starboard bow,
+          starboard bow,
+          starboard bow.
+          There's Klingons on the starboard bow,
+          starboard bow, aaagain!
+
+     Scotty: Ye canna change the script, Jim!  <garbled>
+
+     McCoy:  It's worse than that, it's physics, Jim!
+
+     Kirk:   Bridge to engine room, warp factor nine!
+
+     Scotty: Ach!  If I give 'er any more she'll blow, Captain!
+
+     Scotty: Ye canna change the status of the (auxiliary) ax'l engine eh?!
+
+     <<boom>>
+
+     Na..na..na..na..na..na..na..na..na
+
+     Chorus:
+          Star Trekking, across the universe,
+          On the Starship Enterprise, under Captain Kirk!
+          Star Trekking, across the universe,
+          Boldly going forward, 'cause we can't find reverse!
+
+          Star Trekking, across the universe,
+          On the Starship Enterprise, under Captain Kirk!
+          Star Trekking, across the universe,
+          Boldly going forward, still can't find reverse!
+
+          We come in peace, shoot to kill.
+
+[ there's also the EP version which has a few more verses --ed ]
+----------------------------------------------------------------------------
+Some local stations showed a comercial for TNG:
+(Sung to the tune of "We Didn't Start the Fire" by B. Joel)
+
+     Jean Luc,
+     Geordi's Specs,
+     Mysteries on the Holodecks
+
+     Asteroids,
+     Triple Droids,
+     Telepathic Betazoids
+
+     Transporter
+     Deadly Claw
+     Visitor from LA Law
+
+     Photons,
+     No Kirk,
+     Captain has gone berzerk
+
+     Shuttlecraft,
+     Counselor Troy,
+     Doctor Crusher's little boy
+
+     Klingon Rites,
+     Parasites,
+     New Heights,
+     Phasor Fights,
+     Data's Head,
+     Tasha's Dead,
+     Riker's Hangin' by a thread
+
+     Celebration,
+     Transformation,
+     Everyone to battle stations
+
+     We didn't start the series,
+     It's the Next Generation
+     on your favorite station
+
+     We didn't start the series,
+     But when we are gone it will
+     still be on and on and on...
+
+     We didn't start the series...
+----------------------------------------------------------------------------
+"The Minstril Boy"
+Sung by O'Brien with his captain
+from TNG "The Wounded"
+
+     The minstrel boy to the war has gone,
+          In the ranks of death you will find him.
+     His father's sword he hath girded on,
+          And his wild harp slung behind him.
+
+     Lands of songs said the warrior-bard,
+          Though all the world bestrays thee.
+     One sword at least thy rights shall guard,
+          One faithful harp shall praise thee.
+----------------------------------------------------------------------------
+"Come Cheer Up My Lads"
+Sung by Picard's clone (in Ten Forward)
+from TNG "Allegiance"
+
+     Come cheer up my lads, 'tis to glory we steer,
+          To add something new to this wonderful year;
+     To honour we call you, not press you like slaves,
+          For who are so free as the sons of the waves?
+
+     Heart of Oak are our ships, Heart of Oak are our men,
+          We always are ready.
+     Steady, boys, steady,
+          We'll fight and we'll conquer again and again.
+
+     We ne'er meet our foes but we wish them to stay,
+          They never see us but they wish us away;
+     If they run, why, we follow, and run them ashore,
+          For if they won't fight us, we cannot do more.
+
+     Heart of Oak are out ships, Heart of Oak are our men,
+          We always are ready.
+     Steady, boys, steady,
+          We'll fight and we'll conquer again and again.
+----------------------------------------------------------------------------
+"Banned from Argo" (there are a few variations in different versions)
+by Leslie Fish
+
+     When we pulled into Argo  in search of R & R
+          Our crew set out investigating every joint and bar
+     We had high expectations of their hospitality
+          But found too late it wasn't geared for spacers such as we
+
+     CHORUS:
+     And we're...banned from Argo, every one
+          Banned from Argo, just for having a little fun
+     We spent a jolly shore leave there for just 3 days or 4
+          But Argo doesn't want us anymore
+
+     Our captain's tastes were simple but his methods were complex
+          He found him with five partners, each of a different world and sex
+     The shore police were on the way, we had no second chance
+          We beamed him up in the nick of time in the remnants of his pants
+
+     CHORUS
+
+     Our engineer would yield to none in putting down the brew
+          He outdrank 7 space marines and a demolition crew
+     The navigator didn't win but he outdrank almost all
+          And now they've got a shuttlecraft on the roof of city hall
+
+     CHORUS
+
+     Our proper, cool first officer was drugged with something green
+          And hauled into an alley where he suffered things obscene
+     He sobered up in sickbay and he's none the worse for wear
+          Except he somehow taught the bridge computer how to swear
+
+     CHORUS
+
+     The head nurse disappeared a while in the major [dope] bazaar
+          Buying an odd green liquid guaranteed to cause Pon-farr.
+     She came home with no uniform, and an oddly cheerful heart
+          And a painful way of walking with her feet a yard apart
+
+     CHORUS
+
+     Our lady of communications won a ship-wide bet
+          By getting into the planet's main communications net
+     Now, every time someone calls upon an Argo telescreen
+          The flesh is there, but the clothes they wear are nowhere to be seen
+          (Yaah!)
+
+     CHORUS
+
+     Our doctor loves humanity, his private life is quiet
+          The shore police arrested him for inciting whores to riot.
+     They found him in the city jail, locked on and beamed him free
+          Intact except for hickies, and 6 kinds of V.D.
+
+     CHORUS
+          (Gee, I wonder why?)
+
+     Our helmsman loves exotic plants, and the plants all love him too
+          He took some down on leave with him, and we wondered what they'd do
+     Till the planetary governor called and swore upon his life
+          That a gang of plants entwined his house, and then seduced his wife
+
+     CHORUS
+
+     A gang of pirates landed and nobody seemed to care
+          They stomped into the nearest bar to announce that they were there
+          (We're here!)
+     Half our crew was busy there and invited them to play
+          The pirates only looked at us, and turned and ran away
+
+     CHORUS
+
+     Our crew is Starfleet's finest, and our record is our pride
+          And when we play we tend to leave a trail a mile wide
+     We're sorry 'bout the wreckage and the riots and the fuss
+          At least we're sure that planet won't be quick forgetting us
+
+     CHORUS
+          (I wonder why?)
+          (Did we do something wrong?)
+----------------------------------------------------------------------------
+"Twenty Years of Pointy Ears"
+(sung to the tune of "When Johnny Comes Marching Home Again")
+
+     From sixty-six to sixty-nine
+          There was a show
+     About the Starship Enterprise
+          As we all know
+     With funny ears, and Beetle boots,
+          And phaser guns that WE COULD SHOOT,
+     But Trek... got... canned...
+          'Cause the ratings were so low.
+
+     Letters from the fans didn't get
+          The show's fourth season on,
+     The Star Trek crew, now unemployed,
+          Made cash at sci-fi cons.
+     When the ranks of Trekkies grew and grew,
+          We noticed that some fans do to,
+     'Cause they nibble... just like tribbles...
+          While they're watching Trek re-runs.
+
+     The fans all got together for
+          A new write-in campaign,
+     To get a TV movie made,
+          But not one like "Spock's Brain"!
+     The network told them "GO TO HELL!",
+          But then found Star Trek toys sold well;
+     But there's... no... mar... ket
+          In sci-fi films today.
+
+     (Just then when things seemed darkest,
+      There was a light... saber.)
+
+     The highest grossing movie in the
+          World is called Star Wars;
+     They read through the old Star Trek scripts, then
+          Wrote one that's a bore.
+     Star Trek: The Motion Picture's trash, but
+          It should make a lotta cash:
+     The crew will wear pajamas
+          And we'll make one of them bald.
+
+     (It's making money!  Quick!  Let's make a sequel!)
+     <Well, we have this other old script called... what is it?>
+     (Space Seed?)
+     <Yeah, Ricardo Montalban just happens to be on the back lot doing a
+          Cordoba commercial -- [de plane! de plane!] -- so you know what
+          that means, don't you?>
+     [Duh, what?]
+
+     STAR... TREK... TWO!!!
+
+     We'll kill off Khan, and kill off Spock, and
+          Make them cry, you'll see!
+     We'll sell them Star Trek handkerchiefs, and
+          then make Star Trek three!
+     Kirk has a wife, and has a son; we'll
+          Sell them dolls of everyone.
+     Janiss... iss... is a bomb that's lots of fun.
+     ... Unlike Star Trek one.
+
+     (Shut up!)
+
+     Hey, wait a minute, looky here, there's
+          Money to be made
+     On model kits and other shit like
+          Gum cards they can trade;
+     They'll wonder if Spock's dead, ya see; we'll
+          Sell the rights to PAY TEE VEE,
+     And with... the... mo... ney, we'll make Star Trek three.
+
+     (Great.  Just great.  Now Nimoy won't come back!)
+     <Bribe him.  Tell him he can direct it.>
+     (But he's dead, Jim!)
+     <As a director too, but don't worry; people will come just to see
+          if Spock lives, bless his little pointy-ears.>
+
+     STAR... TREK... THREE!!!
+
+     With Captain Kirk, and Mister Spock, and
+          Doc... Mick... Coy,   (Oh boy!)
+     With Scotty, Checkov, UH-hoo-rah, and
+          Soo... loo... too,  (Oh boy!)
+     And Saavik's gonna join the crew, but
+          Not the one from Star Trek Two,
+     And May... jell... who... is Roddenberry's wife.
+
+     It took a while, but Paramount has
+          Now... turned... face,
+     With Indy films, and Trek films about
+          Ou... ter... space;
+     Trek Four will make their wallets fat, with
+          Trek time-trips and Saavik's brat:
+     An an... ni... ver... s'ry gift for all the fans!
+----------------------------------------------------------------------------
+[ anyone have the lyrics to:
+     any of the other songs (like Uhura's, for example) in TOS
+     the song Nichelle sung in ST5? --ed ]
+----------------------------------------------------------------------------
+Other Star Trek songs can be found at grind.icaen.uiowa.edu in the
+/info/humor/Filk directory.
+
+Firebird Arts and Music (1-800-752-0494) sells several  well-done Star Trek
+tapes:  _Spock  Rock_,  _Star  Trek:    The  Unofficial  Comedy Album_, and
+_Border Patrol_.  _Border  Patrol_, if  you haven't  heard all  the songs a
+hundred times before hand like  some of  us, is  an awesome  tape.  They're
+working on a new Star Trek  music tape  to be  released later  this year or
+next year called _To Boldly Go_.
+----------------------------------------------------------------------------
+Both Shatner and Nimoy have  attempted to  sing and  have a  few albums out
+(from the early 70s, I believe).   They are  *extremely* bad  and only good
+for comic relief.
+
+Nichelle Nichols originally  sang the  tune Uhura  was singing  in ST5, but
+TPTB decided a few days before the  film was  released to  dub in Hiroshima
+singing the song.
+
+Brent Spiner has an  album out  titled something  like "Old  Yellow Eyes is
+Back"
+
+The band  T'Pau  (named after  the Vulcan  priestess from  TOS "Amok Time")
+claim they are not Star Trek  fans; they  just liked  the name.   DJs enjoy
+putting a few lines from "Amok Time" during the opening of  the song "Heart
+and Soul"  (McCoy:    "Do you  know who  that is?   That's  T'Pau!"  T'Pau:
+"Thees ees da Voolcan heart; thees ees da Voolcan soul...")
+
+The Minneapolis band (now  based in  New York)  "Information Society" likes
+putting Star Trek quotes in their  songs.   "Pure Energy"  had Spock's line
+"pure energy" (from the "Errand of Mercy") in it (and later releases of the
+song have McCoy saying something like "we're not out of this yet"), "Think"
+has Kirk saying "Think about it" (from "Mirror, Mirror"), "Something in the
+Air" has a  long scream  (apparently taken  from TOS),  and there's another
+song (the name  escapes me)  that has  a line  from Spock,  Scott, or both.
+Adam Nimoy (Leonard's son) is a fan and friend of the group.
+
+Leonard Nimoy was on the cover of the Bangles' first album.  He was also in
+one or two of their videos from that album.
+
+Susan Vega has a reference to Star Trek in one of her songs.
+
+The German  band  Nena  mentions  "Captain Kirk"  in their  songs "99 Luft-
+balloons" and "99 Red Balloons".
+
+On the Cover of the CD/LP Cassandra Complex  - "Theomania";  SPV CD 85-7268
+there is a picture of the TOS Enterprise above the new York skyline.
+
+Captain of the Starship - Canadian pressing of William Shatner-Live!  2 12"
+LP album.
+
+Captain of  the  Starship  - another  Canadian pressing  of William Shatner
+Live!  2 12" LP album, K-TEL Record, #9400.
+
+The Green Hills of Earth and Gentlemen, Be Seated - Robert A Heinlein, read
+by Leonard Nimoy, 12"LP, Caedmon Records #TC 1526.
+
+Halley's Comet:    Once  in a  Lifetime -  narrated by  LN, audio cassette,
+Caedmon Cassette #S1788, 1986.
+
+The Illustrated Man -  Ray Bradbury,  read by  LN, 12"  LP, Caedmon Records
+#TC1479.
+
+Inside Star Trek - Gene Roddenberry, Columbia Records, #34279.
+
+The Martian Chronicles - Ray Bradbury, read by LN, 12" LP, Caedmon Records,
+#TC1466.
+
+Mimsy Were the Borogoves - Henry Kuttner, read by William  Shatner, 12" LP,
+Caedmon Records, #TC1509.
+
+The Mysterious Golem - narrated by LN, 12" LP, JRT Records.
+
+The Psychohistorians - read by WS, 12" LP, Caedmon Records, #TC1508
+
+Star Fleet  Beat, Phasers  on Stun  - special  20th anni.,  12" LP, Penguin
+Records.
+
+The Star Trek Philosophy and Star Trek Theme -  GR, from  Inside Star Trek,
+7" 45rpm, Columbia Records, #3-10448.
+
+Star Trek Tapes - press recordings, Jack M Sell.
+
+Sterling Bronsan:  Space Engineer - Inter Audio Associates,  parody on four
+cassettes.
+
+The Transformed Man - performed by WS, 12" LP, Decca Records, #DL75043.
+
+The Transformed Man and How Insensitive - from  The Transformed  Man, 7" LP
+45rpm, Decca Records, #32399
+
+Trek Bloopers - 3rd season TOS, 12" LP, Blue Pear Records, #1.
+
+Voice Tracks, USMC Toys for Tots - readings by LN and others, 7" 33 1/3rpm,
+Warner Bros.-Sevent Arts Records, #PRO381.
+
+The Voyage of Star Trek - The Source, promotional copy, 12" LP 1982.
+
+The War of the Worlds - H.G.  Wells, read by  LN, 12"  LP, Caedmon Records,
+#TC1520.
+
+William Shatner-Live! - 2 record album, Lemli Records, #9400.
+
+Beyond Antares  and  Uhura's  Theme  -  Nichelle  Nichols,  7" 45rpm, R-Way
+Records, #RW-1001.
+
+Consilium and Here We Go 'Round Again - sung by LN from The Way  I Feel, 7"
+45rpm, Dot Records, #45-17175.
+
+Dark Side of the Moon - sung by NN, 2 7" LP 45rpm, Americana Records, EP-1.
+
+Disco Trekin' and Star Child  - sung  by Grace  Lee Whitney,  7" 45rpm, GLW
+Star Enterprises.
+
+Down to Earth - sung by NN, 12" LP, Epic Records, #BNZ6351.
+
+Leonard Nimoy Presents Mr.  Spock's Music from Outer  Space (DOT)  - by LN,
+12" LP, Dot Records, #DLP25794. - British version, diffusion, 1973, #25156.
+
+The New World of Leonard Nimoy - 12" LP, Dot Records, #DLP 25966.
+
+Outer Space/Inner Mind - 2  record set  combines amny  LN works,  2 12" LP,
+Paramount Records Famous Twinsets PAS, 2-1030.
+
+Please Don't Try To Change My Mind and I'd Love Making Love to You  - by LN
+from The Way I Feel, 7" 45rpm, Dot Records, #45-17125.
+
+Space Odyssey - cuts from LN Dot Records, Pickwick/33 Records, #SPC3199.
+
+The Sun Will Rise and Time to Get it Together - by LN from The New World of
+Leonard Nimoy, 7" 45rpm, Dot Records, #45-17330.
+
+Take a Star Trip - GLW, 45rpm.
+
+The Touch of Leonard Nimoy - LN, Dot Records, #DLP25910.
+
+Two Sides of Leonard Nimoy - 12" LP, Dot Records, #DLP25835.
+
+Uhura Sings - AR-Way Productions, album or cassette, 1986.
+
+Visit to  a Sad  Planet -  LN from  Mr Spock's  Music from  Outer Space, 7"
+45rpm, Dot Records, #17038, 1967.  (also cassette)
+
+The Way I Feel - LN, 12" LP, Dot Records, #DLP25883. (also reel to reel).
+
+
+
+
+Mail additions and corrections to ottoh@cfsmo.honeywell.com.
+
+						--Otto "HACK-MAN" Heuer
+--
+C, Pascal, Fortran, BASIC, Assembly Language, Snobol, Ada, APL, Prolog, LISP
+Unix, MS-DOS, ProDOS       .  .   .   .... .  .   .   .   .   .   . Audio/Video
+ottoh@cfsmo.honeywell.com  :..: .:.:. :    :.' .. :`.': .:.:. :`. :   Star Trek
+hackman@pnet51.orb.mn.org  :  : :   : :... : `.   :   : :   : :  `:  Apple IIgs
+------I speak for me and not my boss--Honeywell's gain and Usenet's loss.------

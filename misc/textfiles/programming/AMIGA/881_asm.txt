@@ -1,0 +1,1303 @@
+FPU assembler programming
+
+
+
+By Erik H. Bakke
+
+
+
+Written  13/10-93
+
+
+
+
+
+--- I ------------------------- INTRODUCTION ---------------------- I ---
+
+
+
+1.1 Introduction
+
+
+
+Many people have asked me to explain how to program the 68881/68882/040
+
+floating point coprocessors, and here it is, a guide in the "magic art"
+
+I have tried to keep this text as system neutral as possible, but it
+
+may, as the other articles in this series be influenced by the fact
+
+that I usually program at Amiga computers.
+
+If you need more information about the topics discussed herein, please
+
+contact the author.
+
+
+
+1.2 Index
+
+
+
+  Chapter I--------Introduction--------------------
+
+  1.1  Introduction
+
+  1.2  Index
+
+  Chapter II-----The Coprocessor interface---------
+
+  2.1  The Interface mechanics
+
+  2.2  The Floating Point Coprocessor
+
+  Chapter III----Floating Point Programming--------
+
+  3.1  Floating Point Data Formats
+
+  3.2  Floating Point Constant ROM
+
+  3.3  Floating Point Instructions
+
+       1...Data transfer instructions
+
+       2...Dyadic operations
+
+       3...Monadic operations
+
+       4...Program control instructions
+
+       5...System control instructions
+
+  Chapter IV-------The 68040 FPU-------------------
+
+  4.1  Differences
+
+  4.2  Instruction set
+
+  Chapter V------------Sources---------------------
+
+  5.1  Sourcecodes
+
+
+
+
+
+
+
+--- II -------------------THE COPROCESSOR INTERFACE -------------- II ---
+
+
+
+2.1  The Interface Mechanics
+
+
+
+A coprocessor may be thought of as an extension to the main CPU,
+
+extending its register set and instructions.
+
+Different coprocessors that can be interfaced to the 68020+ CPU's
+
+are the 68881/2 FPU and 68851 MMU.
+
+Coprocessor instructions are placed inline with ordinary CPU codes,
+
+all recognized by being LINE-F instructions.  (Having the op-code
+
+format of $Fxxx)  In assembler, they are generally noted as cpXXXX
+
+instructions.
+
+
+
+The coprocessors require a communication protocol with the CPU for
+
+various reasons:
+
+
+
+-----------------------------------------------------------
+
+1.  The CPU must recognize that a coprocessor is to receive
+
+    the LINE-F op-code, and establish contact with that
+
+    coprocessor.
+
+
+
+2.  The coprocessor may need to signal it's internal status
+
+    to the CPU.
+
+
+
+3.  The coprocessor may need to read/write data to/from
+
+    system memory or CPU registers.
+
+
+
+4.  The coprocessor may have to inform the CPU of error
+
+    conditions, such as an illegal instruction or divide by
+
+    zero.  The CPU will have to process the corresponding
+
+    exceptions.
+
+-----------------------------------------------------------
+
+
+
+This protocol is called the MC68000 coprocessor interface.  Knowledge
+
+of this interface is not required of a programmer who wishes to
+
+utilize a coprocessor, therefore I will not go into specific detail
+
+about the interface, but briefly sum up the main mechanisms.
+
+
+
+  The coprocessor instructions are F-line instructions that have
+
+  all bits in the upper nibble set to generate $Fxxx op-codes.
+
+  Up to 8 coprocessors may reside on the bus (The Amiga coprocessors
+
+  are NOT part of this system, and should not be counted in).
+
+  Each of these co-processors have their own 3-bit address.
+
+  Two such addresses are reserved by Motorola:
+
+                         %000   MC68851 PMMU
+
+                         %001   MC68881/2 FPU
+
+  
+
+  It is perfectly possible to install 6 FPU's in the same
+
+  system.
+
+  
+
+  The general format of a coprocessor op-code is shown below:
+
+  
+
+  15    1211  9 8   6 5         0
+
+  ================================
+
+  1 1 1 1 Cp-ID Type  Instruction dependent
+
+  
+
+  Followed by a number of coprocessor defined extension words and
+
+  effective address extension words.
+
+  
+
+  If the instruction is not accepted by the coprocessor it is
+
+  addressed to (if the CP is not present) the CPU will take
+
+  an F-line exception.
+
+
+
+2.2 The Floating Point Coprocessor
+
+
+
+  The Motorola floating point coprocessor has the number 68881 or
+
+  68882.  The 68882 is considerably faster than the 881, due
+
+  to optimized internal design.  In addition, the 68040 CPU has an
+
+  internal FPU has is even faster than the 882.  There are other
+
+  differences between the 881/2 and the 040, but I'll return to
+
+  those later.  The 68881 and 68882 are pin compatible, and available
+
+  in speeds up to 20Mhz and 50MHz respectively
+
+  The FPU implements IEEE compatible floating point formats, and
+
+  implements instructions to perform arithmetics on these formats,
+
+  as well as several trancendental functions, such as SIN(x),E^x
+
+  and so on.  In addition the FPU has an on-chip constant ROM where
+
+  different mathematical constants are stored.
+
+
+
+2.2.1  The floating point registers
+
+
+
+  The FPU has 8 floating point registers, each 80 bits wide.
+
+  These are named FP0-FP7, just as D0-D7 in the CPU.  In addition
+
+  the FPU have 3 32-bit registers:
+
+  
+
+  Control Register       FPCR
+
+  
+
+  31.................15..........7..........0
+
+                       Exeception    Mode
+
+                        Enable      Control
+
+  
+
+  Status Register       FPSR
+
+  
+
+  31.......23........15..........7..........0
+
+  Condition  Quotient   Accrued   Exception
+
+    Codes              Exception   Status
+
+  
+
+  Instruction Address Register    FPIAR
+
+
+
+  31.......23........15..........7..........0
+
+
+
+2.2.1.1  Floating point data registers
+
+
+
+  The data registers always contain an 80 bit wide extended precision
+
+  floating point number.  Before any floating point data is used in
+
+  calculation, it is converted to extended-precision.
+
+  For example, the instruction   FMOVE.L #10,FP3  converts the
+
+  longword #10 to extended precision before transferring it to register
+
+  FP3.  All calculations with the FPU uses the internal registers
+
+  as either source or destination, or both.
+
+  
+
+2.2.1.2  Floating Point Status Register
+
+
+
+  This register is split in two bytes, the exception enable byte, and
+
+  the mode control byte.
+
+
+
+2.2.1.2.1  Exception Enable byte
+
+
+
+  This register contains a bit for each of the possible eight
+
+  exceptions that may be generated by the FPU.  Setting or clearing
+
+  one of these bits will enable/disable the corresponding exception.
+
+
+
+  The exception bytes are organized this way:
+
+  
+
+  Bit   Name    Meaning
+
+  ========================
+
+  7     BSUN    Branch/Set on UNordered
+
+  6     SNAN    Signalling Not A Number
+
+  5     OPERR   OPerand ERRor
+
+  4     OVFL    OVerFLow
+
+  3     UNFL    UNderFLow
+
+  2     DZ      Divide by Zero
+
+  1     INEX2   INEXact operation
+
+  0     INEX1   INEXact decimal input
+
+
+
+2.2.1.2.2  Mode control byte
+
+
+
+  This register controls the rounding modes and rounding precisions.
+
+  A result may be rounded or chopped to either double, single or
+
+  extended precision.  For most usage of the FPU, however, this
+
+  register could be set to all zeroes, which will round the result
+
+  to the nearest extended precision value.
+
+  Mode control byte:
+
+  
+
+  Bit   Name    Meaning
+
+  ========================
+
+  7     PREC1   Precision bit 1
+
+  6     PREC0   Precision bit 0
+
+  5     RND1    Rounding bit 1
+
+  4     RND0    Rounding bit 0
+
+  3     ----    -----
+
+  2     ----    -----
+
+  1     ----    -----
+
+  0     ----    -----
+
+
+
+  PREC=00  Round to extended precision
+
+  PREC=01  Round to single precision
+
+  PREC=10  Round to double precision
+
+  
+
+  RND=00   Round toward nearest possible number
+
+  RND=01   Round toward zero
+
+  RND=10   Round toward the smallest number
+
+  RND=11   Round toward the highest number
+
+  
+
+2.2.1.3  Floating point Status Register
+
+
+
+  This register is just what you may think it is, the parallell to
+
+  the CPU CCR register, and reflects the status of the last
+
+  floating point computation.  The quotient byte is used with
+
+  floating point remaindering operations.  The exception status
+
+  byte tells what exceptions that occured during the last operation.
+
+  The accrued exception byte contains a bitmask of the exceptions
+
+  that have occurred since the last time this field was cleared.
+
+
+
+  Status bits:
+
+  
+
+  Bit   Name    Meaning
+
+  =============================
+
+  7     ----    -----
+
+  6     ----    -----
+
+  5     ----    -----
+
+  4     ----    -----
+
+  3     N       Negative
+
+  2     Z       Zero
+
+  1     I       Infinity
+
+  0     NAN     Not A Number
+
+
+
+2.2.1.4  Floating point Instruction Address Register
+
+
+
+  This register contains the address of the instruction currently
+
+  executing.  The FPU can execute instructions in parallell with
+
+  the CPU, so that time-consuming instrcutions, such as division
+
+  and multiplication don't tie up the CPU unnecessary.  This means
+
+  that if an exception occurs in the floating point operation,
+
+  the address that are pushed on to the stack is not necessarily
+
+  the address of the instruction that caused the exception.
+
+  The exception handler would have to read this register to find
+
+  the address of the offending instruction.
+
+
+
+
+
+
+
+--- III ----------------FLOATING POINT PROGRAMMING ------------- III ---
+
+
+
+
+
+3.1  Floating Point Data Formats
+
+
+
+  The FPU can handle 3 integer formats, and 2 IEEE compatible formats.
+
+  In addition, it has an extended-precision format and can handle a
+
+  Packed-Decimal Real format.
+
+
+
+3.1.1  Integer Formats
+
+
+
+  The 3 integer formats that are supported by the FPU are compatible
+
+  with the formats used by the 68000 CPU's.  They are Byte (8 bits),
+
+  Word (16 bits), and Longword (32 bits).
+
+
+
+3.1.2  Real Formats
+
+
+
+  The FPU supports 4 real formats, the Single precision (32 bits),
+
+  Double precision (64 bits), Extended precision (80 bits), and
+
+  Packed-decimal string (80 bits)
+
+
+
+3.1.2.1 Single Precision
+
+
+
+  The single precision format is indicated with the extension .S
+
+  It consists of a 23-bit fraction, an 8-bit exponent, and 1 bit
+
+  indicating the sign of the fraction.  The Single Precision format
+
+  is defined by IEEE and uses excess-127 notation for the exponent.
+
+  A hidden 1 is assumed as the most significant digit of the fraction.
+
+  The format is defined as follows:
+
+  
+
+        30       22                    0
+
+      S EEEEEEEE FFFFFFFFFFFFFFFFFFFFFFF
+
+      
+
+      S=Sign of fraction
+
+      E=Exponent
+
+      F=Fraction
+
+  
+
+  The single precision format takes 4 bytes when written to memory.
+
+
+
+3.1.2.2 Double Precision
+
+
+
+  The double precision format is indicated with the extension .D
+
+  It consists of a 52-bit fraction, an 11-bit exponent, and 1 bit
+
+  indicating the sign of the fraction.  As the single precision,
+
+  this format is also defined by the IEEE, and uses excess-1023
+
+  notation for the exponent.  A hidden 1 is assumed as the most
+
+  significant digit of the fraction.  The format is defined as
+
+  follows:
+
+  
+
+        62          51                      0
+
+      S EEEEEEEEEEE FFFFFFF........FFFFFFFFFF
+
+      
+
+      S=Sign of fraction
+
+      E=Exponent
+
+      F=Fraction
+
+      
+
+  The double precision format takes 8 bytes when written to memory.
+
+
+
+3.1.2.3 Extended precision
+
+
+
+  The extended precision is indicated with the extension .X
+
+  This is the format that is used in all computations, and
+
+  consists of a 64-bit mantissa, a 15-bit exponent and 1 bit
+
+  indicating the sign of the mantissa.  A hidden 1 is not assumed,
+
+  so all digits of the mantissa are present.  Excess-16383
+
+  is used for the exponent.  When data of this format is written
+
+  to memory, it is "exploded" by 16 zero-bits between the mantissa
+
+  and the exponent in order to make it longword aligned.
+
+  The extended-precision format is defined as follows:
+
+  
+
+    79              63                             0
+
+  S EEEEEEEEEEEEEEE MMMMMMMMMMMMMMM............MMMMM
+
+  
+
+  When written to memory, it looks like this:
+
+    94            80          63                   0
+
+  S EEEEEEEEEEEEEEE 000...000 MMMMMMMM...........MMM
+
+  
+
+  When written to memory, this format takes 12 bytes when written
+
+  to memory
+
+
+
+3.1.2.4  Packed-decimal string
+
+
+
+  To simplify input/output of floating point numbers, a special
+
+  96-bit packed-decimal format.
+
+  This format consists of 17 BCD digits mantissa, some padding
+
+  bits, 4 BCD digits exponent, 2 control bits, 1 bit indicating
+
+  the sign of the exponent, and 1 indicating the sign of the
+
+  mantissa.
+
+  Bits 68-79 are stored as zero bits unless an overflow occurs
+
+  during the conversion.
+
+  Positive and negative infinity is represented by numbers that are
+
+  outside the range of the floating point representation used.
+
+  If the result of an operation has no mathematical meaning, a NAN
+
+  is produced.  In the case of a NAN or infinity, bits 92 and 93
+
+  are both 1.
+
+
+
+3.2  Floating point Constant ROM
+
+
+
+  The FPU have an on-chip ROM where frequently used mathematical
+
+  instructions are stored.  How to retrieve these constants will be
+
+  discussed below.  Each constant has its own address in the ROM:
+
+  
+
+  Offset     Constant
+
+  =============================
+
+  $00        Pi
+
+  $0b        Log10(2)
+
+  $0c        e
+
+  $0d        Log2(e)
+
+  $0e        Log10(e)
+
+  $0f        0.0
+
+  $30        ln(2)
+
+  $31        ln(10)
+
+  $32        10^0
+
+  $33        10^1
+
+  $34        10^2
+
+  $35        10^4
+
+  .
+
+  .
+
+  .
+
+  $3e        10^2048
+
+  $3f        10^4096
+
+
+
+3.3  Floating Point Instructions
+
+
+
+  The FPU provides an extension to the normal 68000 instruction set.
+
+  The floating point instructions can be divided into 5 groups:
+
+  
+
+     1...Data transfer instructions
+
+     2...Dyadic instructions (two operands)
+
+     3...Monadic instructions (one operand)
+
+     4...Program control instructions
+
+     5...System control instructions
+
+     
+
+  The syntax and addressing modes for these instructions are the same
+
+  as those of the ordinary 68000 instructions.
+
+
+
+3.3.1  Data Transfer Instructions
+
+
+
+  Instruction Syntax     Op. Sizes      Operation
+
+  ==================================================================
+
+  FMOVE  FPm,FPn      | X             | The FMOVE instruction
+
+  FMOVE  <ea>,FPn     | B/W/L/S/D/X/P | copies data from the
+
+  FMOVE  FPm,<ea>     | B/W/L/S/D/X   | source operand to the
+
+                      |               | destination operand
+
+  ==================================================================
+
+  FMOVE  FPm,<ea>(#k) | P             | When writing a .P real, an
+
+  FMOVE  FPm,<ea>(Dn) | P             | optional rounding precision
+
+                      |               | may be specified as a constant
+
+                      |               | or in a data register
+
+                      |               | See below for details
+
+  ==================================================================
+
+  FMOVE  <ea>,FPcr    | L             | These two FMOVE's copies
+
+  FMOVE  FPcr,<ea>    | L             | data to/from control registers
+
+  ==================================================================
+
+  FMOVECR #ccc,FPn    | X             | This instruction retrieves a
+
+                      |               | constant from the ROM, where
+
+                      |               | ccc is the offset to be read
+
+  ==================================================================
+
+  FMOVEM <ea>,<list>  | L/X           | Moves multiple FP registers
+
+  FMOVEM <ea>,Dn      | X             | The register list may be
+
+  FMOVEM <list>,<ea>  | L/X           | specified as in 68000 assembler,
+
+  FMOVEM Dn,<ea>      | X             | or be contained as a bitmask
+
+                      |               | in a data register
+
+  ==================================================================
+
+  
+
+  When writing floating point numbers to the memory using the .P
+
+  format, an optional precision may be specified as a constant or
+
+  in a data register.
+
+  
+
+  Meaning of the precision:
+
+  
+
+  -64<=k<=0  Rounded to |k| decimal places
+
+  0<k<=17    Mantissa is rounded to k places
+
+  
+
+  Register bit mask of the MOVEM instruction:
+
+  
+
+  Addressing mode    Bit 7   Bit 6 -------- Bit 1   Bit 0
+
+  =========================================================
+
+  -(An)           |   FP7  |  FP6  |------|  FP1  |  FP0  |
+
+  All other modes |   FP0  |  FP1  |------|  FP6  |  FP7  |
+
+  =========================================================
+
+
+
+3.3.2  Dyadic Operations
+
+
+
+  Dyadic operations are operations computing with two operands.
+
+  The first operand may be addressed with any addressing mode,
+
+  while the second operand (destination) must be an FPU register.
+
+  
+
+  Instruction  Function
+
+  ===================================================
+
+  FADD       | Add two FP numbers
+
+  FCMP       | Compare two FP numbers
+
+  FDIV       | FP Division
+
+  FMOD       | FP Modulo
+
+  FMUL       | Multiply two FP numbers
+
+  FREM       | Get IEEE remainder
+
+  FSCALE     | Scale exponent
+
+  FSGLDIV    | Single-precision Division
+
+  FSGLMUL    | Single-precision Multiplication
+
+  FSUB       | FP Subtraction
+
+  ===================================================
+
+  
+
+  FSCALE adds the first operand to the exponent of the second
+
+  operand.
+
+  FREM returns the remainder of a division as specified by the IEEE
+
+  definition.
+
+
+
+3.3.3  Monadic Operations
+
+
+
+  Monadic operations are operations computing with only one operand.
+
+  The operand may be addressed with any addressing mode.
+
+  The syntax of monadic operations are:
+
+  
+
+    Instruction.Size  <ea>,FPn
+
+  
+
+  Instruction  Function
+
+  ====================================================
+
+  FABS       | Absolute value
+
+  FACOS      | FP Arc Cosine
+
+  FASIN      | FP Arc Sine
+
+  FATAN      | FP Arc Tangent
+
+  FATANH     | FP Hyperbolic Arc Tangent
+
+  FCOS       | FP Cosine
+
+  FCOSH      | FP Hyperbolic Cosine
+
+  FETOX      | FP e^x
+
+  FETOXM1    | FP e^(x-1)
+
+  FGETEXP    | Get exponent
+
+  FGETMAN    | Get mantissa
+
+  FINT       | FP Integer
+
+  FINTRZ     | Get integer and round down
+
+  FLOGN      | FP Ln(n)
+
+  FLOGNP1    | FP Ln(n+1)
+
+  FLOG10     | FP Log10(n)
+
+  FLOG2      | FP Log2(n)
+
+  FNEG       | Negate a floating point number
+
+  FSIN       | FP Sine
+
+  FSINH      | FP Hyperbolic Sine
+
+  FSQRT      | FP Square Root
+
+  FTAN       | FP Tangent
+
+  FTANH      | FP Hyperbolic Tangent
+
+  FTENTOX    | FP 10^x
+
+  FTWOTOX    | FP 2^x
+
+  ====================================================
+
+
+
+  There is one more monadic operation that uses a double
+
+  destination operand, the FSINCOS instruction:
+
+
+
+  FSINCOS <ea>,FPc:FPs        Calculates sine and cosine
+
+  FSINCOS FPm,FPc:FPs         of the same argument
+
+
+
+  All trigonometric operations operate on values in
+
+  radians.
+
+
+
+3.3.4 Program Control Instructions
+
+
+
+3.3.4.1  Instructions
+
+  This group of instructions allows control of program flow based
+
+  on condition codes generated by the FPU.  These instructions are
+
+  parallells to the 68000 instructions with the same names.
+
+
+
+  Instruction      Formats  Operation
+
+  =====================================================================
+
+  FBcc <Label>    | W/L   | Branch on FPU conditions
+
+  FDBcc Dn,<Label>| W     | Test FPU conditions, decrement and branch
+
+  FNOP            |       | No Operation   (Like NOP)
+
+  FScc <ea>       | B     | Set on FPU conditions
+
+  FTST <ea>       | All   | Test FP number at <ea>
+
+  FTST FPn        | X     | Test FP number in FPn
+
+  =====================================================================
+
+
+
+3.3.4.2 Condition codes
+
+
+
+  The FPU condition codes that may be acted upon are divided into two
+
+  groups, with and without NAN exception.
+
+
+
+3.3.4.2.1  Condition codes with NAN
+
+
+
+  Symbol  Meaning
+
+  ===========================================
+
+  GE    | Greater or equal
+
+  GL    | Greater or less
+
+  GLE   | Greater, less or equal
+
+  LE    | Less or equal
+
+  LT    | Less
+
+  NGE   | Not (greater or equal)
+
+  NGL   | Not (greater or less)
+
+  NGLE  | Not (greater, less or equal)
+
+  NGT   | Not greater
+
+  NLE   | Not (less or equal)
+
+  NLT   | Not less
+
+  SEQ   | Signalling equal
+
+  SNE   | Signalling unequal
+
+  SF    | Signalling Always FALSE
+
+  ST    | Signalling Always TRUE
+
+  ===========================================
+
+
+
+3.3.4.2.2  Condition codes without NAN
+
+
+
+  Symbol  Meaning
+
+  ===========================================
+
+  OGE   | Ordered and greater or equal
+
+  OGL   | Ordered and greater or less
+
+  OR    | Ordered
+
+  OGT   | Ordered and greater
+
+  OLE   | Ordered and less or equal
+
+  OLT   | Ordered less
+
+  UGE   | Unordered or greater or equal
+
+  UEQ   | Unordered or equal
+
+  UN    | Unordered
+
+  UGT   | Unordered or greater
+
+  ULE   | Unordered or less or equal
+
+  ULT   | Unordered or less
+
+  EQ    | Equal
+
+  NE    | Unequal
+
+  F     | Always FALSE
+
+  T     | Always TRUE
+
+
+
+3.3.4.2.3  Notes
+
+
+
+  You might wonder why there are different symbols for (unequal) and
+
+  (greater or less).
+
+  Floating point numbers may represent an infinity, something that is
+
+  impossible in the 68000 CPU.  In addition, they may represent illegal
+
+  values (NAN).
+
+  For detailed information on how these condition code symbols relate to the
+
+  condition code flags, consult programming references for the 68881 FPU.
+
+
+
+3.3.5  System Control Instructions
+
+
+
+  This group consists of 3 instructions, FSAVE, FRESTORE and FTRAPcc.
+
+  FSAVE and FRESTORE are priviliged instructions and are used to save
+
+  and restore the FPU state frame to memory.
+
+
+
+  FSAVE <ea>     Copies the internal registers to the specified state frame
+
+  FRESTORE <ea>  Loads the internal registers with the specified state frame.
+
+
+
+  The TRAPcc instruction can generate an exception dependant on the condition
+
+  codes.
+
+
+
+  FTRAPcc                        If the specified condition is true, TRAP.
+
+  FTRAPcc #<data>.(W/L)
+
+
+
+
+
+--- IV --------------------------- THE 68040 FPU ----------------- IV ---
+
+
+
+
+
+4.1  Differences
+
+
+
+  The FPU that is built-in in the 040, and indeed in the yet to come 060
+
+  are highly optimized.  It omits some instructions that are found on
+
+  the 68881/2, but the ones that are unimplemented, are usually emulated
+
+  in software.  By avoiding the emulated instructions, a program can get
+
+  a multiple speed increase when run on the 040.
+
+  The 040 also omits the Packed Decimal format (.P)  When it is attempted
+
+  written, the 040 will respond with an illegal format exception.
+
+
+
+4.2  Instruction set of the FPU-40  (Or whatever it is called)
+
+
+
+4.2.1  68881/2 instructions that are unimplemented
+
+
+
+  Type        Instructions
+
+  =================================================================
+
+  Monadic    | FACOS,FASIN,FATAN,FATANH,FCOS,FCOSH,FETOX,FETOXM1,
+
+             | FGETEXP,FGETMAN,FINT,FINTRZ,FLOG10,FLOG2,FLOGN,
+
+             | FLOGNP1,FSIN,FSINCOS,FSINH,FTAN,FTANH,FTENTOX,
+
+             | FTWOTOX
+
+  Dyadic     | FMOD,FREM,FSCAL,FSGLDIV,FSGLMUL
+
+  Transfer   | FMOVECR
+
+  =================================================================
+
+
+
+4.2.2  68881/2 instructions that WORK on an 040
+
+
+
+  FABS     ADD       FBcc      FCMP      FDBcc     FDIV      FMOVE
+
+  FMOVEM   FMUL      FNEG      FNOP      FRESTORE  FSAVE     FScc
+
+  FSQRT    FSUB      FTRAPcc   FTST
+
+
+
+
+
+--- V ----------------------------- SOURCES ----------------------- V ---
+
+
+
+5.1  Sourcecodes
+
+
+
+  There are no sourcecodes in this text, but in the same archive as you
+
+  got this file there should be an assembler source for a julia fractal
+
+  using the FPU.
+
+  The program is a very simple one, and doesn't use the most advanced
+
+  operations, but illustrates clearly how to program for the FPU.
+
+  The program is written for Amiga computers with AGA chipset and at
+
+  least OS 2.0, but it should be easy to degrade to earlier Amiga
+
+  versions and to other platforms.
+
+
+
+
+
+************************************************************************************************
+
+*             This text was written by Erik H. Bakke 14/10-93   © 1993 Bakke SoftDev           *
+
+*                                                                                              *
+
+* This text is freely redistributable as long as all files are kept together and in unmodified *
+
+* form.                                                                                        *
+
+*             Permission is granted to include this text in the HowToCode archive              *
+
+************************************************************************************************
+
+*  Error corrections, comments and questions should be directed to the author:                 *
+
+*                                                                                              *
+
+*                               e-mail:   db36@hp825.bih.no                                    *
+
+*                               phone:    +47-5630-5537   (13:00-21:00 GMT)                    *
+
+*                               Post:     Erik H. Bakke                                        *
+
+*                                         Bjørnen                                              *
+
+*                                         N-5227 SØRE NESET                                    *
+
+*                                         NORWAY                                               *
+
+************************************************************************************************
+
+  

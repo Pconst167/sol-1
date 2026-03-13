@@ -1,0 +1,2599 @@
+_AN AID TO DOCUMENTING C REVISITED_
+by Ron Winter
+
+[LISTING ONE]
+
+/*********************************************************************
+                                  cpheader.h
+ *********************************************************************/
+
+#include <malloc.h>
+#include <conio.h>
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+
+#define  Max_unget_buffer        20000
+#define  Max_general_buffers     3000
+#define  MAX_functions           5000
+/* #define  Max_functions           4000 */
+#define  Max_defined_functions   1400
+#define  Max_files               1400
+#define  Max_Recursion           50
+
+#define  false       0
+#define  true        1
+#define  completed   2
+
+#define  Escape      0x1b
+#define  Control_z   0x1a
+
+/*********************************************************************/
+typedef struct the_Pages
+   {
+   int               on_this_page;
+   struct the_Pages  *next_page_ptr;
+   }linked_pages_list;
+/**********************************************************************/
+typedef struct
+   {
+   char              *functions_name;
+   char              *its_filename;
+   int               is_referenced;
+   int               static_function;
+   }function_type;
+/**********************************************************************/
+typedef struct
+   {
+   char              *source_filename;
+   char              *source_file_comment;
+   unsigned int      line_count;
+   long              size;
+   }file_record_type;
+/**********************************************************************/
+typedef struct                   /* this is the main data base record */
+   {
+   file_record_type  *file_record_ptr;
+   char              *defined_function;
+   function_type     *ptr_to_function_table;
+   int               number_of_function_calls;
+   linked_pages_list *ptr_to_page_list;
+   int               number_of_references;
+   int               static_definition;
+   int               overlay_number;
+   }data_base_record_type;
+/**********************************************************************/
+
+#if MAIN != 0
+/***********************************************************************/
+
+function_type              /* 6 */
+   **sorted_called_list_ptrs,
+   *function_list,
+   *function_list_ptr;
+int
+   Max_functions,
+   count_of_functions = 0;
+/********************************/
+file_record_type           /* 14 */
+   *file_record_array,
+   *file_record_array_ptr;
+int
+   count_of_source_files = 0;
+/********************************/
+data_base_record_type      /* 20 */
+   *data_base_array,
+   *data_base_array_ptr,
+   **array_of_unused_ptrs_to_records,
+   **array_of_ptrs_to_records;
+int
+   count_of_valid_records = 0;
+/********************************/
+
+char *recursion_array[ Max_Recursion ];
+int recursion_depth = 0;
+
+char nesting_display_buffer[ Max_general_buffers ];
+
+char target[ 40 ] = "main";
+FILE *output = NULL;
+
+char push_buffer[ Max_unget_buffer ] = { 0, 0, 0, 0 };
+char *push_buffer_ptr;
+
+char file_comment_buffer[ Max_general_buffers ];
+int first_comment;
+
+int effective_width;
+
+int
+   page = 1,
+   line = 0,
+   defined_page_width =    80,
+   defined_page_length =   60,
+   defined_left_margin =   1,
+   defined_right_margin =  1,
+   stats_only =      false,
+   g_lib_flag =      false,
+   g_comment_flag =  false,
+   g_dec_def_flag =  false,
+   g_help_flag =     false,
+   ibm_flag =        true,
+   g_quiet_flag =    false,
+   g_tech_flag =     false,
+   g_ov_flag =       false,
+   g_un_flag =       false,
+   target_flag =     false;
+int top_of_form_done;
+char title[] =
+/*       mm/dd/yy0 hh:mm:ss0 */
+      { "                    C PRINTER - (c) 1987, 1988 rev. 1.3" };
+
+/********************************************************************/
+
+#else
+/*********************************************************************/
+
+extern function_type
+   **sorted_called_list_ptrs,
+   *function_list,
+   *function_list_ptr;
+extern file_record_type
+   *file_record_array,
+   *file_record_array_ptr;
+extern data_base_record_type
+   *data_base_array,
+   *data_base_array_ptr,
+   **array_of_unused_ptrs_to_records,
+   **array_of_ptrs_to_records;
+extern char *recursion_array[ ];
+extern int
+   count_of_valid_records,
+   Max_functions,
+   count_of_functions,
+   count_of_source_files;
+extern int page, line, recursion_depth;
+extern int first_comment;
+extern char nesting_display_buffer[ ];
+extern char top_bottom_line_of_box[ ];
+extern FILE *output;
+extern char push_buffer[ ];
+extern char *push_buffer_ptr;
+extern char file_comment_buffer[ ];
+extern int defined_page_width;
+extern int defined_page_length;
+extern int defined_left_margin;
+extern int defined_right_margin;
+extern int effective_width;
+extern char target[ ];
+extern int
+   stats_only,
+   g_lib_flag,
+   g_comment_flag,
+   g_dec_def_flag,
+   g_help_flag,
+   ibm_flag,
+   g_quiet_flag,
+   g_tech_flag,
+   g_ov_flag,
+   g_un_flag,
+   target_flag;
+extern int top_of_form_done;
+extern char title[];
+/*********************************************************************/
+
+#endif
+/**********************************************************************/
+
+[LISTING TWO]
+
+/*********************************************************************
+                                     cp.c
+  
+static void near bump_line_count( void );
+static void near do_top_of_page( void );
+static void near deallocate_arrays( void );
+static void near allocate_arrays( void );
+static void near initialize_globals( void );
+static void near build_records_from_list( FILE * );
+static void near sort_the_data_base_array( void );
+static void near count_all_defined_references( void );
+static void near show_function_relationships( void );
+static void near show_line_and_byte_counts( void );
+static void near show_sorted_function_list( void );
+static void near show_page_references( void );
+static void near show_unused_if_any( );
+static void near show_library_functions( void );
+static void near show_files_leading_comments( );
+       int       main( int, char ** );
+
+ ***************************************************************************/
+
+#define  MAIN  1
+#include "cpheader.h"
+#include "time.h"
+
+extern int  near binary_search_sorted_data_base( char * );
+extern void near build_box_parts( int );
+extern int  near build_the_data_base( char *, char * );
+extern void near check_for_new_page( void );
+extern int  near doprint( int );
+extern void near nasty( int );
+extern void near process_arguments( int, int, char **, int );
+extern void near scan_for_static_or_global( int *, int, char *, char * );
+extern void near tab_to_left_margin( FILE * );
+
+static void near allocate_arrays( void );
+static void near build_records_from_list( FILE * );
+static void near bump_line_count( void );
+static void near count_all_defined_references( void );
+static void near deallocate_arrays( void );
+static void near do_top_of_page( void );
+static void near initialize_globals( void );
+static void near show_files_leading_comments( void );
+static void near show_function_relationships( void );
+static void near show_library_functions( void );
+static void near show_line_and_byte_counts( void );
+static void near show_page_references( void );
+static void near show_sorted_function_list( void );
+static void near show_unused_if_any( void );
+static void near sort_the_data_base_array( void );
+       int       main( int, char ** );
+
+/***************************************************************************/
+
+static void near bump_line_count( )
+{
+top_of_form_done = false;
+++line;
+check_for_new_page();
+tab_to_left_margin( output );
+}
+/***************************************************************************/
+static void near do_top_of_page( )
+{
+if( !top_of_form_done )
+   {
+   top_of_form_done = true;
+   line = 9999;
+   check_for_new_page();
+   tab_to_left_margin( output );
+   }
+}
+/***************************************************************************/
+static void near deallocate_arrays( )
+{
+if( function_list )
+   free( function_list );
+if( file_record_array )
+   free( file_record_array );
+if( data_base_array )
+   free( data_base_array );
+if( sorted_called_list_ptrs )
+   free( sorted_called_list_ptrs );
+if( array_of_ptrs_to_records )
+   free( array_of_ptrs_to_records );
+}
+/***************************************************************************/
+
+static void near allocate_arrays( )
+{
+unsigned long length;
+
+length = (unsigned long)Max_functions * sizeof( function_type );
+if( length > 65535 )
+   {
+   (void)printf( "too many called functions ( go to huge model code )\n" );
+   exit( 1 );
+   }
+else
+   if(
+      !( function_list =
+         (function_type *)malloc( (unsigned int)length )
+       )
+     )
+      {
+      (void)printf( "No room for function_list\n" );
+      exit( 1 );
+      }
+   else
+      {
+      if( !g_quiet_flag && g_tech_flag )
+         (void)printf( "function list = %lu bytes long\n", length );
+      }
+
+length = (unsigned long)Max_files * sizeof( file_record_type );
+if( length > 65535 )
+   {
+   (void)printf( "too many files ( go to huge model code )\n" );
+   exit( 1 );
+   }
+else
+   if(
+      !( file_record_array =
+         (file_record_type *)malloc( (unsigned int)length )
+       )
+     )
+      {
+      (void)printf( "No room for file_record_array\n" );
+      exit( 1 );
+      }
+   else
+      {
+      if( !g_quiet_flag && g_tech_flag )
+         (void)printf( "file record array = %lu bytes long\n", length );
+      }
+
+length =
+   (unsigned long)Max_defined_functions * sizeof( data_base_record_type );
+if( length > 65535 )
+   {
+   (void)printf( "too many defined functions ( go to huge model code )\n" );
+   exit( 1 );
+   }
+else
+   if(
+      !( data_base_array =
+         (data_base_record_type *)malloc( (unsigned int)length )
+       )
+     )
+      {
+      (void)printf( "No room for data_base_array\n" );
+      exit( 1 );
+      }
+   else
+      {
+      if( !g_quiet_flag && g_tech_flag )
+         (void)printf( "data base array = %lu bytes long\n", length );
+      }
+
+length =
+   (unsigned long)Max_defined_functions * sizeof( data_base_record_type * );
+if( length > 65535 )
+   {
+   (void)printf(
+            "too many defined functions pointers( go to huge model code )\n"
+               );
+   exit( 1 );
+   }
+else
+   if(
+      !( array_of_ptrs_to_records =
+         (data_base_record_type **)malloc( (unsigned int)length )
+       )
+     )
+      {
+      (void)printf( "No room for *array_of_ptrs_to_records\n" );
+      exit( 1 );
+      }
+   else
+      {
+      if( !g_quiet_flag && g_tech_flag )
+         (void)printf( "array of ptrs to data base = %lu bytes long\n",
+                        length );
+      }
+
+length = (unsigned long)Max_functions * sizeof( function_type * );
+if( length > 65535 )
+   {
+   (void)printf(
+      "too many called function ptrs ( go to huge model code )\n"
+               );
+   exit( 1 );
+   }
+else
+   if(
+      !( sorted_called_list_ptrs =
+            (function_type **)malloc( (unsigned int)length )
+       )
+     )
+      {
+      (void)printf( "No room for ptr function_list\n" );
+      exit( 1 );
+      }
+   else
+      {
+      if( !g_quiet_flag && g_tech_flag )
+         (void)printf( "sorted called list ptrs = %lu bytes long\n", length );
+      }
+}
+/***************************************************************************/
+
+static void near initialize_globals( )
+{
+int i;
+char *cp;
+
+function_list_ptr = function_list;
+data_base_array_ptr = data_base_array;
+file_record_array_ptr = file_record_array;
+
+for( i = 0; i < Max_Recursion; ++i )
+   recursion_array[ i ] = NULL;
+build_box_parts( ibm_flag );
+effective_width =             /******** set global output width ***********/
+   defined_page_width - defined_left_margin - defined_right_margin;
+if( effective_width < 40 )
+   {
+   (void)printf( "\nThe page width is too narrow( needs > 40 )." );
+   exit( 1 );
+   }
+
+cp = &title[ 0 ];    /* insert date and nice time into title */
+(void)_strdate( cp );
+title[ 8 ] = ' ';
+cp = &title[ 10 ];
+(void)_strtime( cp );
+
+title[ 15 ] = ' ';   /* knock off seconds */
+title[ 16 ] = ' ';   /* put am, pm here */
+title[ 17 ] = 'm';
+title[ 18 ] = ' ';
+
+i = atoi( &title[ 10 ] );  /* f/ military to civilian time */
+title[ 16 ] = ( i < 12 )? (char)'a': (char)'p';
+
+if( i == 0 )
+   i = 12;
+if( i >= 13 )
+   i -= 12;
+
+(void)sprintf( &title[ 10 ], "%2d", i );
+title[ 12 ] = ':';
+
+if( title[ 10 ] == '0' )
+   title[ 10 ] = ' ';
+}
+/***********************************************************************/
+static void near build_records_from_list( stream )
+FILE  *stream;
+{
+char input_list_filename[ 129 ], input_line[ 129 ], overlay_number[ 129 ];
+int l;
+
+while( !feof( stream ) )
+   {
+   input_list_filename[ 0 ] = '\0';
+   input_line[ 0 ] = '\0';
+   overlay_number[ 0 ] = '\0';
+   fgets( input_line, 128, stream );   /* ends at \n or eof */
+
+   if(
+      ( l = strlen( input_line ) ) > 1    /* ie not nul string */
+     )
+      {
+      if( input_line[ l - 1 ] == '\n' )
+         input_line[ l - 1 ] = '\0';
+
+      l = sscanf( input_line, " %s %s ",
+                  input_list_filename, overlay_number
+                );
+      if( !g_quiet_flag && g_tech_flag )
+         {
+         (void)printf( "pathname = %s ", input_list_filename );
+         if( l )
+            (void)printf( "overlay # = %s ", overlay_number );
+         }
+      (void)build_the_data_base( input_list_filename, overlay_number );
+      }
+   }
+}
+/***************************************************************************/
+
+static void near sort_the_data_base_array( )
+{
+int i, still_sorting_flag;
+
+for( i = 0, data_base_array_ptr = data_base_array;
+     i < count_of_valid_records;
+     ++i
+   )
+   array_of_ptrs_to_records[ i ] = data_base_array_ptr++;
+
+if( !g_quiet_flag )
+   {
+   (void)printf( "\n\nSorting the function list...\n" );
+   (void)printf( " of %d functions\n", count_of_valid_records );
+   }
+still_sorting_flag = true;
+while( still_sorting_flag )
+   {
+   still_sorting_flag = false;
+   if( !g_quiet_flag )
+      {
+      (void)printf( "." );
+      }
+   for( i = 0; i < count_of_valid_records - 1; ++i )
+      {
+      if( strcmp( array_of_ptrs_to_records[ i ]->defined_function,
+                  array_of_ptrs_to_records[ i + 1 ]->defined_function ) > 0 )
+         {
+         still_sorting_flag = true;
+         data_base_array_ptr = array_of_ptrs_to_records[ i ];
+         array_of_ptrs_to_records[ i ] = array_of_ptrs_to_records[ i + 1 ];
+         array_of_ptrs_to_records[ i + 1 ] = data_base_array_ptr;
+         }
+      }
+   }
+}
+/************************************************************************/
+
+static void near count_all_defined_references()
+{
+register int count;
+int found;
+register function_type *f_list_ptr;
+
+f_list_ptr = function_list;         /* the full list */
+
+for( count = 0; count < count_of_functions; ++count )
+   {
+   found = binary_search_sorted_data_base( f_list_ptr->functions_name );
+   if( found >= 0 )
+      scan_for_static_or_global( &found,
+                                 f_list_ptr->static_function,
+                                 f_list_ptr->functions_name,
+                                 f_list_ptr->its_filename
+                               );
+   if( found >= 0 )
+      array_of_ptrs_to_records[ found ]->number_of_references +=
+         f_list_ptr->is_referenced;
+   ++f_list_ptr;        /* for all defined functions */
+   }
+if( !g_quiet_flag && g_dec_def_flag )
+   (void)printf( "\n" );
+}
+/***************************************************************************/
+
+static void near show_function_relationships( )
+{
+int found;
+int record_index;
+
+found = binary_search_sorted_data_base( target );/* w/o knowing filename */
+                  /* note if static, will find random one if more than */
+                  /* one with same name */
+if( found >= 0 )
+   {
+   recursion_depth = 0;
+   if( !g_quiet_flag )
+      {
+      (void)printf( "Checking for usage...\n" );
+      }
+   count_all_defined_references();
+   nesting_display_buffer[ 0 ] = '\0';
+   if( !g_quiet_flag )
+      {
+      (void)printf( "Starting the printout...\n" );
+      }
+   if( !target_flag )               /* main is only called once */
+      array_of_ptrs_to_records[ found ]->number_of_references = 1;
+   line = 0;
+   if( !stats_only )
+      {
+      (void)doprint( found );       /* of target function */
+      for( record_index = 0;
+           record_index < count_of_valid_records;
+           ++record_index
+         )
+         {
+         (void)fprintf( output, "\n" );
+         ++line;
+         if( array_of_ptrs_to_records[ record_index ]->number_of_references >
+             1
+           )
+            (void)doprint( record_index );
+         }
+      }
+   }
+else        /* cant find target */
+   {
+   (void)printf( "cant find %s, exitting\n", target );
+   exit( 1 );
+   }
+}
+/***************************************************************************/
+
+static void near show_line_and_byte_counts( )
+{
+long int total_byte_count;
+long int total_line_count;
+int i;
+
+file_record_array_ptr = file_record_array;
+
+do_top_of_page();
+(void)fprintf( output, "File statistics:\n" );
+bump_line_count();
+total_byte_count = 0l;
+total_line_count = 0l;
+for( i = 0; i < count_of_source_files; ++i )
+   {
+   (void)fprintf( output,
+                  "%-40s - %8u lines, %12ld bytes\n",
+                  file_record_array_ptr->source_filename,
+                  file_record_array_ptr->line_count,
+                  file_record_array_ptr->size
+                );
+   bump_line_count();
+
+   total_byte_count += file_record_array_ptr->size;
+   total_line_count += file_record_array_ptr->line_count;
+   ++file_record_array_ptr;
+   }
+(void)fputc( '\n', output );
+bump_line_count();
+(void)fprintf( output, "Totals:\n" );
+bump_line_count();
+/********                       "%-40s - %8u lines, %12ld bytes\n", *******/
+(void)fprintf( output, "%4d files%-30s - %8ld lines, %12ld bytes\n",
+               count_of_source_files, " ", total_line_count, total_byte_count
+             );
+bump_line_count();
+(void)fputc( '\n', output );
+bump_line_count();
+(void)fprintf( output,
+               " %d defined functions found.\n", count_of_valid_records
+             );
+bump_line_count();
+(void)fprintf( output, "Averages:\n" );
+bump_line_count();
+(void)fprintf( output,
+               "%6d lines/file, %6d functions/file, %6d lines/function\n",
+               (int)( total_line_count / count_of_source_files ),
+               (int)( count_of_valid_records / count_of_source_files ),
+               (int)( total_line_count / count_of_valid_records )
+             );
+}
+/***************************************************************************/
+
+static void near show_sorted_function_list( )
+{
+int i, record_index;
+long reference_total = 0;
+
+do_top_of_page();
+
+(void)fprintf( output, "Function index:\n" );
+bump_line_count();
+
+if( g_ov_flag )
+   (void)fprintf( output, "%-39s %-28s %s %s\n",
+                  "function", "in file", "ov#", "refs" );
+else
+   (void)fprintf( output, "%-39s %-28s    %s\n",
+                  "function", "in file", "refs" );
+
+bump_line_count();
+
+for( i = 0; i < effective_width; ++i )
+   (void)fputc( '_', output );
+(void)fprintf( output, "\n" );
+bump_line_count();
+
+for( record_index = 0;
+     record_index < count_of_valid_records;
+     ++record_index
+   )
+   {
+   data_base_array_ptr = array_of_ptrs_to_records[ record_index ];
+   if( data_base_array_ptr->number_of_references > 0 )
+      {   
+      if( g_ov_flag && data_base_array_ptr->overlay_number )
+         (void)fprintf( output, "%-7s%-32s %-28s %3d %d\n",
+                        ( data_base_array_ptr->static_definition )?
+                        "static": "",
+                        data_base_array_ptr->defined_function,
+                  ( data_base_array_ptr->file_record_ptr )->source_filename,
+                        data_base_array_ptr->overlay_number,
+                        data_base_array_ptr->number_of_references
+                      );
+      else
+         (void)fprintf( output, "%-7s%-32s %-28s     %d\n",
+                        ( data_base_array_ptr->static_definition )?
+                        "static": "",
+                        data_base_array_ptr->defined_function,
+                  ( data_base_array_ptr->file_record_ptr )->source_filename,
+                        data_base_array_ptr->number_of_references
+                      );
+      reference_total += (long)data_base_array_ptr->number_of_references;
+      bump_line_count();
+      }
+   }
+(void)fprintf( output, "%-7s%-32s %-28s     %s\n",
+               " ", " ", " ", "____"
+             );
+bump_line_count();
+(void)fprintf( output, "%-7s%-32s %-28s     %ld\n",
+               " ", " ", "total ", reference_total
+             );
+bump_line_count();
+}
+/***************************************************************************/
+
+static void near show_page_references( )
+{
+int pmax;          /* max x ref columns */
+int i, pcnt;
+linked_pages_list *p;
+
+if( !stats_only && ( defined_page_length > 0 ) )
+   {
+   pmax = (int)( effective_width - 7 - 32 - 2 ) / 5;
+   do_top_of_page();
+   (void)fprintf( output, "Function cross reference:\n" );
+   bump_line_count();
+
+   for( i = 0; i < count_of_valid_records; ++i )
+      {
+      data_base_array_ptr = array_of_ptrs_to_records[ i ];
+      if( data_base_array_ptr->number_of_references > 0 )
+         {
+         (void)fprintf( output, "%-7s%-32s- ",
+                        ( data_base_array_ptr->static_definition )?
+                        "static": "",
+                        data_base_array_ptr->defined_function );
+         p = data_base_array_ptr->ptr_to_page_list;
+         if( p )
+            {
+            pcnt = 0;
+            while( p->next_page_ptr )
+               {
+               (void)fprintf( output, "%4d,", p->on_this_page );
+               p = p->next_page_ptr;
+               ++pcnt;
+               if( pcnt >= pmax )
+                  {
+                  (void)fputc( '\n', output );
+                  bump_line_count();
+                  (void)fprintf( output, "%7s%32s  ", " ", " " );
+                  pcnt = 0;
+                  }
+               }
+            (void)fprintf( output, "%4d\n", p->on_this_page );
+            }
+         else
+            (void)fprintf( output, "\n" );
+         bump_line_count();
+         }
+      }
+   }
+}
+/***************************************************************************/
+
+static void near show_unused_if_any( )
+{
+int i, unused_count, unused_index, count, still_sorting_flag;
+data_base_record_type **unused_list_ptr_ptr, *unused_list_ptr;
+
+do_top_of_page();
+(void)fprintf( output, "Un-used function list:\n" );
+bump_line_count();
+
+unused_count = 0;
+for( i = 0; i < count_of_valid_records; ++i )
+   {
+   data_base_array_ptr = array_of_ptrs_to_records[ i ];
+   if( !data_base_array_ptr->number_of_references )
+      {
+      ++unused_count;
+      if( !g_un_flag )
+         {
+         (void)fprintf( output,
+                        "%-7s%-32s- %-33s\n",
+                        ( data_base_array_ptr->static_definition )?
+                        "static": "",
+                        data_base_array_ptr->defined_function,
+                     ( data_base_array_ptr->file_record_ptr )->source_filename
+                      );
+         bump_line_count();
+         }
+      }
+   }
+if( g_un_flag )               /* show sorted */
+   {
+   if( unused_count )
+      {
+      if(
+         !( array_of_unused_ptrs_to_records =
+            (data_base_record_type **)malloc( (unsigned int)unused_count )
+          )
+        )
+         (void)printf( "No room for *array_of_unused_ptrs_to_records\n" );
+      else
+         {
+         unused_index = 0;
+         for( i = 0; i < count_of_valid_records; ++i )
+            {
+            data_base_array_ptr = array_of_ptrs_to_records[ i ];
+            if( !data_base_array_ptr->number_of_references )
+               {                    /* first just collect them */
+               array_of_unused_ptrs_to_records[ unused_index++ ] =
+                  data_base_array_ptr;
+               }
+            }                 /* so now there are unused_index of them */
+         unused_list_ptr_ptr = array_of_unused_ptrs_to_records;
+         still_sorting_flag = true;
+         if( unused_count > 1 )
+            {
+            while( still_sorting_flag )
+               {
+               still_sorting_flag = false;
+               if( !g_quiet_flag && g_tech_flag )
+                  (void)printf( ".%d   \r", count );
+               for( count = 0; count < unused_count - 1; ++count )
+                  {
+                  if( strcmp( unused_list_ptr_ptr[ count ]->
+                              file_record_ptr->source_filename,
+                              unused_list_ptr_ptr[ count + 1 ]->
+                              file_record_ptr->source_filename
+                            ) > 0
+                    )
+                     {
+                     still_sorting_flag = true;
+                     unused_list_ptr = unused_list_ptr_ptr[ count ];
+                     unused_list_ptr_ptr[ count ] =
+                        unused_list_ptr_ptr[ count + 1 ];
+                     unused_list_ptr_ptr[ count + 1 ] = unused_list_ptr;
+                     }
+                  }
+               }
+            }
+         for( i = 0; i < unused_count; ++i )
+            {
+            (void)fprintf( output,
+                           "%-7s%-32s- %-33s\n",
+                           ( unused_list_ptr_ptr[ i ]->static_definition )?
+                           "static": "",
+                           unused_list_ptr_ptr[ i ]->defined_function,
+               ( unused_list_ptr_ptr[ i ]->file_record_ptr )->source_filename
+                         );
+            bump_line_count();
+            }
+         }
+      }
+   }
+if( !unused_count )
+   {
+   tab_to_left_margin( output );
+   (void)fprintf( output, "No un-used functions in the list.\n" );
+   bump_line_count();
+   }
+else
+   {
+   (void)fprintf( output, "%-7s%-39s- %d\n", "", "totals", unused_count );
+   bump_line_count();
+   }
+}
+/************************************************************************/
+
+static void near show_library_functions( )
+{
+register int count;
+int found, total, still_sorting_flag, x_count, final_count, final_call;
+function_type **f_list_ptr_ptr, *f_list_ptr;
+
+if( g_lib_flag )
+   {
+   if( !g_quiet_flag && g_tech_flag )
+      (void)printf( "collecting library functions...\n" );
+   do_top_of_page();
+   (void)fprintf( output, "Library functions:\n" );
+   bump_line_count();
+
+   total = 0;
+   f_list_ptr = function_list;
+   for( count = 0; count < count_of_functions; ++count )
+      {
+      if( !f_list_ptr->static_function )
+         {
+         if(
+            ( found =
+              binary_search_sorted_data_base( f_list_ptr->functions_name )
+            ) < 0
+           )
+            sorted_called_list_ptrs[ total++ ] = f_list_ptr;
+         }
+      ++f_list_ptr;        /* for all called functions */
+      }
+
+   if( !g_quiet_flag && g_tech_flag )
+      (void)printf( "gathering identical library functions...\n" );
+   final_count = total;    /* number of calls to be collected and sorted */
+   f_list_ptr_ptr = sorted_called_list_ptrs;
+   for( count = 0; count < ( total - 1 ); ++count )
+      {
+      for( x_count = count + 1; x_count < total; ++x_count )
+         {
+         if( ( f_list_ptr_ptr[ count ]->functions_name[ 0 ] != '\0' ) &&
+             !strcmp( f_list_ptr_ptr[ count ]->functions_name,
+                      f_list_ptr_ptr[ x_count ]->functions_name )
+           )
+            {
+            f_list_ptr_ptr[ count ]->is_referenced +=
+               f_list_ptr_ptr[ x_count ]->is_referenced;
+            f_list_ptr_ptr[ x_count ]->functions_name[ 0 ] = '\0';
+            --final_count;
+            }
+         }
+      }
+
+   if( !g_quiet_flag && g_tech_flag )
+      {
+      (void)printf( "\nSorting the library function calls...\n" );
+      }
+
+   f_list_ptr_ptr = sorted_called_list_ptrs;
+   still_sorting_flag = true;
+   while( still_sorting_flag )
+      {
+      still_sorting_flag = false;
+      if( !g_quiet_flag && g_tech_flag )
+         (void)printf( ".%d   \r", count );
+      for( count = 0; count < total - 1; ++count )
+         {
+         if( strcmp( f_list_ptr_ptr[ count ]->functions_name,
+                     f_list_ptr_ptr[ count + 1 ]->functions_name ) > 0 )
+            {
+            still_sorting_flag = true;
+            f_list_ptr = f_list_ptr_ptr[ count ];
+            f_list_ptr_ptr[ count ] = f_list_ptr_ptr[ count + 1 ];
+            f_list_ptr_ptr[ count + 1 ] = f_list_ptr;
+            }
+         }
+      }
+   if( !g_quiet_flag && g_tech_flag )
+      (void)printf( "\n" );
+
+   (void)fprintf( output, "%-32s %-28s\n",
+                  "library function", "calls" );
+   bump_line_count();
+
+   for( count = 0; count < effective_width; ++count )
+      (void)fputc( '_', output );
+   (void)fprintf( output, "\n" );
+   bump_line_count();
+
+   final_call = 0;
+   f_list_ptr_ptr = sorted_called_list_ptrs;
+   for( count = 0; count < total; ++count )
+      {
+      if( ( *f_list_ptr_ptr )->functions_name[ 0 ] != '\0' )
+         {
+         (void)fprintf( output, "%-32s %d\n",
+                        ( *f_list_ptr_ptr )->functions_name,
+                        ( *f_list_ptr_ptr )->is_referenced
+                      );
+         final_call += ( *f_list_ptr_ptr )->is_referenced;
+         bump_line_count();
+         }
+      ++f_list_ptr_ptr;
+      }
+   (void)fprintf( output, "Totals:\n" );
+   bump_line_count();
+   (void)fprintf( output, "%6d %-25s %d calls.\n",
+                  final_count, "library functions,", final_call
+                );
+   bump_line_count();
+   }
+}
+/************************************************************************/
+
+static void near show_files_leading_comments( )
+{
+int i;
+char *cp;
+
+if( g_comment_flag )
+   {
+   do_top_of_page();
+   (void)fprintf( output, "File comments:\n" );
+   bump_line_count();
+   file_record_array_ptr = file_record_array;
+   for( i = 0; i < count_of_source_files; ++i )
+      {
+      (void)fprintf( output, "%40s\n",
+                     file_record_array_ptr->source_filename
+                   );
+      bump_line_count();
+      cp = file_record_array_ptr->source_file_comment;
+      while( *cp )
+         {
+         (void)fprintf( output, "%c", *cp );
+         if( *++cp == '\n' )
+            {
+            bump_line_count();
+            }
+         }
+      ++file_record_array_ptr;   
+      do_top_of_page();          /* one page per comment at least */
+      }
+   }
+}
+/**********************************************************************/
+
+int main( argc, argv )
+char **argv;
+int argc;
+{
+int   index, in_error = false, out_error = false;
+FILE  *stream;
+
+nasty( argc );
+
+(void)printf( "\ncp - ver. 1.3,  (C)1987, 1988  Stewart A. Nutter\n" );
+(void)printf( "    extended and corrected by  Ron Winter\n" );
+
+index = 1;
+if( !( stream = fopen( argv[ index ], "rt" ) ) )
+   in_error = true;
+else
+   ++index;
+if(
+   ( argc > index ) &&
+   (
+    ( argv[ index ][ 0 ] != '/' ) && ( argv[ index ][ 0 ] != '-' )
+   )
+  )
+   {
+   output = fopen( argv[ 2 ], "w+" );     /******* wt+ <<<<<<<< ******/
+   ++index;
+   }
+else
+   output = fopen( "prn", "w+" );         /******** wt+ <<<<<< ********/
+
+if( !output )
+   out_error = true;
+
+Max_functions = MAX_functions;
+process_arguments( index, argc, argv, in_error || out_error );
+if( in_error )
+   {
+   (void)printf( "\n can't open input list %s\n", argv[ 1 ] );
+   exit( 1 );
+   }
+if( out_error )
+   {
+   (void)printf( "\n can't open output file, error %s\n", strerror( errno ) );
+   exit( 1 );
+   }
+allocate_arrays( );
+initialize_globals( );
+(void)printf( "\n" );
+
+build_records_from_list( stream );
+sort_the_data_base_array( );
+if( !g_quiet_flag )
+   {
+   (void)printf( "\n" );
+   }
+top_of_form_done = false;
+show_function_relationships( );
+show_page_references( );
+show_line_and_byte_counts( );
+show_sorted_function_list( );
+show_unused_if_any( );
+show_library_functions( );
+show_files_leading_comments( );
+deallocate_arrays( );
+
+/************* done *****************/
+(void)fprintf( output, "%c", 0x0c );   /* ff */
+
+return false;     /* ok */
+}
+/********************************************************************/
+
+
+[LISTING THREE]
+
+/***********************************************************************
+                                   cpinput.c
+       void near nasty( int );
+       void near process_arguments( int, int, char **, int );
+************************************************************************/
+#define  MAIN  0
+#include "cpheader.h"
+
+       void near nasty( int );
+       void near process_arguments( int, int, char **, int );
+/************************************************************************/
+
+void near nasty( argc )
+int argc;
+{
+if( argc < 2 )
+   {
+   (void)printf( "\ncp listfile [ outfile ] [\n" );
+   (void)printf(
+   "     /p:nn /w:nn /m:nn /r:nn /t:main /f:nnnn\n"
+               );
+   (void)printf(
+   "     /l /n /s /q /d /c /h /x\n"
+               );
+   (void)printf(   "                        ]\n\n" );
+   (void)printf(
+   "     outfile            = prn\n" );
+   (void)printf(
+   "    p: page length      = %3d   [ 0, 50 -255 ]\n", defined_page_length
+               );
+   (void)printf(
+   "     w: page width      = %3d   [ 80 - 255 ]\n", defined_page_width
+               );
+   (void)printf(
+   "     m: left margin     = %2d    [ 0 - 30 ]\n", defined_left_margin
+               );
+   (void)printf(
+   "     r: right margin     = %2d    [ 0 - 30 ]\n", defined_right_margin
+               );
+   (void)printf(
+   "     t: target function  = %s\n", target
+               );
+   (void)printf(
+   "     f: # of function calls = %4d    [ 2 - 5461 ]\n", MAX_functions
+               );
+   (void)printf(
+   "     n: normal characters( ie not ibm character graphics )\n"
+               );
+   (void)printf(
+   "     l  output library functions\n"
+               );
+   (void)printf(
+   "     c  output file\'s 1st comment\n"
+               );
+   (void)printf(
+   "     s  output statistics only\n"
+               );
+   (void)printf(
+   "     d  show declarations and definitions\n"
+               );
+   (void)printf(
+   "     o  show overlay information\n"
+               );
+   (void)printf(
+   "     u  show unused sorted by filename\n"
+               );
+   (void)printf(
+   "     q  show no messages\n"
+               );
+   (void)printf(
+   "     h  show more help\n"
+               );
+   (void)printf(
+   "     x  show tech info\n"
+               );
+
+   (void)printf( "\n" );
+   exit( 0 );
+   }
+}
+/**********************************************************************/
+void near process_arguments( index, argc, argv, an_error )
+int index, argc, an_error;
+char **argv;
+{
+char c;
+int i, tmp;
+
+for( i = index; i < argc; ++i )
+   {
+   if( ( argv[ i ][ 0 ] == '/' ) || ( argv[ i ][ 0 ] == '-' ) )
+      {
+      c = (char)tolower( (int)argv[ i ][ 1 ] );
+      switch( c )
+         {
+         case 'n':
+            ibm_flag = ( ibm_flag )? false: true;
+            break;
+         case 'l':
+            g_lib_flag = ( g_lib_flag )? false: true;
+            break;
+         case 'c':
+            g_comment_flag = ( g_comment_flag )? false: true;
+            break;
+         case 'd':
+            g_dec_def_flag = ( g_dec_def_flag )? false: true;
+            break;
+         case 's':
+            stats_only = ( stats_only )? false: true;
+            break;
+         case 'q':
+            g_quiet_flag = ( g_quiet_flag )? false: true;
+            break;
+         case 'o':
+            g_ov_flag = true;
+            break;
+         case 'u':
+            g_un_flag = true;
+            break;
+         case 'h':
+            g_help_flag = true;
+            break;
+         case 'x':
+            g_tech_flag = true;
+            break;
+         default:
+          if( ( strlen( argv[ i ] ) > 3 ) && ( argv[ i ][ 2 ] == ':' ) )
+              {
+               tmp = atoi( &argv[ i ][ 3 ] );
+               switch( c )
+                  {
+                  case 'p':
+                   if( ( ( 50 < tmp ) && ( tmp < 256 ) ) || ( tmp == 0 ) )
+                       defined_page_length = tmp;
+                   break;
+                  case 'm':
+                     if( ( 0 <= tmp ) && ( tmp <= 30 ) )
+                        defined_left_margin = tmp;
+                     break;
+                  case 'r':
+                     if( ( 0 <= tmp ) && ( tmp <= 30 ) )
+                        defined_right_margin = tmp;
+                     break;
+                  case 't':
+                     (void)strcpy( target, &argv[ i ][ 3 ] );
+                     target_flag = true;
+                     break;
+                  case 'w':
+                     if( ( 79 < tmp ) && ( tmp < 256 ) )
+                        defined_page_width = tmp;
+                     break;
+                  case 'f':
+                     if( ( 1 < tmp ) && ( tmp < 5462 ) )
+                        Max_functions = tmp;
+                     break;
+                  default:
+                     (void)printf(
+                         "\nUnknown argument character: %c, ignored!\n",
+                           argv[ i ][ 1 ]
+                              );
+                     break;
+                  }  /* end of switch on character after / or - */
+               }     /* end of if :something */
+            else
+               (void)printf( "\nMissing : for argument %s, ignored!\n",
+                             argv[ i ] );
+            break;
+         }           /* end of switch on character after / or - */
+      }              /* end of if / or - */
+   else
+      (void)printf( "\nUnknown argument: %s, ignored!\n", argv[ i ] );
+   }                 /* end of for loop on arguments */
+
+if( g_tech_flag )
+   {
+   (void)printf( "\n" );
+   (void)printf( "Notes: 1. Max recursive function displacement of %d.\n",
+                 Max_Recursion
+               );
+   (void)printf(
+"         2. Max # of unique function calls per defined function\n\
+            for all defined functions is %d.\n",
+   Max_functions );
+   (void)printf( "         3. Max # of defined functions is %d.\n",
+      Max_defined_functions );
+   (void)printf( "\n" );
+   (void)printf( "sizeof()\'s:\n" );
+   (void)printf(
+" function table = %u, contents = %u, data base = %u,\
+ database = %u, lib = %u\n",
+      sizeof( function_type ),
+      sizeof( file_record_type ),
+      sizeof( data_base_record_type ),
+      sizeof( array_of_ptrs_to_records ),
+      sizeof( sorted_called_list_ptrs )
+               );
+   (void)printf( "\n" );
+   (void)printf(
+   "The program will tend to show certain \'c\' functions as unused.\n" );
+   (void)printf(
+   "1. defined functions assigned to declared pointers to function names\n" );
+   (void)printf(
+   "   and executed as pointers to those function names won't be seen.\n" );
+   (void)printf(
+   "2. #if(s) controlling the generation of code especially with\n" );
+   (void)printf(
+   "   braces( { } ) in the conditional code section will especially\n" );
+   (void)printf(
+   "   screw up if there is an #else code part.  This program will work\n" );
+   (void)printf(
+   "   on both code parts of the conditional and most probably get out\n" );
+   (void)printf(
+   "   of sync with the braces. One might do a preprocessor pass compile\n" );
+   (void)printf(
+   "   and heave it\'s output files as input files at this program.\n" );
+   (void)printf(
+   "3. #define(s) that expand to functions and call functions will also\n" );
+   (void)printf(
+   "   be neglected.  The preprocessor may be used as stated above.\n" );
+/******
+   (void)printf(
+   "\n" );
+******/
+   (void)printf( "\n" );
+   }
+
+if( g_help_flag )
+   {
+   (void)printf( "\n" );
+   (void)printf(
+   "The listfile argument is an ascii text file containing the list of\n"
+               );
+   (void)printf(
+   "filenames to process, one filename per line (optional overlay number.)\n"
+               );
+   (void)printf(
+   "The output file may be a device or a filename. If there is no\n"
+               );
+   (void)printf(
+   "output filename, \'prn\' is assumed. Note that one may put \'con\'\n"
+               );
+   (void)printf(
+   "here and view the output of the program before printing or saving\n"
+               );
+   (void)printf(
+   "to a filename.\n"
+               );
+   (void)printf(
+   "Also note that the output filename and the input filenames in the\n"
+               );
+   (void)printf(
+   "listfile may be full pathnames with drives and or paths.\n"
+               );
+   (void)printf( "/ arguments accept the alternate - form.\n" );
+   (void)printf( "For example: cp x y -s, cp /h, cp x -x /d -t:junk\n" );
+   (void)printf( "arguments may be in upper or lower case.\n" );
+   (void)printf( "Note that the target function is case sensitive\n" );
+   (void)printf( "since it is a \'c\' function name.\n" );
+   (void)printf( "\n" );
+   }
+if( an_error )
+   {
+   if( g_help_flag || g_tech_flag )
+      exit( 0 );
+   else
+      (void)printf( "Oops..." );
+   }
+}
+/***********************************************************************/
+
+
+[LISTING FOUR]
+
+/***************************************************************************
+                                   cpbuild.c
+static void near mark_as_static( function_type *, char*, int );
+static int near  test_and_add( function_type *, char *, int );
+static void near unget_chars( char );
+static char near get_chars( FILE * );
+static char near get_to_next_possible_token( FILE * );
+static int near  is_legal_identifier_character( char );
+       int near  build_the_data_base( char * );
+***************************************************************************/
+
+#define  MAIN  0
+#include "cpheader.h"
+
+       int near  build_the_data_base( char * );
+static char near get_chars( FILE * );
+static char near get_to_next_possible_token( FILE * );
+static int near  is_legal_identifier_character( char );
+static void near mark_as_static( function_type *, char*, int );
+static int near  test_and_add( function_type *, char *, int );
+static void near unget_chars( char );
+
+/***************************************************************************/
+static void near mark_as_static( ptr_to_function_list, 
+                                 name_of_static_function, count
+                               )
+char *name_of_static_function;
+function_type *ptr_to_function_list;
+int count;
+{
+int i;
+
+for( i = 0; i < count; ++i )
+   {
+   if(
+      !strcmp( name_of_static_function, ptr_to_function_list->functions_name )
+     )
+      ptr_to_function_list->static_function = true;
+   ++ptr_to_function_list;
+   }
+}
+/***************************************************************************/
+#define KEYS   7
+
+static int near test_and_add( ptr_to_function_list, string, count )
+function_type *ptr_to_function_list;
+char *string;
+int count;
+{
+int i, is_a_new_function_name;
+static char *keywords[ KEYS ] =
+   {  /* must catch do (void)printf, while(), else (void)... etc. ***/
+   "do", "while", "if", "else", "for", "switch", "return"
+   };
+
+for( i = 0; ( i < KEYS ) && ( strcmp( string, keywords[ i ] ) != 0 ); ++i )
+   ;
+if( i < KEYS )
+   is_a_new_function_name = false;     /* ie a reserved word match */
+else                                   /* is a function name */
+   {
+   for( i = 0; i < count; ++i )
+      {
+      if( !strcmp( string, ptr_to_function_list->functions_name ) )
+         {                       /* function name matches */
+         if( !ptr_to_function_list->static_function )
+            break;               /* and isn't static */
+         else
+            {
+            if( !strcmp( ptr_to_function_list->its_filename,
+                         file_record_array_ptr->source_filename
+                      )
+              )
+               break;            /* only statics in same file match */
+            }
+         }
+      ++ptr_to_function_list;
+      }
+   if( i == count )
+      {                                /* new function name */
+      is_a_new_function_name = true;   /* add function name to list */
+      if( ( function_list_ptr->functions_name = strdup( string ) ) == NULL )
+         {
+         (void)fprintf( stderr, "Ran out of memory.\n" );
+         exit( 1 );
+         }
+      function_list_ptr->static_function = false;
+      function_list_ptr->its_filename =
+         file_record_array_ptr->source_filename;
+      function_list_ptr->is_referenced = 1;
+
+      ++function_list_ptr;             /* point to next empty cell */
+      ++count_of_functions;            /* increase current size */
+      if( count_of_functions > Max_functions )
+         {
+         (void)fprintf( stderr, "Too many functions.\n" );
+         exit( 1 );
+         }
+      }
+   else                                /* string already in function list */
+      {
+      is_a_new_function_name = false;
+      ptr_to_function_list->is_referenced++;
+      }
+   }
+return is_a_new_function_name;
+}
+/***************************************************************************/
+static void near unget_chars( c )
+char c;
+{
+if( ( push_buffer_ptr - push_buffer ) < Max_unget_buffer )
+   *push_buffer_ptr++ = c;
+else
+   {
+   (void)fprintf( stderr, "\nProgram syntax error:" );
+   (void)fprintf( stderr, " Too many pushed characters.\n" );
+   exit( 1 );
+   }
+}
+/***************************************************************************/
+static char near get_chars( stream )
+FILE * stream;
+{
+register char c;
+
+if( push_buffer_ptr != push_buffer )
+   c = *--push_buffer_ptr;
+else
+   {
+   c = (char)fgetc( stream );
+   if( c == EOF )
+      c = Control_z;
+   if( c == 0x0a )
+      {
+      file_record_array_ptr->line_count++;
+      file_record_array_ptr->size++;           /* count the unseen <cr> */
+      }
+   file_record_array_ptr->size++;
+   }
+return c;
+}
+/***************************************************************************/
+static char near get_to_next_possible_token( stream )
+FILE *stream;
+{
+register char
+   c;
+char
+   next_char_peek;
+int
+   done;
+
+static int       /* the only apparent reason these are static is for speed */
+   quotes_flag =           false,
+   comment_flag =          false,
+   escape_sequence_flag =  false,
+   pound_sign_flag =       false,
+   ascii_quote_flag =      false;
+static int
+   fp = 0;   /*****<<<<< */
+static char *cp;
+
+done = false;
+do {
+   c = get_chars( stream );
+   if( c != Control_z )
+      {   
+      if( comment_flag )
+         {
+/**************************
+   process /* comment sequence of characters
+***************************/
+         if( first_comment == true )
+            {
+            if( fp < ( Max_general_buffers - 2 ) )
+               {
+               if(
+                  ( c != '\n' ) &&
+                  ( strlen( cp ) < effective_width )
+                 )
+                  {
+                  file_comment_buffer[ fp++ ] = c;
+                  file_comment_buffer[ fp ] = '\0';
+                  }
+               else        /* c == \n or length >= width */
+                  {
+                  file_comment_buffer[ fp++ ] = '\n';
+                  file_comment_buffer[ fp ] = '\0';
+                  cp = (char *)&file_comment_buffer[ fp ];
+                  if( c != '\n' )
+                     {
+                     file_comment_buffer[ fp++ ] = c;
+                     file_comment_buffer[ fp ] = '\0';
+                     }
+                  }
+               }
+/*          else     /* 1st comment exceeds buffer */
+            }        /* end of if first_comment == true */
+         if( c == '*' )
+            {
+            next_char_peek = get_chars( stream );
+            if( next_char_peek == '/' )          /* close comment */
+               {
+               comment_flag = false;
+               unget_chars( ' ' );  /* comments are white space in 'c' */
+               if( first_comment == true )
+                  {
+                  first_comment = completed;
+                  fp = 0;
+                  cp = (char *)&file_comment_buffer[ fp ];
+                  }
+               }
+            else        /* next_char_peek != '/' ie close comment */
+               unget_chars( (char)next_char_peek );
+            }  /* end of if c == '*' */
+         }
+      else     /* not /* */
+         {
+/**************************
+   process \sequence character, hoping \" \' \\ etc inside " or '
+***************************/
+         if( escape_sequence_flag )
+            escape_sequence_flag = false;
+         else     /* not /*, not \ */
+            {
+/**************************
+   process " string sequence of characters
+***************************/
+            if( quotes_flag )
+               {
+               if( c == '\\' )                  /* check for \'\n' */
+                  {
+                  next_char_peek = get_chars( stream );
+                  if( next_char_peek != '\n' )  /* so not \'\n' */
+                     {
+                     escape_sequence_flag = true;
+                     unget_chars( (char)next_char_peek );
+                     }
+/*******          else                          /* \'\n' continuation */
+                  }
+               else                             /* not \ */
+                  if( c == '\"' )
+                     quotes_flag = false;
+               }
+            else     /* not ", not /*, not \ */
+               {
+/**************************
+   process ' ascii character sequence
+***************************/
+               if( ascii_quote_flag )
+                  {
+                  if( c == '\\' )
+                     escape_sequence_flag = true;
+                  else
+                     if( c == '\'' )
+                        ascii_quote_flag = false;
+                  }
+               else  /* not ', not ", not /*, not \ */
+                  {
+/**************************
+   process # sequence of characters, ie #if, #define, etc.
+   define causes code sequencing problems it would seem!
+***************************/
+                  if( pound_sign_flag )
+                     {
+                     if( c == '/' )       /* comments override #defines etc */
+                        {
+                        next_char_peek = get_chars( stream );
+                        if( next_char_peek == '*' )
+                           comment_flag = true;
+                        else
+                           unget_chars( (char)next_char_peek );
+                        }
+                     else
+                        {
+                        if( c == '\n' )
+                           pound_sign_flag = false;
+                        else                          /* c != \n */
+                           {
+                           if( c == '\\' )  /* check for \'\n' continuation */
+                              {   
+                              next_char_peek = get_chars( stream );
+                              if( next_char_peek != '\n' ) /* it aint \'\n' */
+                                 unget_chars( (char)next_char_peek );
+/*                            else              /* \'\n' means continue # */
+                              }
+                           }
+                        }
+                     }
+                  else     /* not ', not #, not ", not /*, not \ */
+                     {
+/**************************
+   process anything else
+***************************/
+                     done = false;     /* assume a ' or " or # or /* */
+                     switch( c )
+                        {
+                        case '\"':
+                           quotes_flag = true;
+                           break;
+                        case '\'':
+                           ascii_quote_flag = true;
+                           break;
+                        case '#':
+                           pound_sign_flag = true;
+                           break;
+                        case '/':
+                           next_char_peek = get_chars( stream );
+                           if( next_char_peek == '*' )
+                              {
+                              comment_flag = true;
+                              if( first_comment == false )
+                                 {           /* the 1st comment of the file */
+                                 first_comment = true;
+                                 fp = 0;
+                                 cp = (char *)&file_comment_buffer[ fp ];
+                                 }
+                              }
+                           else
+                              {
+                              unget_chars( (char)next_char_peek );
+                              done = true;   
+                              }
+                           break;
+                        default:       /* a worthy character to return */
+                           done = true;   
+                        }
+                     }     /* end of else not ascii */
+                  }        /* end of else not # */
+               }           /* end of else not " */
+            }              /* end of else not /* */
+         }                 /* end of else not \ */
+      }                    /* end of if c != Control_z */
+   }
+while( !done && ( c != Control_z ) );
+if( c == Control_z )
+   {
+   ascii_quote_flag = false;
+   pound_sign_flag = false;
+   quotes_flag = false;
+   escape_sequence_flag = false;
+   comment_flag = false;
+   fp = 0;
+   }
+return c;
+}
+/***************************************************************************/
+static int near is_legal_identifier_character( c )
+char c;
+{
+if(
+   ( ( 'A' <= c ) && ( c <= 'Z' ) ) ||
+   ( ( 'a' <= c ) && ( c <= 'z' ) ) ||
+   ( ( '0' <= c ) && ( c <= '9' ) ) ||
+   ( c == '_')
+  )
+   return true;
+else
+   return false;
+}
+/***************************************************************************/
+#define  C_line_length  512
+#define  C_identifier_length  80
+
+int near build_the_data_base( the_filename )
+char * the_filename;
+{
+static char fake_comment[ ] = "no room!";
+int found_a_possible_function;
+int brace_count, body_found;
+int open_parenthesis, parenthesis_count;
+int at_end_of_source_file;
+int dummy_index, total_called_count;
+int function_definition_flag, static_flag;
+int analyze_buffer_flag = false;
+char c;
+char *function_name_buffer_ptr;
+char function_name_buffer[ C_identifier_length ];
+char look_ahead_buffer[ C_line_length + 1 ];
+FILE *stream;
+data_base_record_type *data_base_ptr, *starting_data_base_ptr;
+function_type *starting_called_function_ptr;
+
+if( !g_quiet_flag )
+   {
+   (void)printf( "Processing file: %-12s\n", the_filename );
+   }
+if( !( stream = fopen( the_filename, "r" ) ) )  /***** rt <<<<<<<<<< */
+   {
+   (void)printf( "Cant open %s\n", the_filename );
+   return -1;
+   }
+
+push_buffer_ptr = push_buffer;         /* reset input character stack */
+                                       /* add file name to data base */
+if( !( file_record_array_ptr->source_filename = strdup( the_filename ) ) )
+   {
+   (void)printf( "Ran out of memory.\n" );
+   exit( 1 );
+   }
+
+starting_called_function_ptr = function_list_ptr;
+starting_data_base_ptr = data_base_array_ptr; /* mark start of defined list */
+
+look_ahead_buffer[ 0 ] = '\0';
+
+first_comment = false;
+file_comment_buffer[ 0 ] = '\0';
+
+file_record_array_ptr->line_count = 0;  /* clear it's variables */
+file_record_array_ptr->size = 0l;
+
+function_name_buffer_ptr = function_name_buffer;
+function_name_buffer[ 0 ] = '\0';
+
+static_flag = false;
+found_a_possible_function = false;
+open_parenthesis = false;
+body_found = false;
+
+brace_count = 0;
+parenthesis_count = 0;
+
+at_end_of_source_file = false;
+while( !at_end_of_source_file )
+   {
+   c = get_to_next_possible_token( stream );
+   switch( c )
+      {
+      case '{':
+         ++brace_count;
+         break;
+      case '}':
+         --brace_count;
+         break;
+      case Control_z:
+         at_end_of_source_file = true;
+         analyze_buffer_flag = true;
+         break;
+      case '(':
+         if( !open_parenthesis )
+            ++open_parenthesis;
+         analyze_buffer_flag = true;
+         break;
+      case ' ':                  /* this is where we eat white space */
+      case '\v':
+      case '\b':
+      case '\f':
+      case '\t':
+      case '\r':
+      case '\n':
+         do {
+            c = get_to_next_possible_token( stream );
+            }
+         while(
+               ( c == '\f' ) || ( c == ' ' ) || ( c == '\v' ) ||
+               ( c == '\b' ) || ( c == '\t' ) || ( c == '\r' ) ||
+               ( c == '\n' )
+              );
+         unget_chars( c ); /* put next non white character back */
+
+         if( c != '(' )
+            analyze_buffer_flag = true;
+/***     else  /* c == '(' and next pass will find it */
+         break;
+      default:
+         if( is_legal_identifier_character( c ) )
+            {                          /* it's a good identifier character */
+            *function_name_buffer_ptr++ = c;
+            *function_name_buffer_ptr = '\0';
+            }
+         else                          /* it aint, so toss it */
+            {
+            if( static_flag && ( c == ';' ) )
+               static_flag = false;
+/*          if( c != '*' ) */
+            analyze_buffer_flag = true;
+            }
+         break;
+      }                    /* end of preliminary character parse */
+/*****************
+   start checking characters accumulated in function_name_buffer[]
+******************/
+   if( analyze_buffer_flag )
+      {
+      analyze_buffer_flag = false;
+      if(
+         function_name_buffer[ 0 ] &&        /* ie not null string */
+         (                                   /* & not number */
+          ( function_name_buffer[ 0 ] < '0' ) ||
+          ( function_name_buffer[ 0 ] > '9' )
+         )
+        )
+         found_a_possible_function = true;
+      else                                   /* it aint an identifier */
+         {                                   /* so erase buffer */
+         function_name_buffer_ptr = function_name_buffer;
+         function_name_buffer[ 0 ] = '\0';
+         if( static_flag && ( c == ';' ) )
+            static_flag = false;
+         open_parenthesis = false;
+         }
+      }                       /* end of analyze_buffer_flag */
+/*****************
+   if function_name_buffer[] has legal function name, scan ahead
+******************/
+   if( found_a_possible_function )
+      {
+      found_a_possible_function = false;
+      *function_name_buffer_ptr = '\0';   /* append nul char to end */
+      if( !static_flag )                  /* don't retest if true */
+         if( !strcmp( function_name_buffer, "static" ) )
+            static_flag = true;
+      if( open_parenthesis )
+         {
+         open_parenthesis = false;
+         if( !brace_count )
+            {                             /* ie outside any function body */
+            parenthesis_count = 1;
+            for( dummy_index = 0;
+                 ( dummy_index < C_line_length ) && parenthesis_count;
+                 ++dummy_index
+               )
+               {                          /* scan ahead for function() */
+               c = get_to_next_possible_token( stream );
+               if( c == Control_z )
+                  break;            /* dummy_index not bumped */
+               look_ahead_buffer[ dummy_index ] = c;
+               look_ahead_buffer[ dummy_index + 1 ] = '\0';
+               switch( c )
+                  {
+                  case '(':
+                     ++parenthesis_count;
+                     break;
+                  case ')':
+                     --parenthesis_count;
+                     break;
+                  }           /* dummy_index is bumped */
+               }              /* end of for loop scanning for (...) */
+            if( ( c == Control_z ) || ( !parenthesis_count ) )
+               --dummy_index;
+            function_definition_flag = false;
+            for( ++dummy_index;
+                 ( dummy_index < C_line_length ) && !function_definition_flag;
+                 ++dummy_index
+               )
+               {                 /* what happens past (..) */
+               c = get_to_next_possible_token( stream );
+               if( c == Control_z )
+                  break;            /* w/ function_definition_flag == false */
+               look_ahead_buffer[ dummy_index ] = c;
+               look_ahead_buffer[ dummy_index + 1 ] = '\0';
+               switch( c )
+                  {
+                  case ' ':         /* this is where we eat white space */
+                  case '\v':
+                  case '\b':
+                  case '\f':
+                  case '\t':
+                  case '\n':
+                  case '\r':
+                     break;
+                  case '{':
+                     ++body_found;
+                     break;
+                  case ';':
+                  case ',':
+                  case '(':            /* at (*)() type declaration */
+                     if( !body_found )
+                        {
+                        function_definition_flag = true; /* declaration */
+                        if( !g_quiet_flag )
+                           {
+                           if( g_dec_def_flag )
+                              {
+                              if( static_flag )
+                                 (void)printf( " static" );
+                              else
+                                 (void)printf( "       " );
+                              (void)printf( " declaration " );
+                              (void)printf( "%s(%s\n",
+                                            function_name_buffer,
+                                            look_ahead_buffer );
+                              }
+                           }
+                        }
+                     break;
+                  default:          /* any other non white character means */
+                     function_definition_flag = completed;
+                     if( !g_quiet_flag )
+                        {
+                        if( g_dec_def_flag )
+                           {
+                           if( static_flag )
+                              (void)printf( "static " );
+                           else
+                              (void)printf( "       " );
+                           (void)printf( "define " );
+                           }   
+                        }
+                     break;
+                  }           /* dummy_index is bumped */
+               }              /* end of for loop parsing character after ) */
+            body_found = false;
+            if( function_definition_flag == false )
+               {
+               (void)printf( "\nSyntax error: " );
+               (void)printf( "Function description.\n" );
+               look_ahead_buffer[ dummy_index ] = '\0';
+               (void)printf( "\n%s\n", look_ahead_buffer );
+               exit( 1 );
+               }
+            while( dummy_index )
+               {                       /* put all characters after ( back */
+               unget_chars( look_ahead_buffer[ dummy_index - 1 ] );
+               --dummy_index;
+               }
+            if( function_definition_flag == completed )
+               {
+               if( !g_quiet_flag )
+                  {
+                  if( g_dec_def_flag )
+                     (void)printf( "%-40s\n", function_name_buffer );
+                  }
+/*******************
+   this element can distinguish static functions
+   in different files with the same name
+ *******************/
+               data_base_array_ptr->file_record_ptr = file_record_array_ptr;
+               data_base_array_ptr->number_of_function_calls = 0;
+               data_base_array_ptr->ptr_to_function_table = function_list_ptr;
+               data_base_array_ptr->static_definition = static_flag;
+               static_flag = false;
+
+               if(
+                  !( data_base_array_ptr->defined_function =
+                     strdup( function_name_buffer )
+                   )
+                 )
+                  {
+                  (void)printf( "\nRan out of memory( for strdup() )." );
+                  exit( 1 );
+                  }
+               data_base_array_ptr->number_of_references = 0;
+               data_base_array_ptr->ptr_to_page_list = NULL;
+
+               data_base_ptr = data_base_array_ptr; /* save current pointer */
+               ++data_base_array_ptr;                 /* next entry */
+               ++count_of_valid_records;
+               if( count_of_valid_records > Max_defined_functions )
+                  {
+                  (void)printf( "\nToo many new functions\n" );
+                  exit( 1 );
+                  }
+               }        /* end of function definition */
+            static_flag = false;
+            }
+         else                    /* brace_count is not zero */
+            {                    /* so inside a function */
+            data_base_ptr->number_of_function_calls +=
+               test_and_add( data_base_ptr->ptr_to_function_table,
+                             function_name_buffer,
+                             data_base_ptr->number_of_function_calls
+                           );
+            }
+         look_ahead_buffer[ 0 ] = '\0';   /* reset tail buffer */
+         static_flag = false;
+         }                       /* end of parenthesis */
+      function_name_buffer_ptr = function_name_buffer;   /* reset buffer */
+      *function_name_buffer_ptr = '\0';
+      }                    /* end of found_a_possible_function */
+   }                       /* end of while !at_end_of_source_file */
+(void)fclose( stream );
+if( !g_quiet_flag )
+   {
+   (void)printf( "\n" );
+   }
+
+if(
+   !( file_record_array_ptr->source_file_comment =
+      strdup( file_comment_buffer )
+    )
+  )
+    file_record_array_ptr->source_file_comment = fake_comment;
+
+/***** mark called functions in list as static if in defined list *******/
+total_called_count = 0;
+data_base_ptr = starting_data_base_ptr;
+while( data_base_ptr != data_base_array_ptr )
+   {
+   total_called_count += data_base_ptr->number_of_function_calls;
+   ++data_base_ptr;
+   }
+data_base_ptr = starting_data_base_ptr;
+while( data_base_ptr < data_base_array_ptr )
+   {
+   if( data_base_ptr->static_definition )
+      mark_as_static( starting_called_function_ptr,
+                      data_base_ptr->defined_function,
+                      total_called_count
+                    );
+   ++data_base_ptr;
+   }
+++file_record_array_ptr;      /* next file name entry */
+++count_of_source_files;
+if( count_of_source_files >= Max_files )
+   {
+   (void)printf( "\nError: too many files to process.\n" );
+   exit( 1 );
+   }
+return at_end_of_source_file;
+}
+/***************************************************************************/
+
+
+[LISTING FIVE]
+
+/***************************************************************************
+                                  cpfuncts.c
+       void near build_box_parts( int );
+       void near tab_to_left_margin( FILE * );
+static void near stop( void );
+static void near setpage( data_base_record_type * );
+static int  near recursion_check( char *, int );
+       void near check_for_new_page( void );
+static void near draw_output_block( char *, char *, char *,
+                                    char *, int, int, int );
+       int near  doprint( int );
+       void near scan_for_static_or_global( int *, int, char *, char * );
+       int near  binary_search_sorted_data_base( char * );
+  
+ ***************************************************************************/
+
+#define  MAIN  0
+#include "cpheader.h"
+
+static char
+   top_line_of_box[ 37 ], bottom_line_of_box[ 37 ],
+   wall, ibm_line, bottom_attach,
+   upper_left_corner, lower_left_corner,
+   upper_right_corner, lower_right_corner,
+   left_attach, right_attach;
+
+static char *recursion_filename, *test_filename;
+static int static_recursion;
+
+       int near  binary_search_sorted_data_base( char * );
+       void near build_box_parts( int );
+       void near check_for_new_page( void );
+       int near  doprint( int );
+       void near scan_for_static_or_global( int *, int, char *, char * );
+       void near tab_to_left_margin( FILE * );
+
+static void near draw_output_block( char *, char *, char *,
+                                    char *, int, int, int );
+static int near  recursion_check( char *, int );
+static void near stop( void );
+static void near setpage( data_base_record_type * );
+
+/***************************************************************************/
+void near build_box_parts( is_ibm )
+int is_ibm;
+{
+int i;
+
+if( is_ibm )
+   {
+   wall =               '\xb3';
+   ibm_line =           '\xc4';
+   bottom_attach =      '\xc2';
+   upper_left_corner =  '\xda';
+   lower_left_corner =  '\xc0';
+   upper_right_corner = '\xbf';
+   lower_right_corner = '\xd9';
+   left_attach =        '\xb4';
+   right_attach =       '\xc3';
+   }
+else
+   {
+   wall =               '|';
+   ibm_line =           '-';
+   bottom_attach =      '+';
+   upper_left_corner =  '+';
+   lower_left_corner =  '+';
+   upper_right_corner = '+';
+   lower_right_corner = '+';
+   left_attach =        '+';
+   right_attach =       '+';
+   }
+
+top_line_of_box[ 0 ] = upper_left_corner;   
+bottom_line_of_box[ 0 ] = lower_left_corner;
+for( i = 1; i <= 34; ++i )
+   {
+   top_line_of_box[ i ] = ibm_line;
+   bottom_line_of_box[ i ] = ibm_line;
+   }
+top_line_of_box[ i ] = upper_right_corner;
+bottom_line_of_box[ i ] = lower_right_corner;
+top_line_of_box[ ++i ] = '\0';
+bottom_line_of_box[ i ] = '\0';
+}
+/***************************************************************************/
+void near tab_to_left_margin( output )
+FILE *output;
+{
+register int i;
+
+for( i = 0; i < defined_left_margin; ++i )
+   (void)fputc( ' ', output );
+}
+/***************************************************************************/
+static void near stop()
+{
+(void)printf( "hello" );
+}
+/***************************************************************************/
+static void near setpage( data_base_ptr )
+data_base_record_type *data_base_ptr;
+{
+linked_pages_list *page_list_ptr;
+
+page_list_ptr = data_base_ptr->ptr_to_page_list;
+if( page_list_ptr == NULL )
+   {
+   if(
+      !( page_list_ptr =
+         (linked_pages_list *)malloc( sizeof( linked_pages_list ) )
+       )
+     )
+      {
+      (void)fprintf( stderr, "Ran out of memory for page # list.\n" );
+      exit( 1 );
+      }
+
+   data_base_ptr->ptr_to_page_list = page_list_ptr;
+   }
+else
+   {
+   while( page_list_ptr->next_page_ptr )
+      page_list_ptr = page_list_ptr->next_page_ptr;
+
+   if(
+      !( page_list_ptr->next_page_ptr =
+         (linked_pages_list *)malloc( sizeof( linked_pages_list ) )
+       )
+     )
+      {
+      (void)fprintf( stderr, "Ran out of memory for page # list.\n" );
+      exit( 1 );
+      }
+
+   page_list_ptr = page_list_ptr->next_page_ptr;
+   }
+page_list_ptr->next_page_ptr = NULL;
+page_list_ptr->on_this_page = page - 1;
+}
+/***************************************************************************/
+static int near recursion_check( string, static_call )
+char *string;
+int static_call;
+{
+register char **recursion_array_ptr;
+
+recursion_array_ptr = recursion_array;
+if( static_recursion )
+   {                             /* defined function is static */
+   while(
+         *recursion_array_ptr && /* not null */
+                                 /* and different function names */
+         ( strcmp( *recursion_array_ptr, string ) ||
+                                 /* or same function names and */
+                                 /* in different files */
+           strcmp( test_filename, recursion_filename )
+         )
+        )
+   ++recursion_array_ptr;
+   }
+else
+   {                             /* defined function is not static */
+   while(
+         *recursion_array_ptr && /* not null & */
+                                 /* and different function names */
+         ( strcmp( *recursion_array_ptr, string ) ||
+                                 /* or same function names and */
+           static_call           /* called is static */
+         )
+        )
+      ++recursion_array_ptr;
+   }
+return ( *recursion_array_ptr )? true: false;
+}
+/***************************************************************************/
+void near check_for_new_page()
+{
+int i;
+
+if( defined_page_length == 0 && line == 9999 )
+   {
+   (void)fprintf( output, "\n\n\n\n" );
+   line = 0;
+   }
+else
+   {
+   if( defined_page_length != 0 )
+      {
+      if( line > ( defined_page_length - 5 ) )
+         {
+         (void)fprintf( output, "\f" );
+         line = 0;
+         }
+      if( line == 0 )
+         {
+         top_of_form_done = true;
+         tab_to_left_margin( output );
+         (void)fprintf( output, "%s", title );
+         for( i = strlen( title ); i < ( effective_width - 10 ); ++i )
+            (void)fputc( ' ', output );
+         (void)fprintf( output, "Page:%4d\n", page );
+         tab_to_left_margin( output );
+         for( i = 0; i < effective_width; ++i )
+            (void)fputc( '_', output );
+         (void)fprintf( output, "\n\n" );
+         line = 3;
+         ++page;
+         }
+      }
+   }
+}
+/***************************************************************************/
+static void near draw_output_block( lead_in_string,
+                                    name_of_function,
+                                    description,
+                                    name_of_file,
+                                    either_count,
+                                    tail_flag,
+                                    kill_flag
+                                  )
+char *lead_in_string,
+   *name_of_function,
+   *description,
+   *name_of_file;
+int either_count, tail_flag, kill_flag;
+{
+unsigned int string_length;
+static char alternate_lead_in[ 140 ];
+
+/******* 1st line ***********************************************************/
+tab_to_left_margin( output );
+(void)fprintf( output, "%s %s\n", lead_in_string, top_line_of_box );
+
+/******* 2nd line ***********************************************************/
+tab_to_left_margin( output );
+string_length = strlen( lead_in_string );
+if( string_length )        /******* ie not main or defined function box ***/
+   {
+   (void)strncpy( alternate_lead_in, lead_in_string, --string_length );
+   alternate_lead_in[ string_length++ ] = '\0'; /* restore string_length */
+   }
+if( string_length )        /******* ie not main or defined function box ***/
+   (void)fprintf( output, "%s%c%c%c%-33s %c\n",
+                  alternate_lead_in,
+/***  if( kill_flag )      /****** last line to this box ******************/
+/***  else                 /****** line continues downwards ***************/
+                  ( kill_flag )? lower_left_corner: right_attach,
+                  ibm_line, left_attach, name_of_function, wall );
+else                       /****** main or defined box starting ***********/
+   (void)fprintf( output,     "%c%c%-33s %c\n",
+                  ibm_line, left_attach, name_of_function, wall );
+
+/******* 3rd line ***********************************************************/
+tab_to_left_margin( output );
+if( string_length-- )      /***** kill outside vertical line on last box ****/
+   lead_in_string[ string_length++ ] = ( kill_flag )? (char)' ': wall;
+(void)fprintf( output, "%s %c%-20s %8s%3d  %c\n",
+               lead_in_string, wall, description,
+               name_of_file, either_count, wall );
+
+/******* 4th line ***********************************************************/
+tab_to_left_margin( output );
+bottom_line_of_box[ 2 ] =  /******** if defined box has calls ***********/
+   ( tail_flag && either_count )? bottom_attach: ibm_line;
+(void)fprintf( output, "%s %s\n", lead_in_string, bottom_line_of_box );
+
+line += 4;
+top_of_form_done = false;
+}
+/***************************************************************************/
+static char library_string[] = { "(library)" };
+static char usage_string[] =   { "Used=" };
+static char funct_string[] =   { "Functs=" };
+
+int near doprint( index )
+int index;
+{
+int
+   loop_counter,
+   max_count,
+   starting_index,
+   found,
+   return_value;
+data_base_record_type *record_ptr;
+function_type *f_list_ptr;
+
+static int kill_flag = false;
+
+starting_index = index;
+record_ptr = array_of_ptrs_to_records[ starting_index ];
+
+recursion_array[ recursion_depth ] = record_ptr->defined_function;
+if( !recursion_depth )
+   {
+   recursion_filename = record_ptr->file_record_ptr->source_filename;
+                        /* add function to list for recursion check */
+   static_recursion = record_ptr->static_definition;
+   }
+check_for_new_page();
+setpage( array_of_ptrs_to_records[ starting_index ] );
+
+return_value = page - 1;               /* must be a relic! */
+                                       /* start w/ target function */
+draw_output_block( nesting_display_buffer,
+                   record_ptr->defined_function,
+                   ( record_ptr->file_record_ptr )->source_filename,
+                   funct_string,
+                   record_ptr->number_of_function_calls,
+                   true,
+                   kill_flag
+                 );
+
+++recursion_depth;
+                           /****   mystic width = 4 *****/
+(void)strcat( nesting_display_buffer, "   |" );
+nesting_display_buffer[ strlen( nesting_display_buffer ) - 1 ] = wall;
+
+max_count = record_ptr->number_of_function_calls;
+for( loop_counter = 0, f_list_ptr = record_ptr->ptr_to_function_table;
+     loop_counter < max_count;
+     ++loop_counter, ++f_list_ptr
+   )
+   {
+   kill_flag = ( loop_counter == ( max_count - 1 ) )? true: false;
+   check_for_new_page();
+                           /* is called function defined? */
+   found = binary_search_sorted_data_base( f_list_ptr->functions_name );
+   if( found >= 0 )
+      {
+      scan_for_static_or_global( &found,
+                                 f_list_ptr->static_function,
+                                 f_list_ptr->functions_name,
+                                 f_list_ptr->its_filename
+                               );
+
+      }
+   if( found >= 0 )        /* yes */
+      {
+      test_filename = f_list_ptr->its_filename;
+      if( recursion_check( f_list_ptr->functions_name,
+                           f_list_ptr->static_function )
+        )
+         {
+/*         tab_to_left_margin( output );
+/*         (void)fprintf( output, "%s\n", nesting_display_buffer ); */
+         setpage( array_of_ptrs_to_records[ found ] );
+/*         ++line; */
+         top_of_form_done = false;
+         draw_output_block( nesting_display_buffer,
+                            f_list_ptr->functions_name,
+                            "(recursive)",
+                            "",
+                            0,
+                            false,
+                            kill_flag
+                          );
+         }
+      else        /* not recursive and found >= 0 */
+         {
+         if( array_of_ptrs_to_records[ found ]->number_of_references == 1 )
+            {                       /* got a new function */
+/*            tab_to_left_margin( output );
+/*            (void)fprintf( output, "%s\n", nesting_display_buffer );
+/*            ++line;
+/*            top_of_form_done = false; */
+            doprint( found );           /* used only once */
+            }
+         else
+            {                       /* a previously defined function */
+/*            tab_to_left_margin( output );
+/*            (void)fprintf( output, "%s\n", nesting_display_buffer ); */
+            setpage( array_of_ptrs_to_records[ found ] );
+/*            ++line;
+/*            top_of_form_done = false; */
+            draw_output_block( nesting_display_buffer,
+                               f_list_ptr->functions_name,
+                               "(defined)",
+                               usage_string,
+                               f_list_ptr->is_referenced,
+                               false,
+                               kill_flag
+                             ); 
+            }
+         }
+      }
+   else           /* found = -1 ie not defined means */
+      {           /* a library function */
+/*      tab_to_left_margin( output );
+/*      (void)fprintf( output, "%s\n", nesting_display_buffer );
+/*      ++line;
+/*      top_of_form_done = false; */
+      draw_output_block( nesting_display_buffer,
+                         f_list_ptr->functions_name,
+                         library_string,
+                         usage_string,
+                         f_list_ptr->is_referenced,
+                         false,
+                         kill_flag
+                       );
+      }
+   }           /* end of loop on all called functions */
+
+                           /* remove function f/ recursion list */
+recursion_array[ recursion_depth ] = NULL;
+                           /****   mystic width = 4 *****/
+nesting_display_buffer[ strlen( nesting_display_buffer ) - 4 ] = '\0';
+--recursion_depth;
+return return_value;
+}
+/***************************************************************************/
+void near scan_for_static_or_global(
+                              index_ptr, is_static, function_name, file_name
+                                   )
+int *index_ptr, is_static;
+char *function_name, *file_name;
+{
+int index;
+
+index = *index_ptr;
+if( index )
+   while( index-- )
+      if( strcmp( function_name,
+                  array_of_ptrs_to_records[ index ]->defined_function )
+        )
+         {
+         ++index;       /* exit at last matching defined function */
+         break;
+         }
+do {
+   if(
+      ( !is_static && !array_of_ptrs_to_records[ index ]->static_definition
+      ) ||
+      ( is_static &&
+        array_of_ptrs_to_records[ index ]->static_definition &&
+        !strcmp( array_of_ptrs_to_records[ index ]->
+                  file_record_ptr->source_filename,
+                 file_name
+               )
+      )
+     )
+      break;
+   }
+while(
+      ( ++index < count_of_functions ) &&
+      !strcmp( function_name,
+               array_of_ptrs_to_records[ index ]->defined_function
+             )
+     );
+if(
+   ( index >= count_of_functions ) ||
+   strcmp( function_name, array_of_ptrs_to_records[ index ]->defined_function
+         )
+  )
+   index = -1;
+*index_ptr = index;
+}
+/***************************************************************************/
+int near binary_search_sorted_data_base( key )
+char *key;
+{
+int lo, hi, index;
+int doesnt_match;
+
+lo = 0;
+hi = count_of_valid_records - 1;
+index = ( hi - lo ) / 2;
+
+while( true )
+   {
+   doesnt_match =
+      strcmp( key, array_of_ptrs_to_records[ index ]->defined_function );
+   if( !doesnt_match )        /* a match found at index */
+      break;
+   if( lo >= hi )             /* no match found */
+      {
+      index = -1;
+      break;
+      }
+   if( doesnt_match < 0 )     /* key < choice so go downwards */
+      hi = index - 1;
+   else                       /* key > choice so go upwards */
+      lo = index + 1;
+   index = ( hi + lo ) / 2;   /* new choice */
+   }
+return index;
+}
+/***************************************************************************/
+
+
+[LISTING SIX]
+
+cp.obj : cp.c cpheader.h cp
+        cl -AL -c cp.c
+
+cpinput.obj : cpinput.c cpheader.h cp
+        cl -AL -c cpinput.c
+
+cpfuncts.obj : cpfuncts.c cpheader.h cp
+        cl -AL -c cpfuncts.c
+
+cpbuild.obj: cpbuild.c cpheader.h cp
+        cl -AL cpbuild.c -c
+
+cp.exe : cp.obj cpinput.obj cpfuncts.obj cpbuild.obj cp
+        link cp+ cpinput+ cpbuild+ cpfuncts/packcode/st:16000,,cp;
+
+
+
+[LISTING SEVEN]
+
+cpheader.h
+cp.c
+cpbuild.c
+cpfuncts.c
+cpinput.c
+
+
+
