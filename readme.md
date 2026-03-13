@@ -9,14 +9,16 @@ It is published here for educational purposes.
 | ccompiler     | a c compiler written for the Sol-1 CPU. It outputs Sol-1 assembly |
 | hardware      | schematics, board pictures, microcode assembler |
 | software      | bios, kernel, shell, and unix utilities programs written in ASM for Sol-1 |
+| emulator      | an emulator for Sol-1. |
 | solix         | the operating system for Sol-1 |
+| solfs         | a disk image generator for Sol-1 |
 | systemverilog | systemverilog models for the Sol-1 CPU, computer, and a few other things |
 | general_docs  | datasheets and miscellaneous documents related to Sol-1 and digital design in general | 
 | sol1_docs     | documents directly related to Sol-1 | 
 
 ## Features
 ### Hardware
-- User and Kernel privilege modes, with up to 256 processes running in parallel.
+- User and Kernel privilege modes, with up to 256 processes.
 - Paged virtual memory, such that each process can have a total of 64KB RAM for itself.
 - Two serial ports (16550), a real time clock(M48T02), 2 parallel ports(8255), a programmable timer(8253), an IDE hard-drive interface(2.5 Inch HDD), a sound chip(AY-3-8910),
 5.25" floppy drive controller (WD1770).
@@ -57,6 +59,7 @@ It is published here for educational purposes.
 - Unix-like operating system (in progress and very early)
 - C compiler that generates a Sol-1 assembly output file
 - SystemVerilog model
+- Emulator
 
 [Video demonstrations here](https://www.youtube.com/@PauloConstantino167/videos)
 
