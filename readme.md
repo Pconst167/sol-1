@@ -70,3 +70,16 @@ It is published here for educational purposes.
 ![Boot](https://github.com/Pconst167/sol-1/blob/main/images/Screenshot%20from%202023-07-22%2020-40-15.png)
 ![Front](https://github.com/Pconst167/sol-1/blob/main/images/Screenshot%202022-10-05%20194412.png)
 
+
+### Licensing Terms
+
+Copyright © 2026 Paulo Constantino
+
+This work is licensed under the Creative Commons Attribution-NonCommercial 4.0 International License (CC BY-NC 4.0).
+
+You are free to use, copy, modify, and redistribute this work for non-commercial purposes, provided appropriate credit is given.
+
+Commercial use is not permitted.
+
+License:
+https://creativecommons.org/licenses/by-nc/4.0/
