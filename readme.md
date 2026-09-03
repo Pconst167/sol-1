@@ -70,24 +70,3 @@ It is published here for educational purposes.
 ![Boot](https://github.com/Pconst167/sol-1/blob/main/images/Screenshot%20from%202023-07-22%2020-40-15.png)
 ![Front](https://github.com/Pconst167/sol-1/blob/main/images/Screenshot%202022-10-05%20194412.png)
 
-### Licensing Terms
-
-Sol-1 Homebrew CPU/Minicomputer is a CPU + system around it, made from 74 series logic from scratch
-as an educational project.
-Copyright (C) 2025  Paulo Constantino
-
-This program is free software; you can redistribute it and/or
-modify it under the terms of the GNU General Public License
-as published by the Free Software Foundation; either version 2
-of the License, or (at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License
-along with this program; if not, see
-<https://www.gnu.org/licenses/>.
-
-contact: pconstantino@sol-1.org
